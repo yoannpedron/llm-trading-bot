@@ -1,0 +1,39 @@
+# PowerShell
+*.ps1xml
+*.psm1
+*.psd1
+
+# Modules locaux
+/Modules/
+/packages/
+
+# Logs et sorties
+*.log
+*.txt
+/logs/
+/output/
+
+# Données sensibles - NE JAMAIS committer
+secrets.ps1
+config.local.ps1
+*.credential
+*.key
+*.pfx
+*.p12
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains Rider
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Archives temporaires
+*.zip
+*.tar.gz
+*.bak
