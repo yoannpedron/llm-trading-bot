@@ -1,0 +1,69 @@
+================================================================================
+  ADGUARD DNS FORTRESS - NOTICE DE RECUPERATION D'URGENCE
+================================================================================
+
+CE QUE FAIT CE SYSTEME
+----------------------
+Force tout le trafic DNS vers ton serveur AdGuard DNS prive (device 499cb42d)
+pour bloquer le contenu adulte. Concu pour etre tres difficile a desactiver sur
+un coup de tete (mesure d'autodiscipline).
+
+COMPOSANTS INSTALLES
+--------------------
+Taches planifiees (SYSTEM) :
+  - AdGuard-AutoLinkIp   : lie ton IP publique au device (toutes les 10 min)
+  - AdGuard-Failover     : sortie de secours DNS (toutes les 2 min)
+  - AdGuard-Guardian-A   : auto-reparation depuis L1 (toutes les 2 min)
+  - AdGuard-Guardian-B   : auto-reparation depuis L2 (toutes les 3 min)
+
+Fichiers (verrouilles, proprietaire = SYSTEM) :
+  - L1 = C:\ProgramData\AdGuardAutoLink
+  - L2 = C:\ProgramData\Microsoft\Windows\AGDNS
+  (chacun contient : failover.ps1, guardian.ps1, update-linkip.ps1,
+   restore.dat, config.json)
+
+SORTIE DE SECOURS AUTOMATIQUE A PALIERS (si AdGuard perso tombe en panne)
+------------------------------------------------------------------------
+Si le resolveur AdGuard perso (94.140.14.49/59) ne repond plus pendant ~4 min
+ALORS QUE l'internet fonctionne, le systeme bascule AUTOMATIQUEMENT :
+  Palier 1 : AdGuard FAMILY (94.140.14.15 / 94.140.15.16)
+             -> le contenu adulte reste BLOQUE (filtrage maintenu).
+  Palier 2 : seulement si Family est AUSSI injoignable, DNS public 8.8.8.8
+             (non filtre) en dernier recours, pour garder un internet.
+Des qu'AdGuard perso re-repond, la config stricte est restauree seule.
+
+ANTI-BYPASS (deconnexion/reconnexion Wi-Fi) :
+  Si AUCUN internet n'est joignable (test TCP independant du DNS), le systeme
+  NE bascule PAS et reste epingle sur AdGuard. Couper le Wi-Fi ne permet donc
+  PLUS de retomber sur un DNS non filtre. Si le DNS etait deja sur du public,
+  il est re-epingle sur Family (filtre) des qu'il n'y a pas de reseau.
+=> Tu gardes le filtrage anti-adulte meme pendant une panne AdGuard, et tu
+   n'es jamais bloque sans internet par une vraie panne totale d'AdGuard.
+
+PERSISTANCE / AUTO-REPARATION
+-----------------------------
+- Si une tache est supprimee, une autre la recree (resurrection mutuelle).
+- Si un script est efface, il est restaure (2 copies miroir + restore.dat).
+- Les fichiers sont verrouilles (Administrateurs en lecture seule).
+En usage normal de Windows, il n'y a PAS de bouton "off" : c'est volontaire.
+
+================================================================================
+  COMMENT TOUT RETIRER (la seule methode fiable : MODE SANS ECHEC)
+================================================================================
+En Mode sans echec, les taches planifiees ne tournent pas : les gardiens sont
+donc dormants et ne peuvent rien ressusciter.
+
+  1. Parametres > Systeme > Recuperation > Demarrage avance > Redemarrer
+     (ou : maintenir la touche Maj enfoncee en cliquant sur "Redemarrer")
+  2. Depannage > Options avancees > Parametres de demarrage > Redemarrer
+  3. Appuyer sur la touche 4 (Mode sans echec).
+  4. Ouvrir PowerShell en administrateur et lancer :
+        powershell -ExecutionPolicy Bypass -File "C:\Users\pop\Downloads\Uninstall-Everything.ps1"
+  5. Redemarrer normalement.
+
+Ce script restaure : DNS en DHCP, EnableAutoDoh=0, IPv6 reactive,
+fichier hosts nettoye, toutes les taches et fichiers supprimes.
+
+(En cas d'extreme urgence hors Mode sans echec, le meme script accepte le
+ parametre -Force, mais il se battra contre les gardiens et echouera souvent.)
+================================================================================
