@@ -65,7 +65,11 @@ function CurDns { (Get-DnsClientServerAddress -InterfaceAlias 'Wi-Fi' -AddressFa
 
 # ---- Auto-resurrection : s'assurer que les gardiens existent --------------------
 function Ensure-Task($name, $script, $minutes) {
-    if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { return }
+    $ex = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($ex) {
+        if ($ex.State -eq 'Disabled') { Enable-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue | Out-Null; Log "RE-ACTIVATION: tache $name reactivee (etait desactivee)" }
+        return
+    }
     if (-not (Test-Path $script)) { return }
     $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
     $t = @((New-ScheduledTaskTrigger -AtStartup), (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $minutes)))

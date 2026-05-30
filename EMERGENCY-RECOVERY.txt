@@ -43,9 +43,18 @@ ANTI-BYPASS (deconnexion/reconnexion Wi-Fi) :
 PERSISTANCE / AUTO-REPARATION
 -----------------------------
 - Si une tache est supprimee, une autre la recree (resurrection mutuelle).
+- Si une tache est DESACTIVEE (pas supprimee), un gardien la REACTIVE.
 - Si un script est efface, il est restaure (2 copies miroir + restore.dat).
 - Les fichiers sont verrouilles (Administrateurs en lecture seule).
 En usage normal de Windows, il n'y a PAS de bouton "off" : c'est volontaire.
+
+ANTI-CONTOURNEMENT DoH NAVIGATEUR
+---------------------------------
+Chrome, Edge, Brave, Chromium et Firefox sont forces (politiques HKLM, re-appliquees
+toutes les 2 min par le gardien) a utiliser le DNS DU SYSTEME (AdGuard) au lieu de
+leur propre DNS chiffre (DoH). Un navigateur ne peut donc pas contourner le filtrage
+en activant "DNS securise". (Note : un navigateur tiers non couvert, un VPN ou un
+proxy peuvent encore contourner - aucune solution DNS ne couvre ces cas.)
 
 ================================================================================
   COMMENT TOUT RETIRER (la seule methode fiable : MODE SANS ECHEC)

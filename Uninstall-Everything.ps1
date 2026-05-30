@@ -73,6 +73,14 @@ Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue | Where-Object { $_.
     Remove-DnsClientDohServerAddress -ServerAddress $_.ServerAddress -ErrorAction SilentlyContinue
 }
 
+# --- 4bis. Retirer les politiques DoH navigateur --------------------------------
+Write-Host "[4bis] Retrait des politiques DoH navigateur..." -ForegroundColor Cyan
+Remove-ItemProperty "HKLM:\SOFTWARE\Policies\Google\Chrome"            -Name "DnsOverHttpsMode" -ErrorAction SilentlyContinue
+Remove-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Edge"           -Name "DnsOverHttpsMode" -ErrorAction SilentlyContinue
+Remove-ItemProperty "HKLM:\SOFTWARE\Policies\BraveSoftware\Brave"      -Name "DnsOverHttpsMode" -ErrorAction SilentlyContinue
+Remove-ItemProperty "HKLM:\SOFTWARE\Policies\Chromium"                 -Name "DnsOverHttpsMode" -ErrorAction SilentlyContinue
+Remove-Item "HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS" -Recurse -Force -ErrorAction SilentlyContinue
+
 # --- 5. Reactiver IPv6 sur Wi-Fi ------------------------------------------------
 Write-Host "[5] Reactivation IPv6..." -ForegroundColor Cyan
 Enable-NetAdapterBinding -Name "Wi-Fi" -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue

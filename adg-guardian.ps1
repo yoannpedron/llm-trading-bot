@@ -61,7 +61,15 @@ elseif ((Test-Path "$L2\config.json") -and -not (Test-Path "$L1\config.json")) {
 
 # ---- 2. Restauration des taches planifiees ------------------------------------
 function Ensure-Task($name, $script, $minutes) {
-    if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { return }
+    $ex = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($ex) {
+        # Anti-contournement : une tache DESACTIVEE (pas supprimee) est reactivee.
+        if ($ex.State -eq 'Disabled') {
+            Enable-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue | Out-Null
+            $script:changed = $true; Log "RE-ACTIVATION: tache $name etait desactivee -> reactivee"
+        }
+        return
+    }
     if (-not (Test-Path $script)) { return }
     $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
     $t = @((New-ScheduledTaskTrigger -AtStartup), (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $minutes)))
@@ -74,6 +82,29 @@ Ensure-Task 'AdGuard-AutoLinkIp' "$L1\update-linkip.ps1" 10
 Ensure-Task 'AdGuard-Failover'   "$L1\failover.ps1"      2
 Ensure-Task 'AdGuard-Guardian-A' "$L1\guardian.ps1"      2
 Ensure-Task 'AdGuard-Guardian-B' "$L2\guardian.ps1"      3
+
+# ---- 2bis. Anti-contournement DoH navigateur ----------------------------------
+# Force Chrome/Edge/Brave/Firefox a utiliser le DNS DU SYSTEME (AdGuard) au lieu de
+# leur propre DNS chiffre (DoH) qui contournerait tout le filtrage. Politiques HKLM.
+function Set-Pol($key, $name, $value, $type) {
+    if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+    $cur = (Get-ItemProperty -Path $key -Name $name -ErrorAction SilentlyContinue).$name
+    if ($cur -ne $value) { Set-ItemProperty -Path $key -Name $name -Value $value -Type $type -Force -ErrorAction SilentlyContinue; return $true }
+    return $false
+}
+function Enforce-BrowserDoh {
+    $ch = $false
+    # Chromium "off" => le navigateur utilise le resolveur de l'OS (AdGuard, suit la bascule de secours)
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\Google\Chrome"            "DnsOverHttpsMode" "off" "String") -or $ch
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\Microsoft\Edge"           "DnsOverHttpsMode" "off" "String") -or $ch
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\BraveSoftware\Brave"      "DnsOverHttpsMode" "off" "String") -or $ch
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\Chromium"                 "DnsOverHttpsMode" "off" "String") -or $ch
+    # Firefox : DoH (TRR) desactive ET verrouille (grise dans les reglages)
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS" "Enabled" 0 "DWord") -or $ch
+    $ch = (Set-Pol "HKLM:\SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS" "Locked"  1 "DWord") -or $ch
+    if ($ch) { Log "BROWSER-DOH: politiques navigateurs (re)forcees sur le DNS systeme" }
+}
+Enforce-BrowserDoh
 
 # ---- 3. Re-verrouillage si alteration detectee --------------------------------
 function Harden($dir) {
