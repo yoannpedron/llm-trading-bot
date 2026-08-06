@@ -15,7 +15,7 @@
       <span class="brand-mark" aria-hidden="true">◈</span>
       <div>
         <h1>LLM Trading Bot</h1>
-        <p class="brand-sub">Tableau de bord — lecture seule</p>
+        <p class="brand-sub">Instrument de mesure — paper trading</p>
       </div>
     </div>
 
@@ -25,6 +25,7 @@
         <span class="dot"></span><span id="conn-text">Connexion…</span>
       </span>
       <button id="btn-refresh" class="btn" type="button">Actualiser</button>
+      <button id="btn-debug" class="btn btn-ghost" type="button">Diagnostic</button>
       <button id="btn-settings" class="btn btn-ghost" type="button" aria-expanded="false">Réglages</button>
     </div>
   </header>
@@ -32,13 +33,13 @@
   <section id="settings" class="settings" hidden>
     <label class="field">
       <span>URL du back-end</span>
-      <input id="api-url" type="url" placeholder="https://mon-bot.onrender.com" autocomplete="off" spellcheck="false">
-      <small>L'adresse de ton API. Elle est stockée dans ce navigateur uniquement.</small>
+      <input id="api-url" type="url" placeholder="http://localhost:8099" autocomplete="off" spellcheck="false">
+      <small>Stockée dans ce navigateur uniquement.</small>
     </label>
     <label class="field">
       <span>Jeton administrateur <em>(optionnel)</em></span>
       <input id="admin-token" type="password" placeholder="ADMIN_TOKEN de ton back-end" autocomplete="off" spellcheck="false">
-      <small>Débloque la gestion des clés API. Stocké dans ce navigateur uniquement, jamais publié.</small>
+      <small>Débloque la gestion des clés et le pilotage du moteur.</small>
     </label>
     <label class="field field-sm">
       <span>Rafraîchissement</span>
@@ -58,7 +59,22 @@
   <div id="alert" class="alert" hidden role="status"></div>
 
   <main class="wrap">
-    <!-- ─── Indicateurs clés ─────────────────────────────────────────── -->
+    <!-- ═══ LE VERDICT — l'élément central du projet ═══════════════════ -->
+    <section id="verdict" class="verdict verdict-unknown">
+      <div class="verdict-head">
+        <span id="verdict-badge" class="verdict-badge">—</span>
+        <h2>Verdict statistique</h2>
+        <span id="verdict-meta" class="verdict-meta">—</span>
+      </div>
+      <p id="verdict-reason" class="verdict-reason">En attente de données.</p>
+      <div class="verdict-progress">
+        <div class="verdict-track"><span id="verdict-fill"></span></div>
+        <span id="verdict-progress-label" class="verdict-progress-label">—</span>
+      </div>
+      <p id="verdict-caveat" class="verdict-caveat" hidden></p>
+    </section>
+
+    <!-- ═══ Indicateurs clés ══════════════════════════════════════════ -->
     <section class="kpis" aria-label="Indicateurs clés">
       <article class="kpi kpi-hero">
         <h2>Capital total</h2>
@@ -73,16 +89,16 @@
       <article class="kpi">
         <h2>P&amp;L réalisé</h2>
         <p id="kpi-realized" class="kpi-value">—</p>
-        <p id="kpi-fees" class="kpi-sub">—</p>
+        <p id="kpi-unrealized" class="kpi-sub">—</p>
       </article>
       <article class="kpi">
         <h2>Positions</h2>
         <p id="kpi-positions" class="kpi-value">—</p>
-        <p id="kpi-unrealized" class="kpi-sub">—</p>
+        <p id="kpi-decisions" class="kpi-sub">—</p>
       </article>
     </section>
 
-    <!-- ─── Courbe d'équity ──────────────────────────────────────────── -->
+    <!-- ═══ Courbe d'équity ═══════════════════════════════════════════ -->
     <section class="card">
       <div class="card-head">
         <h2>Évolution du capital</h2>
@@ -92,7 +108,7 @@
     </section>
 
     <div class="grid-2">
-      <!-- ─── Positions ──────────────────────────────────────────────── -->
+      <!-- ═══ Positions ═══════════════════════════════════════════════ -->
       <section class="card">
         <div class="card-head">
           <h2>Positions ouvertes</h2>
@@ -101,33 +117,30 @@
         <div class="table-scroll">
           <table id="positions-table">
             <thead>
-              <tr>
-                <th>Actif</th><th class="num">Qté</th><th class="num">PRU</th>
-                <th class="num">Cours</th><th class="num">Valeur</th><th class="num">P&amp;L latent</th>
-                <th class="num">Stop / Objectif</th>
-              </tr>
+              <tr><th>Actif</th><th class="num">Qté</th><th class="num">PRU</th><th class="num">Cours</th>
+                  <th class="num">Valeur actuelle</th><th class="num">P&amp;L latent</th><th class="num">Stop</th></tr>
             </thead>
             <tbody><tr class="empty"><td colspan="7">Aucune position ouverte.</td></tr></tbody>
           </table>
         </div>
       </section>
 
-      <!-- ─── État du bot ────────────────────────────────────────────── -->
+      <!-- ═══ État du moteur ══════════════════════════════════════════ -->
       <section class="card">
         <div class="card-head"><h2>État du moteur</h2></div>
         <dl id="status-list" class="status-list">
           <div><dt>Statut</dt><dd id="st-state">—</dd></div>
           <div class="status-actions" hidden id="engine-actions">
-            <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle maintenant</button>
+            <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
             <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
           </div>
           <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
           <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
+          <div><dt>Marché</dt><dd id="st-market">—</dd></div>
+          <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
           <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
-          <div><dt>Clés Gemini</dt><dd id="st-keys">—</dd></div>
-          <div><dt>Quota IA du jour</dt><dd id="st-quota">—</dd></div>
-          <div><dt>Cycles possibles / jour</dt><dd id="st-cycles">—</dd></div>
-          <div><dt>Univers suivi</dt><dd id="st-symbols">—</dd></div>
+          <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
+          <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
           <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
           <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
           <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
@@ -135,7 +148,90 @@
       </section>
     </div>
 
-    <!-- ─── Clés API Gemini ──────────────────────────────────────────── -->
+    <!-- ═══ Les mesures ═══════════════════════════════════════════════ -->
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>Qualité de prédiction</h2>
+          <span id="shadow-meta" class="card-meta">—</span>
+        </div>
+        <p class="card-note">
+          Chaque décision — exécutée ou non — est rouverte à 3 jours et comparée à l'indice.
+          C'est la seule mesure non contaminée par la mémorisation des LLM.
+        </p>
+        <div class="table-scroll">
+          <table id="shadow-table">
+            <thead><tr><th>Segment</th><th class="num">n</th><th class="num">Réussite</th><th class="num">Score moyen</th><th class="num">Excédent réel</th><th class="num">Sharpe</th></tr></thead>
+            <tbody><tr class="empty"><td colspan="6">Aucune décision résolue.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Coûts réels mesurés</h2>
+          <span id="cost-meta" class="card-meta">—</span>
+        </div>
+        <p class="card-note">
+          Chez Alpaca la commission est nulle : le spread est le seul coût qui compte.
+          Mesuré ici sur nos propres ordres, pas estimé.
+        </p>
+        <dl id="cost-list" class="status-list">
+          <div><dt>Spread médian</dt><dd id="cost-spread">—</dd></div>
+          <div><dt>Coût aller-retour</dt><dd id="cost-roundtrip">—</dd></div>
+          <div><dt>Seuil de rentabilité</dt><dd id="cost-breakeven">—</dd></div>
+          <div><dt>Qualité d'exécution</dt><dd id="cost-execution">—</dd></div>
+          <div><dt>Amélioration de prix</dt><dd id="cost-improvement">—</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <!-- ═══ Calibration & biais du modèle ═════════════════════════════ -->
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>Fiabilité des probabilités</h2>
+          <span id="calib-meta" class="card-meta">—</span>
+        </div>
+        <p class="card-note">
+          Le modèle répartit 100 scénarios entre surperformance, sous-performance et indécision.
+          On compare ici ce qu'il annonce à ce qui arrive vraiment. C'est ce tableau qui dit
+          si sa confiance mérite de piloter la taille des positions.
+        </p>
+        <dl class="status-list">
+          <div><dt>Verdict</dt><dd id="calib-verdict">—</dd></div>
+          <div><dt>Échelle des probabilités</dt><dd id="calib-bias">—</dd></div>
+          <div><dt>Score de Brier</dt><dd id="calib-brier">—</dd></div>
+          <div><dt>Pouvoir discriminant</dt><dd id="calib-skill">—</dd></div>
+        </dl>
+        <div class="table-scroll">
+          <table id="calib-table">
+            <thead><tr><th>Annoncé</th><th class="num">n</th><th class="num">Moyenne annoncée</th><th class="num">Réalisé</th><th class="num">Écart</th></tr></thead>
+            <tbody><tr class="empty"><td colspan="5">Aucune prévision résolue.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Biais d'inaction</h2>
+          <span id="advisory-meta" class="card-meta">—</span>
+        </div>
+        <p class="card-note">
+          Le modèle ne décide plus : il prévoit, et le seuil est appliqué ici. On lui demande
+          quand même son avis, sans le suivre — l'écart entre les deux mesure son penchant
+          pour l'attente au lieu de le supposer.
+        </p>
+        <dl class="status-list">
+          <div><dt>Taux de divergence</dt><dd id="adv-rate">—</dd></div>
+          <div><dt>Il voulait attendre</dt><dd id="adv-held">—</dd></div>
+          <div><dt>Il voulait agir</dt><dd id="adv-pushed">—</dd></div>
+        </dl>
+        <p id="adv-note" class="card-note" hidden></p>
+      </section>
+    </div>
+
+    <!-- ═══ Clés API ══════════════════════════════════════════════════ -->
     <section class="card">
       <div class="card-head">
         <h2>Clés API Gemini</h2>
@@ -144,24 +240,16 @@
           <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
         </div>
       </div>
-
       <div class="capacity-bar-wrap">
         <div class="capacity-bar"><span id="capacity-fill"></span></div>
         <p id="capacity-detail" class="capacity-detail">—</p>
       </div>
-
       <div class="table-scroll">
         <table id="keys-table">
-          <thead>
-            <tr>
-              <th>Nom</th><th>Clé</th><th>Source</th>
-              <th class="num">Consommé</th><th>Quota du jour</th><th>État</th><th></th>
-            </tr>
-          </thead>
-          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages pour voir tes clés.</td></tr></tbody>
+          <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>Quota</th><th>État</th><th></th></tr></thead>
+          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages.</td></tr></tbody>
         </table>
       </div>
-
       <form id="add-key-form" class="add-key" hidden>
         <label class="field">
           <span>Nouvelle clé Gemini</span>
@@ -173,11 +261,10 @@
         </label>
         <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
       </form>
-
       <p id="keys-feedback" class="keys-feedback" hidden></p>
     </section>
 
-    <!-- ─── Journal de l'IA ──────────────────────────────────────────── -->
+    <!-- ═══ Journal de l'IA ═══════════════════════════════════════════ -->
     <section class="card">
       <div class="card-head">
         <h2>Journal de l'IA</h2>
@@ -189,11 +276,11 @@
         </div>
       </div>
       <div id="journal" class="journal">
-        <p class="empty-block">Aucune décision enregistrée pour l'instant.</p>
+        <p class="empty-block">Aucune décision enregistrée.</p>
       </div>
     </section>
 
-    <!-- ─── Historique des ordres ────────────────────────────────────── -->
+    <!-- ═══ Ordres ════════════════════════════════════════════════════ -->
     <section class="card">
       <div class="card-head">
         <h2>Historique des ordres</h2>
@@ -201,23 +288,53 @@
       </div>
       <div class="table-scroll">
         <table id="trades-table">
-          <thead>
-            <tr>
-              <th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
-              <th class="num">Prix</th><th class="num">Montant</th><th class="num">Frais</th>
-              <th class="num">P&amp;L</th><th>Origine</th>
-            </tr>
-          </thead>
-          <tbody><tr class="empty"><td colspan="9">Aucun ordre passé.</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
+                     <th class="num">Prix</th><th class="num">Montant payé</th><th class="num">P&amp;L</th><th>Origine</th></tr></thead>
+          <tbody><tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- ═══ PANNEAU DE DIAGNOSTIC ═════════════════════════════════════ -->
+    <section id="debug-panel" class="card debug" hidden>
+      <div class="card-head">
+        <h2>🔧 Diagnostic</h2>
+        <div class="head-actions">
+          <button id="btn-copy-diag" class="btn btn-primary btn-sm" type="button">Copier le diagnostic</button>
+          <button id="btn-close-debug" class="btn btn-ghost btn-sm" type="button">Fermer</button>
+        </div>
+      </div>
+
+      <p class="card-note">
+        Le bouton copie un rapport texte complet — état du moteur, quota, verdict, erreurs et logs.
+        Colle-le dans la conversation si quelque chose te semble anormal.
+      </p>
+
+      <div class="debug-grid" id="debug-health"></div>
+
+      <div class="debug-section">
+        <div class="debug-section-head">
+          <h3>Logs en direct</h3>
+          <div class="filters" id="log-filters">
+            <button class="chip chip-active" data-log="all" type="button">Tout</button>
+            <button class="chip" data-log="warn" type="button">Avertissements</button>
+            <button class="chip" data-log="error" type="button">Erreurs</button>
+          </div>
+        </div>
+        <div id="log-view" class="log-view"><p class="empty-block">Chargement…</p></div>
+      </div>
+
+      <details class="raw">
+        <summary>Réponse brute de l'API (JSON complet)</summary>
+        <pre id="debug-raw">—</pre>
+      </details>
     </section>
   </main>
 
   <footer class="footer">
     <p>
-      Simulation de trading à but pédagogique. Les décisions sont produites par un modèle de langage
-      et <strong>ne constituent pas un conseil en investissement</strong>.
+      Simulation à but pédagogique. Les décisions sont produites par un modèle de langage et
+      <strong>ne constituent pas un conseil en investissement</strong>.
       Dernière mise à jour : <span id="last-update">—</span>
     </p>
   </footer>

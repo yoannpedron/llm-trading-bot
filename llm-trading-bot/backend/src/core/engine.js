@@ -1,6 +1,9 @@
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
-import { getMarketSnapshot, getPrice, getFxRate, isTradeable } from '../data/marketData.js';
+import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js';
+import { spreadLog } from '../data/spreadLog.js';
+import { calendarPhase } from '../data/calendar.js';
+import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { getNews } from '../news/newsService.js';
 import { decide } from '../llm/agent.js';
 
@@ -49,15 +52,27 @@ export class TradingEngine {
     };
   }
 
-  /** Récupère prix + taux de change de tous les actifs suivis ou détenus. */
+  /**
+   * Récupère cotations et bougies de tous les actifs suivis ou détenus.
+   * Le passage par `getQuote` alimente au passage le journal des spreads,
+   * qui construit la mesure empirique de notre coût de transaction réel.
+   */
   async #collectQuotes(symbols) {
     const quotes = {};
     await Promise.all(
       symbols.map(async (symbol) => {
         try {
-          const snapshot = await getMarketSnapshot(symbol);
-          const fxRate = await getFxRate(snapshot.currency);
-          quotes[symbol] = { price: snapshot.lastPrice, fxRate, currency: snapshot.currency, snapshot };
+          const [snapshot, quote] = await Promise.all([getMarketSnapshot(symbol), getQuote(symbol)]);
+          quotes[symbol] = {
+            price: quote.price,
+            bid: quote.bid,
+            ask: quote.ask,
+            spreadBps: quote.spreadBps,
+            // Compte et actifs sont tous deux en USD : plus aucune conversion.
+            fxRate: 1,
+            currency: 'USD',
+            snapshot,
+          };
         } catch (err) {
           log.warn(`Cotation ${symbol} indisponible : ${err.message}`);
         }
@@ -115,13 +130,15 @@ export class TradingEngine {
     try {
       const quote = quotes[symbol];
       const snapshot = quote?.snapshot ?? (await getMarketSnapshot(symbol));
-      const fxRate = quote?.fxRate ?? (await getFxRate(snapshot.currency));
-      const price = snapshot.indicators.price;
+      const fxRate = 1; // compte et actifs en USD : aucune conversion
+      // Le prix de décision est la cotation courante si on l'a, sinon la
+      // dernière clôture. On ne décide jamais sur un prix plus vieux que ça.
+      const price = quote?.price ?? snapshot.indicators.price;
 
       const position = await this.broker.getPosition(symbol);
 
       if (config.schedule.onlyMarketHours) {
-        const tradeable = isTradeable(snapshot);
+        const tradeable = await isTradeable(snapshot);
         if (!tradeable.open) {
           outcome.reason = `analyse ignorée : ${tradeable.reason}`;
           log.info(`${symbol} — ${outcome.reason}`);
@@ -132,40 +149,47 @@ export class TradingEngine {
       const account = await this.broker.getAccount();
       const budget = this.risk.computeBudget({ account, position, price, fxRate, circuitBreaker });
 
-      // Rien à faire : ni position à gérer, ni budget pour ouvrir.
-      // On évite l'appel LLM (quota, latence) et on le trace explicitement.
-      if (!budget.canBuy && !position) {
-        outcome.reason = `aucune action possible (${budget.blockReason})`;
-        await this.journal.record({
-          symbol,
-          source: 'engine',
-          action: 'HOLD',
-          executed: false,
-          confidence: 0,
-          justification: `Cycle passé sans consulter l'IA : ${budget.blockReason}.`,
-          technicalRationale: `RSI ${snapshot.indicators.rsi14}, MACD ${snapshot.indicators.macd.crossover}.`,
-          newsSentiment: 'INDISPONIBLE',
-          newsRationale: 'Non consultées (aucune action possible).',
-          riskDecision: budget.blockReason,
-          price,
-          indicators: snapshot.indicators,
-        });
-        return outcome;
-      }
-
+      // ── ON INTERROGE TOUJOURS LE MODÈLE, MÊME SANS POUVOIR AGIR ────────────
+      //
+      // Une version précédente sautait l'appel LLM quand aucune action n'était
+      // possible — plafond de positions atteint, ou coupe-circuit — pour
+      // « ménager le quota et la latence ». C'était une fausse économie, et
+      // mesurée comme telle : 30 appels par cycle pour 1000 disponibles, soit
+      // 4 % du quota. Elle coûtait 70 % de l'instrument de mesure.
+      //
+      // Dès que 3 positions étaient tenues, 7 actifs sur 10 disparaissaient du
+      // carnet fantôme. Le bot vendant rarement, c'était le régime NORMAL, pas
+      // l'exception. Et le biais était pire que la perte de volume : les seuls
+      // actifs encore mesurés étaient ceux qu'on détenait déjà, si bien qu'on
+      // aurait mesuré « sait-il garder ? » en croyant mesurer « sait-il
+      // choisir ? ».
+      //
+      // « Ç'aurait été un bon achat ? » est précisément la question que le
+      // carnet fantôme existe pour trancher — et elle vaut le plus cher
+      // justement quand on n'a pas pu agir.
       const news = await getNews(symbol);
+      const phase = calendarPhase();
+
+      // Budget présenté au modèle : arithmétique seule, sans nos verrous de
+      // politique. Sinon la prévision dépendrait de l'état du portefeuille et
+      // les observations cesseraient d'être comparables d'un cycle à l'autre.
+      const promptBudget = this.risk.computeBudget({
+        account, position, price, fxRate, circuitBreaker, ignorePolicyGates: true,
+      });
 
       const decision = await decide({
         snapshot,
         news,
         account,
         position,
-        budget,
+        budget: promptBudget,
+        calendar: phase,
         constraints: config.risk,
       });
 
       outcome.action = decision.action;
 
+      // La validation, elle, s'appuie sur le budget RÉEL, verrous compris.
       const validation = this.risk.validate({ decision, account, position, price, fxRate, budget });
 
       let tradeResult = null;
@@ -179,8 +203,22 @@ export class TradingEngine {
           meta: { source: 'llm', reason: decision.justification.slice(0, 200), confidence: decision.confidence },
         });
         if (tradeResult.status === 'filled') {
-          const levels = this.risk.protectionLevels(tradeResult.trade.price, decision);
+          // Le stop est dimensionné sur l'ATR courant de l'actif, pas sur un
+          // pourcentage arbitraire ni sur une suggestion du modèle.
+          //
+          // Référence : le prix de revient MOYEN de la position après l'ordre,
+          // pas le prix du dernier fill. Sur une position complétée en
+          // plusieurs fois, se baser sur le dernier fill faisait dériver le
+          // stop au gré du hasard intraday — il protégeait la dernière tranche
+          // au lieu du capital réellement engagé.
+          const after = await this.broker.getPosition(symbol);
+          const reference = after?.avgPrice ?? tradeResult.trade.price;
+          const levels = this.risk.protectionLevels(reference, snapshot.indicators.atr14);
           await this.broker.setProtection(symbol, levels);
+          log.info(
+            `Stop posé sur ${symbol} à ${levels.stopPrice} (${(levels.stopPct * 100).toFixed(1)} %, `
+            + `ATR ${levels.atrUsed}, PRU ${reference})`,
+          );
         }
       } else if (validation.approved && decision.action === 'SELL') {
         tradeResult = await this.broker.sell({
@@ -203,9 +241,17 @@ export class TradingEngine {
         confidence: decision.confidence,
         sizePct: decision.sizePct,
         justification: decision.justification,
-        technicalRationale: decision.technicalRationale,
         newsSentiment: decision.newsSentiment,
-        newsRationale: decision.newsRationale,
+        // La répartition annoncée : sans elle, le journal affiche une confiance
+        // de 55 % sans dire d'où elle sort ni de quel côté elle penche.
+        forecast: decision.forecast,
+        // Le pré-mortem était produit par le modèle à chaque décision et jeté.
+        // C'est pourtant la partie la plus instructive : ce que le modèle
+        // considère lui-même comme le point faible de sa lecture.
+        preMortem: decision.preMortem,
+        // Divergence entre son conseil et ce que le seuil a décidé.
+        advisedAction: decision.advisedAction,
+        advisoryConflict: decision.advisoryConflict,
         riskFlags: decision.riskFlags,
         riskDecision: outcome.reason,
         riskAdjustments: validation.adjustments,
@@ -220,8 +266,33 @@ export class TradingEngine {
         trade: tradeResult?.trade ?? null,
       });
 
+      // Le carnet fantôme enregistre TOUTES les décisions, exécutées ou non.
+      // C'est ce qui fait passer la mesure de ~70 observations par an à ~1000 :
+      // sans lui, 99 % de ce que produit le bot serait jeté.
+      await shadowBook.record({
+        symbol,
+        action: decision.action,
+        confidence: decision.confidence,
+        price,
+        executed: outcome.executed,
+        hadPosition: Boolean(position && position.quantity > 0),
+        newsAvailable: !news.degraded,
+        newsCount: news.articles.length,
+        calendarPhase: phase.phase,
+        model: decision.provider,
+        source: 'llm',
+        // La prévision chiffrée, indispensable à la mesure de calibration.
+        forecast: decision.forecast,
+        advisedAction: decision.advisedAction,
+        advisoryConflict: decision.advisoryConflict,
+        voided: decision.voided,
+      });
+
+      const f = decision.forecast;
       log.info(
-        `${symbol} → ${decision.action} (confiance ${decision.confidence}) : ${outcome.executed ? 'EXÉCUTÉ' : outcome.reason}`,
+        `${symbol} → ${decision.action}`
+        + (f ? ` (prévision ${Math.round(f.pUp * 100)}/${Math.round(f.pDown * 100)}/${Math.round(f.pFlat * 100)}, écart ${(f.edge * 100).toFixed(0)} pts)` : ' (sans prévision)')
+        + ` : ${outcome.executed ? 'EXÉCUTÉ' : outcome.reason}`,
       );
       return outcome;
     } catch (err) {
@@ -260,7 +331,22 @@ export class TradingEngine {
     log.info(`── Cycle #${this.cycleCount + 1} (${trigger}) ──`);
 
     try {
-      const symbols = [...new Set([...config.universe.symbols, ...(await this.broker.getPositions()).map((p) => p.symbol)])];
+      // Résolution du carnet fantôme AVANT toute nouvelle décision : on ferme
+      // le passé dont l'horizon est échu avant d'en produire davantage.
+      await shadowBook
+        .resolve((symbol) => getMarketSnapshot(symbol).then((s) => s.candles))
+        .catch((err) => log.warn(`Résolution du carnet fantôme reportée : ${err.message}`));
+
+      const symbols = [
+        ...new Set([
+          ...config.universe.symbols,
+          ...(await this.broker.getPositions()).map((p) => p.symbol),
+          // L'indice de référence sert à neutraliser le bêta de marché dans
+          // le scoring : sans lui, on mesurerait la direction du marché, pas
+          // la compétence de sélection du modèle.
+          BENCHMARK,
+        ]),
+      ];
 
       const quotes = await this.#collectQuotes(symbols);
       await this.broker.markToMarket(quotes);
@@ -279,6 +365,10 @@ export class TradingEngine {
         if (index > 0 && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
         results.push(await this.#processSymbol(symbol, { quotes, circuitBreaker }));
       }
+
+      // Récapitulatif des spreads observés : c'est la mesure qui, séance après
+      // séance, remplacera les estimations contradictoires par un chiffre réel.
+      await spreadLog.logSummary();
 
       const accountAfter = await this.broker.getAccount();
       const summary = {

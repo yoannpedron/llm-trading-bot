@@ -38,10 +38,15 @@ function buildPayload(userPrompt) {
       maxOutputTokens: config.llm.maxOutputTokens,
       responseMimeType: 'application/json',
       responseSchema: toGeminiSchema(DECISION_SCHEMA),
-      // Les modèles 2.5 « pensent » par défaut et consomment maxOutputTokens
-      // avant d'écrire la moindre ligne de JSON — d'où des réponses tronquées.
-      // Budget 0 = réponse directe ; l'augmenter améliore le raisonnement au
-      // prix de la latence et des tokens facturés.
+      // Les modèles récents « pensent » par défaut et consomment
+      // maxOutputTokens avant d'écrire la moindre ligne de JSON — d'où des
+      // réponses tronquées si on les laisse faire.
+      //
+      // Attention : Gemini 2.x accepte `thinkingBudget: 0` pour désactiver
+      // complètement la réflexion, mais Gemini 3.x le REFUSE (HTTP 400
+      // INVALID_ARGUMENT). Il lui faut un budget strictement positif ; 128
+      // suffit et le modèle n'en consomme alors aucun. La valeur par défaut
+      // est choisie par famille de modèle dans config.js.
       thinkingConfig: { thinkingBudget: config.llm.thinkingBudget },
     },
     safetySettings: [],
@@ -119,7 +124,14 @@ export const geminiProvider = {
         return { raw: text, usage: data.usageMetadata || null, model: config.llm.model, keyUsed: entry.masked };
       } catch (err) {
         if (err instanceof HttpError && err.status === 429) {
-          await keyPool.markExhausted(entry.id, 'HTTP 429 (quota journalier)');
+          // Le corps du 429 est la SEULE source d'information de Google sur le
+          // quota réel (aucun en-tête n'est renvoyé en cas de succès). On s'en
+          // sert pour recalibrer le plafond au lieu de le supposer.
+          const detected = keyPool.calibrateFrom429(err.body);
+          await keyPool.markExhausted(
+            entry.id,
+            detected ? `HTTP 429 (quota réel détecté : ${detected}/jour)` : 'HTTP 429 (quota journalier)',
+          );
           continue;
         }
         if (err instanceof HttpError && (err.status === 400 || err.status === 403)) {

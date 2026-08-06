@@ -39,40 +39,75 @@ export const heuristicProvider = {
     const cross = ind.macd?.crossover ?? 'unknown';
     const bullishTrend = ind.trend === 'haussière';
 
-    let action = 'HOLD';
-    let size = 0;
-    let confidence = 0.3;
-
     const technicalBuy = (cross === 'bullish_cross' || (cross === 'above_signal' && rsi < 60)) && rsi < 68;
     const technicalSell = cross === 'bearish_cross' || rsi > 75;
 
-    if (!hasPosition && technicalBuy && sentiment.score >= 0 && bullishTrend) {
-      action = 'BUY';
-      size = sentiment.label === 'POSITIF' ? 0.8 : 0.5;
-      confidence = sentiment.label === 'POSITIF' ? 0.65 : 0.45;
-    } else if (hasPosition && (technicalSell || sentiment.score < -0.4)) {
-      action = 'SELL';
-      size = 1;
-      confidence = 0.6;
-    }
+    // ── Conviction signée, puis répartition des 100 scénarios ─────────────
+    // Le moteur de secours doit parler le MÊME langage que le LLM, sinon la
+    // dérivation d'action côté agent le ramène systématiquement à HOLD et le
+    // fallback ne sert plus à rien.
+    let conviction = 0;
+    if (technicalBuy && bullishTrend) conviction += 0.5;
+    if (technicalSell) conviction -= 0.5;
+    conviction += sentiment.score * 0.3;
+    // Plafonné : une heuristique de secours ne prétend jamais à la quasi-certitude.
+    conviction = Math.max(-0.7, Math.min(0.7, conviction));
+
+    const flat = 15;
+    const spread = 100 - flat;
+    const up = Math.round((spread * (1 + conviction)) / 2);
+    const down = spread - up;
+
+    // Action indicative, cohérente avec la répartition (le seuil réel est
+    // appliqué côté agent).
+    const edge = (up - down) / 100;
+    const action = edge >= 0.2 ? 'BUY' : edge <= -0.2 ? 'SELL' : 'HOLD';
+    const size = action === 'SELL' ? 1 : action === 'BUY' ? Math.min(1, edge * 2) : 0;
+
+    // Le moteur de secours produit le MÊME schéma que le LLM, y compris les
+    // preuves et la grille : sans quoi la vérification d'ancrage rejetterait
+    // systématiquement ses décisions et le fallback serait inopérant.
+    const budget = context.budget?.maxNotionalBase ?? 0;
+    const notional = budget * size;
 
     const decision = {
-      action,
-      confidence,
-      size_pct: size,
-      technical_rationale: `RSI ${rsi}, MACD ${cross}, tendance ${ind.trend ?? 'inconnue'}.`,
+      evidence: {
+        cited_price: ind.price,
+        cited_rsi: rsi,
+        cited_atr_pct: ind.atrPct,
+        cited_budget: Number(budget.toFixed(2)),
+      },
+      checks: {
+        momentum_favorable: technicalBuy,
+        trend_favorable: bullishTrend,
+        news_confirms: sentiment.label === 'POSITIF',
+        volatility_acceptable: (ind.atrPct ?? 0) < 8,
+      },
       news_sentiment: sentiment.label,
-      news_rationale:
-        sentiment.label === 'INDISPONIBLE'
-          ? 'Aucune actualité exploitable sur la fenêtre analysée.'
-          : `Score lexical ${sentiment.score.toFixed(2)} sur ${context.news.articles.length} titres.`,
+      pre_mortem: {
+        scenario_defavorable:
+          'Le croisement MACD est un signal retardé : il peut survenir après l\'essentiel du mouvement, '
+          + 'auquel cas l\'entrée se fait au sommet local.',
+        signal_le_plus_fragile: sentiment.label === 'INDISPONIBLE'
+          ? 'Aucune actualité : la lecture est purement technique.'
+          : 'Le sentiment est déduit d\'un simple comptage de mots-clés, sans compréhension du contexte.',
+      },
+      forecast: {
+        sur_100_surperforme: up,
+        sur_100_sousperforme: down,
+        sur_100_indistinct: flat,
+      },
+      risk_math: {
+        proposed_notional: Number(notional.toFixed(2)),
+        stop_distance_pct: 0.1,
+        max_loss_dollars: Number((notional * 0.1).toFixed(2)),
+      },
+      action,
+      risk_flags: ['Décision produite par le moteur heuristique de secours, pas par le LLM.'],
       justification:
         action === 'HOLD'
-          ? `Attente : signal technique (RSI ${rsi}, MACD ${cross}) insuffisant ou contredit par le sentiment ${sentiment.label}.`
-          : `${action} : signal technique ${cross} avec RSI ${rsi} ET sentiment presse ${sentiment.label}.`,
-      risk_flags: ['Décision produite par le moteur heuristique de secours, pas par le LLM.'],
-      stop_loss_pct: 0.05,
-      take_profit_pct: 0.12,
+          ? `Attente : signal technique (RSI ${rsi}, MACD ${cross}) insuffisant ou contredit par les actualités (sentiment ${sentiment.label}).`
+          : `${action} : signal technique ${cross} avec RSI ${rsi} ET sentiment des actualités ${sentiment.label}.`,
     };
 
     return { raw: JSON.stringify(decision), usage: null, model: 'heuristic-v1' };

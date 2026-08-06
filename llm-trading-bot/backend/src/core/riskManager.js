@@ -5,6 +5,7 @@ import { JsonStore } from '../storage/JsonStore.js';
 const log = createLogger('risk');
 
 const today = () => new Date().toISOString().slice(0, 10);
+const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 /**
  * Gestionnaire de risque — la seule autorité qui décide de la TAILLE des ordres.
@@ -22,53 +23,71 @@ export class RiskManager {
   constructor(limits = config.risk) {
     this.limits = limits;
     this.store = new JsonStore(config.storage.dir, 'risk-state.json', {
+      month: currentMonth(),
+      monthStartEquity: null,
       day: today(),
-      dayStartEquity: null,
       circuitBreakerTrippedAt: null,
-      blockedTradesToday: 0,
+      blockedTradesThisMonth: 0,
     });
   }
 
   async init(account) {
     await this.store.load();
-    await this.#rollDay(account);
+    await this.#rollPeriod(account);
     return this;
   }
 
-  async #rollDay(account) {
+  async #rollPeriod(account) {
     const s = this.store.data;
-    if (s.day !== today() || s.dayStartEquity == null) {
-      s.day = today();
-      s.dayStartEquity = account.equity;
+    if (s.month !== currentMonth() || s.monthStartEquity == null) {
+      s.month = currentMonth();
+      s.monthStartEquity = account.equity;
       s.circuitBreakerTrippedAt = null;
-      s.blockedTradesToday = 0;
+      s.blockedTradesThisMonth = 0;
       await this.store.save();
-      log.info(`Nouvelle journée de trading — équity de référence ${account.equity} ${account.currency}`);
+      log.info(`Nouveau mois de trading — équity de référence ${account.equity} ${account.currency}`);
+    }
+    if (s.day !== today()) {
+      s.day = today();
+      await this.store.save();
     }
   }
 
   /**
-   * Coupe-circuit : au-delà de MAX_DAILY_LOSS_PCT de perte sur la journée,
-   * toute ouverture de position est interdite jusqu'au lendemain.
-   * Les sorties (SELL) restent autorisées : on doit toujours pouvoir se protéger.
+   * Coupe-circuit MENSUEL.
+   *
+   * ── Pourquoi mensuel et non journalier ───────────────────────────────────
+   * Un seuil journalier de 10 % représente 10 $ sur ce compte. L'ATR journalier
+   * d'une valeur comme TSLA atteint 3 à 5 % : sur un portefeuille investi, le
+   * simple bruit stochastique d'une séance d'ouverture suffit à déclencher le
+   * coupe-circuit. On couperait des stratégies gagnantes au hasard.
+   *
+   * À l'échelle du mois, une perte de 15 % ne relève plus du bruit : elle
+   * signale une dérive du modèle ou un changement de régime que la calibration
+   * n'a pas absorbé. C'est à ce niveau que l'arrêt devient informatif.
+   *
+   * Les ventes restent toujours autorisées : on doit pouvoir se protéger même
+   * coupe-circuit déclenché.
    */
   async checkCircuitBreaker(account) {
-    await this.#rollDay(account);
+    await this.#rollPeriod(account);
     const s = this.store.data;
-    const reference = s.dayStartEquity || account.equity;
+    const reference = s.monthStartEquity || account.equity;
     const drawdown = (reference - account.equity) / reference;
+    const limit = this.limits.maxMonthlyLossPct ?? this.limits.maxDailyLossPct ?? 0.15;
 
-    if (drawdown >= this.limits.maxDailyLossPct) {
+    if (drawdown >= limit) {
       if (!s.circuitBreakerTrippedAt) {
         s.circuitBreakerTrippedAt = new Date().toISOString();
         await this.store.save();
         log.error(
-          `COUPE-CIRCUIT déclenché : -${(drawdown * 100).toFixed(2)} % sur la journée (limite ${(this.limits.maxDailyLossPct * 100).toFixed(0)} %). Aucun nouvel achat aujourd'hui.`,
+          `COUPE-CIRCUIT déclenché : -${(drawdown * 100).toFixed(2)} % sur le mois ` +
+            `(limite ${(limit * 100).toFixed(0)} %). Aucun nouvel achat jusqu'au mois prochain.`,
         );
       }
-      return { tripped: true, drawdownPct: drawdown * 100, since: s.circuitBreakerTrippedAt };
+      return { tripped: true, drawdownPct: drawdown * 100, since: s.circuitBreakerTrippedAt, period: 'mois' };
     }
-    return { tripped: false, drawdownPct: drawdown * 100, since: null };
+    return { tripped: false, drawdownPct: drawdown * 100, since: null, period: 'mois' };
   }
 
   /**
@@ -76,7 +95,7 @@ export class RiskManager {
    * Ce calcul est injecté dans le prompt : le LLM connaît ainsi ses limites
    * réelles au lieu de proposer des tailles fantaisistes.
    */
-  computeBudget({ account, position, price, fxRate, circuitBreaker }) {
+  computeBudget({ account, position, price, fxRate, circuitBreaker, ignorePolicyGates = false }) {
     const priceBase = price * fxRate;
     const maxByEquity = account.equity * this.limits.maxPositionPct;
     const alreadyInvested = position ? position.marketValue ?? 0 : 0;
@@ -86,9 +105,37 @@ export class RiskManager {
     let canBuy = true;
     let blockReason = null;
 
+    // ── Budget « arithmétique », sans les verrous de politique ──────────────
+    // Utilisé UNIQUEMENT pour construire le prompt. Le coupe-circuit et le
+    // plafond du nombre de positions sont nos règles de gestion, pas des faits
+    // de marché : les afficher au modèle changerait sa PRÉVISION selon que le
+    // portefeuille est plein ou non, et les observations cesseraient d'être
+    // comparables entre elles.
+    //
+    // Ce n'est pas une précaution théorique : ce modèle lit le contexte dans ses
+    // prévisions — mesuré ce matin, il penche à la baisse quand les actualités
+    // manquent, à l'encontre d'une consigne explicite. Lui annoncer « achat
+    // INTERDIT » influencerait de la même façon.
+    //
+    // Le prompt lui dit déjà : « le seuil de passage à l'acte est appliqué
+    // ailleurs, tu n'as pas à en tenir compte ». Ce paramètre rend cette phrase
+    // vraie.
+    if (ignorePolicyGates) {
+      return {
+        maxNotionalBase,
+        maxQuantity: priceBase > 0 ? Number((maxNotionalBase / priceBase).toFixed(6)) : 0,
+        canBuy: maxNotionalBase >= this.limits.minOrderValue,
+        blockReason: maxNotionalBase >= this.limits.minOrderValue
+          ? null
+          : `budget disponible ${maxNotionalBase.toFixed(2)} ${account.currency} < minimum ${this.limits.minOrderValue}`,
+        totalAllowance: Number(maxByEquity.toFixed(2)),
+        alreadyInvested: Number(alreadyInvested.toFixed(2)),
+      };
+    }
+
     if (circuitBreaker?.tripped) {
       canBuy = false;
-      blockReason = `coupe-circuit actif (-${circuitBreaker.drawdownPct.toFixed(1)} % aujourd'hui)`;
+      blockReason = `coupe-circuit actif (-${circuitBreaker.drawdownPct.toFixed(1)} % sur le ${circuitBreaker.period ?? 'mois'})`;
     } else if (!position && account.positionsCount >= this.limits.maxPositions) {
       canBuy = false;
       blockReason = `nombre maximum de positions atteint (${this.limits.maxPositions})`;
@@ -102,6 +149,12 @@ export class RiskManager {
       maxQuantity: priceBase > 0 ? Number((maxNotionalBase / priceBase).toFixed(6)) : 0,
       canBuy,
       blockReason,
+      // Enveloppe TOTALE autorisée sur l'actif, et ce qui y est déjà engagé.
+      // `maxNotionalBase` ne dit que la marge restante — c'est le bon chiffre à
+      // montrer au modèle, mais pas celui sur lequel dimensionner : voir
+      // `validate`, qui raisonne en exposition cible.
+      totalAllowance: Number(maxByEquity.toFixed(2)),
+      alreadyInvested: Number(alreadyInvested.toFixed(2)),
     };
   }
 
@@ -114,7 +167,16 @@ export class RiskManager {
     const priceBase = price * fxRate;
 
     if (decision.action === 'HOLD') {
-      return { approved: false, quantity: 0, reason: 'décision HOLD', adjustments };
+      // « décision HOLD » ne disait rien : ni pourquoi, ni ce qu'il aurait fallu
+      // pour agir. Or l'inaction est le cas le plus FRÉQUENT du bot — c'est donc
+      // celui qui a le plus besoin d'être expliqué, sinon le journal se résume à
+      // dix lignes identiques et illisibles.
+      return {
+        approved: false,
+        quantity: 0,
+        reason: explainHold(decision, position, this.limits),
+        adjustments,
+      };
     }
 
     if (decision.action === 'SELL') {
@@ -126,10 +188,10 @@ export class RiskManager {
           adjustments,
         };
       }
-      // Une conviction faible ne justifie pas de solder toute la ligne d'un coup.
-      const fraction = decision.confidence >= 0.7 ? 1 : Math.max(decision.sizePct, 0.5);
-      const quantity = Number((position.quantity * Math.min(fraction, 1)).toFixed(6));
-      if (fraction < 1) adjustments.push(`sortie partielle ${(fraction * 100).toFixed(0)} % (confiance ${decision.confidence})`);
+      // Sortie totale. Une sortie partielle laisserait une position résiduelle
+      // de quelques dollars, dont le stop serait plus coûteux à gérer que la
+      // ligne ne vaut — et sur un compte de 100 $ elle ne protège de rien.
+      const quantity = position.quantity;
       return { approved: quantity > 0, quantity, reason: 'vente autorisée', adjustments };
     }
 
@@ -137,17 +199,74 @@ export class RiskManager {
     if (!budget.canBuy) {
       return { approved: false, quantity: 0, reason: `achat bloqué : ${budget.blockReason}`, adjustments };
     }
-    if (decision.confidence < 0.35) {
+    // Le repli explicite n'est pas décoratif : `limits` peut arriver partiel, et
+    // `confiance < undefined` vaut toujours faux — le garde-fou se
+    // désactiverait sans le dire.
+    const minConfidence = this.limits.minConfidence ?? 0.35;
+    if (decision.confidence < minConfidence) {
       return {
         approved: false,
         quantity: 0,
-        reason: `achat bloqué : confiance ${decision.confidence} sous le seuil 0.35`,
+        reason: `achat bloqué : probabilité ${decision.confidence} sous le seuil ${minConfidence}`,
         adjustments,
       };
     }
 
-    // La conviction module la taille à l'intérieur du budget autorisé.
-    const notional = budget.maxNotionalBase * decision.sizePct * (0.5 + decision.confidence / 2);
+    // ── Une seule fonction de conviction, pas deux ─────────────────────────
+    // Cette ligne multipliait `sizePct` par (0,5 + confiance/2). C'était
+    // cohérent quand le modèle fournissait lui-même une taille et une confiance
+    // indépendantes : le second facteur corrigeait la première.
+    //
+    // Ce n'est plus le cas. `sizePct` est maintenant DÉDUIT de l'écart de
+    // probabilité, donc il encode déjà la conviction. Le produit des deux
+    // appliquait une conviction au carré, avec une forme que personne n'a
+    // choisie — et rabotait les positions de 5 à 25 % au passage.
+    //
+    // ── EXPOSITION CIBLE, PAS ACHAT INCRÉMENTAL ────────────────────────────
+    // `sizePct` dimensionnait la MARGE RESTANTE, pas l'enveloppe totale. Sur
+    // trois cycles consécutifs au même signal, cela produisait trois achats
+    // décroissants — 12,02 $ puis 5,74 $ puis 5,11 $ — une série géométrique
+    // convergeant vers le plafond, chaque tranche payant le spread.
+    //
+    // Or les bougies sont JOURNALIÈRES : à trois cycles par jour, le RSI,
+    // l'ATR et la tendance sont pratiquement identiques. C'est la même décision
+    // exécutée trois fois. Le carnet fantôme le reconnaît déjà et déduplique à
+    // une observation par actif et par jour ; l'exécution, elle, comptait ces
+    // signaux comme indépendants. Incohérence corrigée ici.
+    //
+    // `sizePct` exprime donc désormais une exposition VOULUE sur l'enveloppe
+    // entière. On n'achète que l'écart entre cette cible et ce qui est déjà
+    // engagé. Même signal deux fois → rien à faire. Conviction réellement
+    // renforcée un autre jour → la cible monte, et on complète.
+    const allowance = budget.totalAllowance ?? budget.maxNotionalBase;
+    const invested = budget.alreadyInvested ?? 0;
+    const target = allowance * decision.sizePct;
+    const notional = Math.min(target - invested, budget.maxNotionalBase);
+
+    if (invested > 0) {
+      adjustments.push(
+        `exposition cible ${target.toFixed(2)} ${account.currency}, déjà engagé ${invested.toFixed(2)} → complément ${notional.toFixed(2)}`,
+      );
+    }
+
+    // Asymétrie DÉLIBÉRÉE : quand la cible tombe sous l'exposition en cours, on
+    // ne allège pas. La fonction de dimensionnement gouverne l'ENTRÉE ; la
+    // sortie appartient au stop et aux signaux de vente.
+    //
+    // En faire un rebalanceur continu paraîtrait plus cohérent et coûterait
+    // cher : la conviction du modèle oscille de quelques points d'un cycle à
+    // l'autre, chaque ajustement paierait le spread mesuré (~11 bps), et cette
+    // rotation mangerait précisément l'avantage qu'on cherche à mesurer.
+    if (notional < this.limits.minOrderValue && invested > 0) {
+      return {
+        approved: false,
+        quantity: 0,
+        reason:
+          `achat ignoré : exposition déjà proche de la cible (${invested.toFixed(2)} sur ${target.toFixed(2)} ${account.currency} visés) `
+          + '— le signal n\'a pas changé depuis la dernière entrée',
+        adjustments,
+      };
+    }
     if (notional < this.limits.minOrderValue) {
       return {
         approved: false,
@@ -164,13 +283,31 @@ export class RiskManager {
     return { approved: quantity > 0, quantity, reason: 'achat autorisé', adjustments };
   }
 
-  /** Niveaux de protection posés à l'ouverture, en devise native de l'actif. */
-  protectionLevels(entryPrice, decision) {
-    const sl = decision?.stopLossPct ?? this.limits.stopLossPct;
-    const tp = decision?.takeProfitPct ?? this.limits.takeProfitPct;
+  /**
+   * Niveaux de protection posés à l'ouverture.
+   *
+   * Le stop est dimensionné sur l'ATR et non sur un pourcentage fixe. La
+   * raison est empirique : un stop à 5 % est SOUS le bruit quotidien d'une
+   * valeur dont l'ATR journalier atteint 3 à 5 %. On se ferait sortir au hasard
+   * par de la variance normale, pas par une invalidation de la thèse.
+   *
+   * Le plancher et le plafond évitent les deux dérives : un actif anormalement
+   * calme donnerait un stop si serré qu'il déclencherait au moindre tick, un
+   * actif en crise donnerait un stop si large qu'il ne protégerait plus rien.
+   *
+   * Aucun take-profit n'est posé : un objectif fixe tronque la queue droite de
+   * la distribution et détruit l'espérance des mouvements de tendance, qui
+   * reposent précisément sur une minorité de gains très étendus.
+   */
+  protectionLevels(entryPrice, atr) {
+    const raw = atr > 0 ? (this.limits.stopAtrMultiple * atr) / entryPrice : this.limits.stopMinPct;
+    const stopPct = Math.min(Math.max(raw, this.limits.stopMinPct), this.limits.stopMaxPct);
+
     return {
-      stopPrice: Number((entryPrice * (1 - sl)).toFixed(4)),
-      takeProfitPrice: Number((entryPrice * (1 + tp)).toFixed(4)),
+      stopPrice: Number((entryPrice * (1 - stopPct)).toFixed(4)),
+      takeProfitPrice: null,
+      stopPct: Number(stopPct.toFixed(4)),
+      atrUsed: atr ?? null,
     };
   }
 
@@ -181,14 +318,23 @@ export class RiskManager {
   checkExits(position, price) {
     if (!position || position.quantity <= 0) return null;
 
-    const stop = position.stopPrice ?? position.avgPrice * (1 - this.limits.stopLossPct);
-    const target = position.takeProfitPrice ?? position.avgPrice * (1 + this.limits.takeProfitPct);
+    // Si aucun stop n'a été posé (position ouverte hors du bot, ou état perdu),
+    // on retombe sur le plancher plutôt que de laisser la ligne sans protection.
+    const stop = position.stopPrice ?? position.avgPrice * (1 - this.limits.stopMinPct);
 
     if (price <= stop) {
-      return { triggered: 'STOP_LOSS', reason: `stop-loss touché : ${price} <= ${stop.toFixed(4)}`, level: stop };
+      return { triggered: 'STOP_LOSS', reason: `stop touché : ${price} <= ${stop.toFixed(4)}`, level: stop };
     }
-    if (price >= target) {
-      return { triggered: 'TAKE_PROFIT', reason: `objectif atteint : ${price} >= ${target.toFixed(4)}`, level: target };
+
+    // Take-profit uniquement s'il a été explicitement posé — ce que la
+    // stratégie ne fait plus. Conservé pour ne pas ignorer un niveau défini
+    // manuellement via l'API.
+    if (position.takeProfitPrice && price >= position.takeProfitPrice) {
+      return {
+        triggered: 'TAKE_PROFIT',
+        reason: `objectif atteint : ${price} >= ${position.takeProfitPrice.toFixed(4)}`,
+        level: position.takeProfitPrice,
+      };
     }
     return null;
   }
@@ -196,4 +342,44 @@ export class RiskManager {
   get state() {
     return this.store.data;
   }
+}
+
+/**
+ * Explique une inaction en toutes lettres.
+ *
+ * Le bot ne fait rien dans la grande majorité des cycles : c'est le
+ * comportement attendu, pas une panne. Mais un journal qui répète « décision
+ * HOLD » dix fois par cycle est inexploitable — on ne sait pas si le modèle
+ * hésitait, si le seuil a mordu de peu, ni ce qu'il aurait fallu pour agir.
+ *
+ * Le message dit donc trois choses : la répartition annoncée, l'écart obtenu,
+ * et l'écart qu'il aurait fallu — dans le sens pertinent selon qu'une position
+ * est détenue ou non.
+ */
+function explainHold(decision, position, limits) {
+  const f = decision.forecast;
+  const held = Boolean(position && position.quantity > 0);
+
+  if (!f) {
+    return held
+      ? 'position conservée : aucune prévision exploitable, on ne touche à rien par défaut'
+      : 'aucune action : aucune prévision exploitable';
+  }
+
+  const pct = (v) => Math.round(v * 100);
+  const repartition = `${pct(f.pUp)} hausse / ${pct(f.pDown)} baisse / ${pct(f.pFlat)} indécis`;
+  const ecart = Math.round(f.edge * 100);
+  const seuil = Math.round((limits.minEdge ?? 0.2) * 100);
+  const signe = ecart >= 0 ? `+${ecart}` : `${ecart}`;
+
+  // Quand le modèle recommandait autre chose, c'est l'information la plus
+  // parlante du message : elle montre que c'est le seuil qui a tranché.
+  const avis = decision.advisedAction && decision.advisedAction !== 'HOLD'
+    ? ` — le modèle conseillait ${decision.advisedAction}, le seuil a dit non`
+    : '';
+
+  if (held) {
+    return `position conservée (${repartition}) : écart ${signe} pts, il en faudrait -${seuil} pour sortir${avis}`;
+  }
+  return `aucune action (${repartition}) : écart ${signe} pts, il en faudrait +${seuil} pour entrer${avis}`;
 }

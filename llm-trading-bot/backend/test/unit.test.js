@@ -22,7 +22,7 @@ process.env.SYMBOLS = 'TSLA,AAPL';
 const { rsi, ema, sma, macd, atr, computeIndicators } = await import('../src/data/indicators.js');
 const { PaperBrokerAdapter } = await import('../src/brokers/PaperBrokerAdapter.js');
 const { RiskManager } = await import('../src/core/riskManager.js');
-const { normalizeDecision } = await import('../src/llm/agent.js');
+const { normalizeDecision, normalizeForecast, deriveAction } = await import('../src/llm/agent.js');
 const { parseRss } = await import('../src/news/providers/rss.js');
 const { keyPool, recommendCron } = await import('../src/llm/keyPool.js');
 
@@ -177,8 +177,9 @@ describe('PaperBrokerAdapter', () => {
 describe('RiskManager', () => {
   const account = { equity: 100, cash: 100, currency: 'EUR', positionsCount: 0 };
   const risk = new RiskManager({
-    baseCurrency: 'EUR', initialCapital: 100, maxPositions: 3, maxPositionPct: 0.35,
-    minOrderValue: 5, stopLossPct: 0.05, takeProfitPct: 0.12, maxDailyLossPct: 0.1,
+    baseCurrency: 'USD', initialCapital: 100, maxPositions: 3, maxPositionPct: 0.35,
+    minOrderValue: 5, maxDailyLossPct: 0.1,
+    stopAtrMultiple: 4, stopMinPct: 0.08, stopMaxPct: 0.2,
   });
 
   test('le budget respecte le plafond par position', () => {
@@ -206,14 +207,55 @@ describe('RiskManager', () => {
     assert.match(budget.blockReason, /nombre maximum/);
   });
 
-  test('une confiance trop faible fait rejeter l\'achat', () => {
+  test('une probabilité trop faible fait rejeter l\'achat', () => {
     const budget = risk.computeBudget({ account, position: null, price: 10, fxRate: 1, circuitBreaker: { tripped: false } });
     const validation = risk.validate({
       decision: { action: 'BUY', confidence: 0.2, sizePct: 1 },
       account, position: null, price: 10, fxRate: 1, budget,
     });
     assert.equal(validation.approved, false);
-    assert.match(validation.reason, /confiance/);
+    assert.match(validation.reason, /sous le seuil/);
+  });
+
+  test('le seuil de probabilité reste actif même si limits est incomplet', () => {
+    // `confiance < undefined` vaut toujours faux : sans repli explicite, un
+    // objet de limites partiel désactiverait ce garde-fou en silence.
+    const partiel = new RiskManager({ maxPositions: 3, maxPositionPct: 0.35, minOrderValue: 5 });
+    const budget = { canBuy: true, maxNotionalBase: 35, blockReason: null };
+    const v = partiel.validate({
+      decision: { action: 'BUY', confidence: 0.1, sizePct: 1 },
+      account, position: null, price: 10, fxRate: 1, budget,
+    });
+    assert.equal(v.approved, false, 'le seuil doit s\'appliquer malgré la limite absente');
+  });
+
+  test('la taille ne dépend que de sizePct, pas deux fois de la conviction', () => {
+    // sizePct est désormais DÉDUIT de l'écart de probabilité : le multiplier
+    // encore par un facteur de confiance appliquerait une conviction au carré.
+    const budget = risk.computeBudget({ account, position: null, price: 10, fxRate: 1, circuitBreaker: { tripped: false } });
+    const faible = risk.validate({
+      decision: { action: 'BUY', confidence: 0.45, sizePct: 0.5 },
+      account, position: null, price: 10, fxRate: 1, budget,
+    });
+    const forte = risk.validate({
+      decision: { action: 'BUY', confidence: 0.9, sizePct: 0.5 },
+      account, position: null, price: 10, fxRate: 1, budget,
+    });
+    assert.equal(
+      faible.quantity,
+      forte.quantity,
+      'à sizePct égal, la quantité ne doit pas varier avec la probabilité annoncée',
+    );
+  });
+
+  test('une vente solde toujours la ligne entière', () => {
+    const budget = risk.computeBudget({ account, position: { quantity: 3 }, price: 10, fxRate: 1, circuitBreaker: { tripped: false } });
+    const v = risk.validate({
+      decision: { action: 'SELL', confidence: 0.41, sizePct: 1 },
+      account, position: { quantity: 3 }, price: 10, fxRate: 1, budget,
+    });
+    assert.equal(v.approved, true);
+    assert.equal(v.quantity, 3, 'aucun résidu : un reliquat de quelques dollars ne protège de rien');
   });
 
   test('un achat validé ne dépasse jamais le budget autorisé', () => {
@@ -245,71 +287,173 @@ describe('RiskManager', () => {
     assert.equal(validation.quantity, 4);
   });
 
-  test('le stop-loss se déclenche sous le niveau', () => {
-    const exit = risk.checkExits({ quantity: 1, avgPrice: 100, stopPrice: 95, takeProfitPrice: 112 }, 94);
+  test('le stop se déclenche sous le niveau', () => {
+    const exit = risk.checkExits({ quantity: 1, avgPrice: 100, stopPrice: 90 }, 89);
     assert.equal(exit.triggered, 'STOP_LOSS');
   });
 
-  test('le take-profit se déclenche au-dessus de l\'objectif', () => {
-    const exit = risk.checkExits({ quantity: 1, avgPrice: 100, stopPrice: 95, takeProfitPrice: 112 }, 115);
-    assert.equal(exit.triggered, 'TAKE_PROFIT');
+  test('aucune sortie au-dessus du stop, même très haut', () => {
+    // Plus de take-profit : une position gagnante n'est jamais coupée
+    // mécaniquement, pour ne pas tronquer la queue droite de la distribution.
+    assert.equal(risk.checkExits({ quantity: 1, avgPrice: 100, stopPrice: 90 }, 150), null);
   });
 
-  test('aucune sortie entre les deux niveaux', () => {
-    assert.equal(risk.checkExits({ quantity: 1, avgPrice: 100, stopPrice: 95, takeProfitPrice: 112 }, 103), null);
+  test('le stop est dimensionné sur l\'ATR', () => {
+    // ATR de 3 $ sur un prix de 100 $ → 4 × 3 = 12 % → dans les bornes [8 %, 20 %]
+    const levels = risk.protectionLevels(100, 3);
+    assert.equal(levels.stopPct, 0.12);
+    assert.equal(levels.stopPrice, 88);
+    assert.equal(levels.takeProfitPrice, null);
   });
 
-  test('les niveaux de protection encadrent le prix d\'entrée', () => {
-    const levels = risk.protectionLevels(100, { stopLossPct: 0.05, takeProfitPct: 0.12 });
-    assert.equal(levels.stopPrice, 95);
-    assert.equal(levels.takeProfitPrice, 112);
+  test('le stop respecte le plancher sur un actif très calme', () => {
+    // ATR de 0,5 $ → 4 × 0,5 = 2 % → relevé au plancher de 8 %
+    const levels = risk.protectionLevels(100, 0.5);
+    assert.equal(levels.stopPct, 0.08);
+    assert.equal(levels.stopPrice, 92);
+  });
+
+  test('le stop respecte le plafond sur un actif en crise', () => {
+    // ATR de 10 $ → 4 × 10 = 40 % → ramené au plafond de 20 %
+    const levels = risk.protectionLevels(100, 10);
+    assert.equal(levels.stopPct, 0.2);
+    assert.equal(levels.stopPrice, 80);
   });
 });
 
 describe('normalisation des décisions LLM', () => {
+  // Grille unanime : sans elle le second verrou (≥ 3 critères sur 4) bloque
+  // tout achat, indépendamment de la prévision.
+  const checks = {
+    momentum_favorable: true, trend_favorable: true,
+    news_confirms: true, volatility_acceptable: true,
+  };
+
   const base = {
-    action: 'BUY', confidence: 0.8, size_pct: 0.5,
+    action: 'BUY',
+    checks,
+    forecast: { sur_100_surperforme: 65, sur_100_sousperforme: 20, sur_100_indistinct: 15 },
     technical_rationale: 'RSI bas', news_sentiment: 'POSITIF',
     news_rationale: 'bonnes nouvelles',
     justification: 'J\'achète car le RSI est bas ET les actualités sont positives.',
   };
 
-  test('une décision conforme passe intacte', () => {
+  test('une prévision nettement haussière produit un achat', () => {
     const d = normalizeDecision(base);
     assert.equal(d.action, 'BUY');
-    assert.equal(d.sizePct, 0.5);
+    assert.equal(d.confidence, 0.65, 'la confiance est la probabilité annoncée, pas un nombre inventé');
+    assert.ok(d.sizePct > 0.25 && d.sizePct < 1, `taille proportionnée à l'écart, obtenu ${d.sizePct}`);
     assert.deepEqual(d.warnings, []);
   });
 
-  test('une action inconnue est ramenée à HOLD', () => {
-    const d = normalizeDecision({ ...base, action: 'SHORT' });
+  test('un écart sous le seuil produit un HOLD, même si le modèle conseille d\'acheter', () => {
+    const d = normalizeDecision({
+      ...base,
+      forecast: { sur_100_surperforme: 48, sur_100_sousperforme: 42, sur_100_indistinct: 10 },
+    });
+    assert.equal(d.action, 'HOLD', '6 points d\'écart ne suffisent pas');
+    assert.equal(d.advisedAction, 'BUY');
+    assert.equal(d.advisoryConflict, true, 'la divergence doit être tracée');
+  });
+
+  test('une prévision nettement baissière produit une vente', () => {
+    const d = normalizeDecision({
+      ...base,
+      forecast: { sur_100_surperforme: 15, sur_100_sousperforme: 70, sur_100_indistinct: 15 },
+    });
+    assert.equal(d.action, 'SELL');
+    assert.equal(d.sizePct, 1, 'une sortie est toujours totale');
+    assert.equal(d.confidence, 0.7);
+  });
+
+  test('une répartition qui ne totalise pas 100 est renormalisée et signalée', () => {
+    const d = normalizeDecision({
+      ...base,
+      forecast: { sur_100_surperforme: 130, sur_100_sousperforme: 40, sur_100_indistinct: 30 },
+    });
+    assert.equal(d.action, 'BUY');
+    assert.equal(d.forecast.pUp, 0.65, '130/200 = 0,65');
+    assert.ok(d.warnings.some((w) => /totalisant 200/.test(w)));
+  });
+
+  test('la probabilité conditionnelle exclut la bande d\'indécision', () => {
+    const d = normalizeDecision({
+      ...base,
+      forecast: { sur_100_surperforme: 60, sur_100_sousperforme: 20, sur_100_indistinct: 20 },
+    });
+    // 60 / (60 + 20) = 0,75 : c'est cette valeur qui se confronte au signe du
+    // rendement excédentaire dans la mesure de calibration.
+    assert.equal(d.forecast.pUpGivenMove, 0.75);
+  });
+
+  test('une prévision absente conduit à HOLD sans planter', () => {
+    const d = normalizeDecision({ action: 'BUY', checks, justification: 'x' });
     assert.equal(d.action, 'HOLD');
-    assert.equal(d.sizePct, 0);
+    assert.equal(d.forecast, null);
+    assert.ok(d.warnings.some((w) => /prévision absente/.test(w)));
   });
 
-  test('les valeurs hors bornes sont écrêtées', () => {
-    const d = normalizeDecision({ ...base, confidence: 42, size_pct: 9 });
-    assert.equal(d.confidence, 1);
-    assert.equal(d.sizePct, 1);
-  });
-
-  test('un BUY de taille nulle devient HOLD', () => {
-    const d = normalizeDecision({ ...base, size_pct: 0 });
-    assert.equal(d.action, 'HOLD');
-    assert.ok(d.warnings.length > 0);
-  });
-
-  test('une justification sans référence aux actualités est signalée', () => {
+  test('le vocabulaire de la justification ne déclenche plus d\'avertissement', () => {
+    // Ce contrôle cherchait des mots-clés d'actualité dans la justification.
+    // Mesuré en production : 15 déclenchements sur 35 décisions, et c'était le
+    // seul avertissement jamais émis — que des fausses alertes, du type
+    // « soutenue par des partenariats solides dans l'IA », qui référence les
+    // actualités sans employer les mots cherchés. Un canal d'alerte saturé de
+    // bruit entraîne à ignorer les vraies alertes.
+    //
+    // La question « les actualités servent-elles ? » est tranchée par la
+    // segmentation AVEC/SANS actualités du carnet fantôme, pas par un regex.
     const d = normalizeDecision({ ...base, justification: 'Le RSI est bas.' });
-    assert.ok(d.warnings.some((w) => /actualités/.test(w)));
+    assert.deepEqual(d.warnings, [], 'aucun avertissement sur le seul vocabulaire');
+    assert.equal(d.action, 'BUY', 'et la décision reste intacte');
   });
 
-  test('les champs manquants reçoivent des valeurs sûres', () => {
-    const d = normalizeDecision({ action: 'HOLD' });
-    assert.equal(d.confidence, 0.3);
+  test('le stop n\'est jamais une sortie du modèle', () => {
+    const d = normalizeDecision({ action: 'HOLD', checks, justification: 'rien à faire' });
+    assert.equal(d.stopLossPct, undefined);
     assert.equal(d.sizePct, 0);
-    assert.equal(typeof d.justification, 'string');
-    assert.ok(d.stopLossPct > 0);
+  });
+
+  test('le pré-mortem est conservé quand il est fourni', () => {
+    const d = normalizeDecision({
+      ...base,
+      pre_mortem: { scenario_defavorable: 'la hausse était un rebond technique', signal_le_plus_fragile: 'le RSI' },
+    });
+    assert.equal(d.preMortem.scenario, 'la hausse était un rebond technique');
+    assert.equal(d.preMortem.weakestSignal, 'le RSI');
+  });
+});
+
+describe('dérivation de l\'action depuis la prévision', () => {
+  const seuils = { minEdge: 0.2, minUpProbability: 0.4 };
+
+  test('la taille croît avec l\'écart de probabilité', () => {
+    const petit = deriveAction(normalizeForecast({ sur_100_surperforme: 55, sur_100_sousperforme: 30, sur_100_indistinct: 15 }), seuils);
+    const grand = deriveAction(normalizeForecast({ sur_100_surperforme: 85, sur_100_sousperforme: 5, sur_100_indistinct: 10 }), seuils);
+    assert.equal(petit.action, 'BUY');
+    assert.equal(grand.action, 'BUY');
+    assert.ok(grand.sizePct > petit.sizePct, `${grand.sizePct} doit dépasser ${petit.sizePct}`);
+  });
+
+  test('franchir tout juste le seuil engage une taille non nulle', () => {
+    // Sans plancher de taille, un écart pile au seuil donnerait 0 donc un HOLD :
+    // une zone morte où le signal suffit à agir mais la mise est trop faible.
+    const d = deriveAction(normalizeForecast({ sur_100_surperforme: 55, sur_100_sousperforme: 35, sur_100_indistinct: 10 }), seuils);
+    assert.equal(d.action, 'BUY');
+    assert.equal(d.sizePct, 0.25);
+  });
+
+  test('un écart suffisant mais une probabilité haussière faible reste un HOLD', () => {
+    // 38/18/44 : l'écart atteint 20 points, mais le scénario dominant est
+    // l'indécision. Agir dessus reviendrait à parier sur une minorité.
+    const d = deriveAction(normalizeForecast({ sur_100_surperforme: 38, sur_100_sousperforme: 18, sur_100_indistinct: 44 }), seuils);
+    assert.equal(d.action, 'HOLD');
+  });
+
+  test('une répartition dégénérée est refusée', () => {
+    assert.equal(normalizeForecast({ sur_100_surperforme: 0, sur_100_sousperforme: 0, sur_100_indistinct: 0 }), null);
+    assert.equal(normalizeForecast({ sur_100_surperforme: -10, sur_100_sousperforme: 50, sur_100_indistinct: 60 }), null);
+    assert.equal(normalizeForecast(null), null);
   });
 });
 
@@ -412,5 +556,52 @@ describe('parseur RSS', () => {
 
   test('retourne un tableau vide sur un flux sans items', () => {
     assert.deepEqual(parseRss('<rss><channel></channel></rss>', 'x'), []);
+  });
+});
+
+describe('mode dégradé — actualités indisponibles', () => {
+  const checks = {
+    momentum_favorable: true, trend_favorable: true,
+    news_confirms: false, volatility_acceptable: true,
+  };
+  // Écart de 25 points : suffisant en mode normal, insuffisant sans actualités.
+  const base = {
+    checks,
+    action: 'SELL',
+    forecast: { sur_100_surperforme: 30, sur_100_sousperforme: 55, sur_100_indistinct: 15 },
+    news_sentiment: 'INDISPONIBLE',
+    justification: 'Technique seule, aucune actualité disponible.',
+  };
+
+  test('un écart de 25 points déclenche une vente en mode normal', () => {
+    const d = normalizeDecision(base, null, { degraded: false });
+    assert.equal(d.action, 'SELL');
+  });
+
+  test('le même écart ne suffit plus sans actualités', () => {
+    // Le modèle penche à la baisse quand l'information manque, au lieu de se
+    // resserrer comme le prompt le demande. Une panne de flux RSS ne doit pas
+    // suffire à solder une position saine.
+    const d = normalizeDecision(base, null, { degraded: true });
+    assert.equal(d.action, 'HOLD');
+    assert.ok(d.warnings.some((w) => /écart minimal relevé/.test(w)));
+  });
+
+  test('un écart franc passe même en mode dégradé', () => {
+    const d = normalizeDecision(
+      { ...base, forecast: { sur_100_surperforme: 20, sur_100_sousperforme: 70, sur_100_indistinct: 10 } },
+      null,
+      { degraded: true },
+    );
+    assert.equal(d.action, 'SELL');
+  });
+
+  test('la prévision annoncée reste intacte quel que soit le seuil', () => {
+    // Le seuil filtre l'ACTION. Toucher à la probabilité corromprait la mesure
+    // de calibration, qui doit juger le modèle et non nos garde-fous.
+    const normal = normalizeDecision(base, null, { degraded: false });
+    const degrade = normalizeDecision(base, null, { degraded: true });
+    assert.deepEqual(normal.forecast, degrade.forecast);
+    assert.equal(degrade.forecast.pDown, 0.55);
   });
 });

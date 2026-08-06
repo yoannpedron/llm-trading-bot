@@ -4,6 +4,7 @@ import { getJson } from '../utils/http.js';
 import { finnhubProvider } from './providers/finnhub.js';
 import { newsapiProvider } from './providers/newsapi.js';
 import { rssProvider } from './providers/rss.js';
+import { buildRedactionTerms } from '../llm/anonymize.js';
 
 const log = createLogger('news');
 
@@ -41,12 +42,32 @@ async function resolveCompanyName(symbol) {
 
 const normalizeTitle = (t) => (t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 90);
 
-function dedupeAndRank(articles, lookbackHours, maxArticles) {
+/**
+ * Ne conserve que les articles qui mentionnent réellement l'entreprise ciblée.
+ *
+ * Ce filtre n'est pas cosmétique. Mesuré sur NVDA : le flux « headline » de
+ * Yahoo Finance ne renvoie que 3 articles pertinents sur 20 — c'est un flux
+ * sectoriel qui remonte Astera Labs, Amphenol ou Applied Materials. Comme le
+ * classement se fait par date, ce bruit chassait les articles pertinents de
+ * Google News (100 % de pertinence) hors de la fenêtre transmise au modèle.
+ *
+ * Conséquence observée avant correction : le LLM répondait, à juste titre,
+ * que « les actualités ne concernent pas directement l'actif analysé ». Le
+ * canal fondamental était donc structurellement inopérant.
+ */
+function isRelevant(article, terms) {
+  if (!terms.length) return true; // aucun terme identifiable : on ne filtre pas
+  const haystack = `${article.title || ''} ${article.summary || ''}`.toLowerCase();
+  return terms.some((term) => haystack.includes(term.toLowerCase()));
+}
+
+function dedupeAndRank(articles, lookbackHours, maxArticles, terms = []) {
   const cutoff = Date.now() - lookbackHours * 3600_000;
   const seen = new Set();
 
   return articles
     .filter((a) => a?.title && a.title.length > 12)
+    .filter((a) => isRelevant(a, terms))
     .filter((a) => {
       // Une date absente n'est pas un motif d'exclusion (fréquent en RSS).
       if (!a.publishedAt) return true;
@@ -82,6 +103,10 @@ export async function getNews(symbol) {
     maxArticles: config.news.maxArticles,
   };
 
+  // Mêmes termes que ceux servant à l'anonymisation : ce qui identifie
+  // l'entreprise est aussi ce qui rend un article pertinent.
+  const terms = buildRedactionTerms(symbol, companyName);
+
   const errors = [];
   const collected = [];
   let usedProvider = null;
@@ -103,7 +128,7 @@ export async function getNews(symbol) {
         collected.push(...articles);
         usedProvider = usedProvider ? `${usedProvider}+${provider.name}` : provider.name;
         // Un fournisseur riche suffit : on s'arrête dès qu'on a la quantité voulue.
-        if (dedupeAndRank(collected, params.lookbackHours, params.maxArticles).length >= params.maxArticles) break;
+        if (dedupeAndRank(collected, params.lookbackHours, params.maxArticles, terms).length >= params.maxArticles) break;
       } else {
         errors.push(`${key} : 0 article`);
       }
@@ -113,7 +138,7 @@ export async function getNews(symbol) {
     }
   }
 
-  const articles = dedupeAndRank(collected, params.lookbackHours, params.maxArticles);
+  const articles = dedupeAndRank(collected, params.lookbackHours, params.maxArticles, terms);
   const value = {
     symbol,
     companyName,
@@ -121,13 +146,19 @@ export async function getNews(symbol) {
     provider: usedProvider,
     degraded: articles.length === 0,
     errors,
+    collectedCount: collected.length,
+    relevantCount: articles.length,
     fetchedAt: new Date().toISOString(),
   };
 
   if (value.degraded) {
     log.warn(`Aucune actualité pour ${symbol} — le LLM décidera sur la seule technique.`, errors);
   } else {
-    log.info(`${articles.length} articles pour ${symbol} via ${usedProvider}`);
+    const dropped = collected.length - articles.length;
+    log.info(
+      `${articles.length} articles pertinents pour ${symbol} via ${usedProvider}` +
+        (dropped > 0 ? ` (${dropped} écartés comme hors-sujet)` : ''),
+    );
   }
 
   newsCache.set(symbol, { at: Date.now(), value });

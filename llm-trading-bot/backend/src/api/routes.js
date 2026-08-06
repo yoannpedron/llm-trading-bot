@@ -1,7 +1,12 @@
 import express from 'express';
 import { config } from '../config.js';
 import { getRecentLogs } from '../logger.js';
-import { getMarketSnapshot, getFxRate } from '../data/marketData.js';
+import { getMarketSnapshot, getMarketClock } from '../data/marketData.js';
+import { spreadLog } from '../data/spreadLog.js';
+import { executionQuality } from '../data/executionQuality.js';
+import { calendarPhase } from '../data/calendar.js';
+import { shadowBook } from '../core/shadowBook.js';
+import { runSprt } from '../core/sprt.js';
 import { getNews } from '../news/newsService.js';
 import { buildUserPrompt } from '../llm/agent.js';
 import { keyPool } from '../llm/keyPool.js';
@@ -55,6 +60,46 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     res.json(await keyPool.capacity());
   }));
 
+  /**
+   * Coût de transaction mesuré. C'est la réponse empirique à la question que
+   * les rapports de recherche laissaient ouverte d'un facteur 8.
+   */
+  router.get('/spreads', asyncRoute(async (_req, res) => {
+    res.json(await spreadLog.summary());
+  }));
+
+  /**
+   * Carnet fantôme : qualité de PRÉDICTION du modèle, isolée de la qualité
+   * d'exécution. Segmenté par action, confiance, disponibilité des actualités
+   * et phase calendaire, pour savoir ce qui sert réellement à quelque chose.
+   */
+  router.get('/shadow', asyncRoute(async (req, res) => {
+    const horizon = intParam(req.query.horizon, 3, 7);
+    res.json(await shadowBook.stats({ horizon }));
+  }));
+
+  /**
+   * Verdict séquentiel : le bot a-t-il un avantage, faut-il l'arrêter, ou
+   * manque-t-il encore des données ? C'est l'instrument de décision du projet.
+   */
+  router.get('/sprt', asyncRoute(async (req, res) => {
+    const horizon = intParam(req.query.horizon, 3, 7);
+    res.json(await runSprt(shadowBook, { horizon }));
+  }));
+
+  router.get('/calendar', (_req, res) => {
+    res.json(calendarPhase());
+  });
+
+  /**
+   * Qualité d'exécution : le prix obtenu vs la cotation au moment de la
+   * soumission. Répond empiriquement à la question qu'aucun rapport public ne
+   * peut trancher pour NOS ordres fractionnaires.
+   */
+  router.get('/execution', asyncRoute(async (_req, res) => {
+    res.json(await executionQuality.summary());
+  }));
+
   router.get('/account', asyncRoute(async (_req, res) => {
     res.json(await broker.getAccount());
   }));
@@ -83,6 +128,125 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     res.json(getRecentLogs(intParam(req.query.limit, 100, 300)));
   });
 
+  /**
+   * Diagnostic complet, en texte brut, prêt à être copié dans une conversation.
+   *
+   * Le format n'est pas du JSON : quand on cherche à comprendre pourquoi le bot
+   * n'a rien fait depuis trois jours, on veut lire l'état, pas le parser. Tout
+   * ce qui permet de répondre à « est-il vivant, et que fait-il ? » est réuni
+   * ici en un seul appel.
+   *
+   * Aucune donnée sensible n'y figure : les clés sont masquées et le jeton
+   * admin n'apparaît jamais.
+   */
+  router.get('/diagnostic', asyncRoute(async (_req, res) => {
+    const [account, positions, capacity, sprtVerdict, shadowStats, spreadStats, execStats] = await Promise.all([
+      broker.getAccount().catch((e) => ({ error: e.message })),
+      broker.getPositions().catch(() => []),
+      keyPool.capacity().catch((e) => ({ error: e.message })),
+      runSprt(shadowBook, { horizon: 3 }).catch((e) => ({ error: e.message })),
+      shadowBook.stats({ horizon: 3 }).catch((e) => ({ error: e.message })),
+      spreadLog.summary().catch((e) => ({ error: e.message })),
+      executionQuality.summary().catch((e) => ({ error: e.message })),
+    ]);
+
+    const status = engine.status;
+    const phase = calendarPhase();
+    const logs = getRecentLogs(60);
+    const errors = logs.filter((l) => l.level === 'error');
+    const warnings = logs.filter((l) => l.level === 'warn');
+
+    const lines = [
+      '════════ DIAGNOSTIC LLM TRADING BOT ════════',
+      `Généré le          : ${new Date().toISOString()}`,
+      `Uptime serveur     : ${Math.round(process.uptime() / 60)} min`,
+      '',
+      '── MOTEUR ──',
+      `Statut             : ${status.isRunning ? 'cycle en cours' : status.paused ? 'EN PAUSE' : 'en veille'}`,
+      `Cycles exécutés    : ${status.cycleCount}`,
+      `Dernier cycle      : ${status.lastCycleAt ?? 'jamais'}`,
+      `Planification      : ${status.cron} (${config.schedule.timezone})`,
+      `Horaires marché    : ${config.schedule.onlyMarketHours ? 'respectés' : 'IGNORÉS (mode test)'}`,
+      `Univers            : ${status.symbols.join(', ')}`,
+      `Phase calendaire   : ${phase.label} / ${phase.phase}`,
+      '',
+      '── COMPTE ──',
+      `Broker             : ${status.broker}${status.isLive ? ' ⚠️ RÉEL' : ' (paper)'}`,
+      account.error
+        ? `ERREUR             : ${account.error}`
+        : `Équity             : ${account.equity} ${account.currency} (initial ${account.initialCapital})`,
+      account.error ? '' : `Liquidités         : ${account.cash} | P&L ${account.totalPnl} (${account.totalPnlPct} %)`,
+      `Positions          : ${positions.length ? positions.map((p) => `${p.symbol} ${p.quantity}@${p.avgPrice} (${p.unrealizedPnlPct} %)`).join(', ') : 'aucune'}`,
+      '',
+      '── QUOTA IA ──',
+      capacity.error
+        ? `ERREUR             : ${capacity.error}`
+        : `Clés               : ${capacity.keys} (${capacity.keysExhausted} épuisée(s))`,
+      capacity.error ? '' : `Consommé           : ${capacity.used}/${capacity.totalPerDay} — ${capacity.cyclesPerDay} cycles/jour possibles`,
+      capacity.error ? '' : `Modèle             : ${status.llmProvider}/${status.model}`,
+      '',
+      '── VERDICT STATISTIQUE ──',
+      `Statut SPRT        : ${sprtVerdict.status ?? 'indisponible'}`,
+      `Raison             : ${sprtVerdict.reason ?? '—'}`,
+      `Observations       : ${sprtVerdict.n ?? 0} au total, dont ${sprtVerdict.nWarmup ?? 0} pour calibrer l'échelle`,
+      `Preuves accumulées : ${sprtVerdict.nEff ?? 0} | LLR ${sprtVerdict.llr ?? '—'} | bornes [${sprtVerdict.bounds?.lower ?? '?'} ; ${sprtVerdict.bounds?.upper ?? '?'}]`,
+      sprtVerdict.achievedNote ? `Garantie atteinte  : ${sprtVerdict.achievedNote}` : '',
+      `Carnet fantôme     : ${shadowStats.samples ?? 0} décisions résolues, ${shadowStats.pendingResolution ?? 0} en attente`,
+      shadowStats.overall
+        ? `Taux de réussite   : ${(shadowStats.overall.hitRate * 100).toFixed(1)} % | rendement excédentaire moyen ${shadowStats.overall.meanExcessPct} %`
+        : 'Taux de réussite   : pas encore mesurable',
+      '',
+      '── CALIBRATION DES PRÉVISIONS ──',
+      shadowStats.calibration?.brier != null
+        ? `Brier ${shadowStats.calibration.brier} | ECE ${shadowStats.calibration.ece} | habileté ${shadowStats.calibration.scoreHabilete}`
+        : `Indisponible       : ${shadowStats.calibration?.note ?? 'aucune prévision résolue'}`,
+      // Pente d'abord : le biais moyen s'annule sur une surconfiance symétrique
+      // et laisserait croire l'échelle saine.
+      shadowStats.calibration?.penteDeCalibration != null
+        ? `Pente d'échelle    : ${shadowStats.calibration.penteDeCalibration} `
+          + `(< 1 = écarts exagérés, > 1 = trop timides) | biais moyen `
+          + `${shadowStats.calibration.biaisMoyen > 0 ? '+' : ''}${shadowStats.calibration.biaisMoyen}`
+        : '',
+      shadowStats.calibration?.verdict ? `Verdict            : ${shadowStats.calibration.verdict}` : '',
+      ...(shadowStats.calibration?.bins ?? []).map(
+        (b) => `  tranche ${b.range}   : annoncé ${b.annonce} → réalisé ${b.realise} (n=${b.n}, écart ${b.ecart > 0 ? '+' : ''}${b.ecart})`,
+      ),
+      '',
+      '── BIAIS D\'INACTION DU MODÈLE ──',
+      shadowStats.advisory
+        ? `Divergences        : ${(shadowStats.advisory.tauxDeConflit * 100).toFixed(0)} % des ${shadowStats.advisory.n} décisions`
+        : 'Divergences        : pas encore mesurable',
+      shadowStats.advisory
+        ? `Il freinait        : ${shadowStats.advisory.freinePar.n} fois (score moyen des actions prises malgré son avis : ${shadowStats.advisory.freinePar.scoreMoyenPct ?? '—'} %)`
+        : '',
+      shadowStats.advisory
+        ? `Il poussait        : ${shadowStats.advisory.retenuPar.n} fois (score moyen : ${shadowStats.advisory.retenuPar.scoreMoyenPct ?? '—'} %)`
+        : '',
+      shadowStats.advisory?.note ? `Lecture            : ${shadowStats.advisory.note}` : '',
+      '',
+      '── COÛTS MESURÉS ──',
+      spreadStats.overall
+        ? `Spread médian      : ${spreadStats.overall.medianOfMedians} bps sur ${spreadStats.overall.symbolsMeasured} actifs (${spreadStats.overall.totalSamples} mesures)`
+        : 'Spread médian      : aucune mesure en séance',
+      execStats.measurable
+        ? `Exécution          : ${execStats.vsExpectedSide.medianBps} bps médian — ${execStats.interpretation}`
+        : `Exécution          : ${execStats.note ?? 'aucun fill mesurable'}`,
+      '',
+      `── ERREURS RÉCENTES (${errors.length}) ──`,
+      ...(errors.length ? errors.slice(-10).map((l) => `${l.ts} [${l.scope}] ${l.message}`) : ['aucune']),
+      '',
+      `── AVERTISSEMENTS RÉCENTS (${warnings.length}) ──`,
+      ...(warnings.length ? warnings.slice(-10).map((l) => `${l.ts} [${l.scope}] ${l.message}`) : ['aucun']),
+      '',
+      '── 25 DERNIÈRES LIGNES DE LOG ──',
+      ...logs.slice(-25).map((l) => `${l.ts} ${l.level.toUpperCase().padEnd(5)} ${l.scope.padEnd(10)} ${l.message}`),
+      '',
+      '════════ FIN DU DIAGNOSTIC ════════',
+    ];
+
+    res.type('text/plain; charset=utf-8').send(lines.filter((l) => l !== '').join('\n'));
+  }));
+
   router.get('/config', (_req, res) => {
     // Aucune clé d'API n'est exposée ici : uniquement les paramètres de stratégie.
     res.json({
@@ -98,14 +262,33 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     });
   });
 
-  /** Agrégat : une seule requête pour peindre tout le dashboard. */
+  /**
+   * Agrégat : une seule requête pour peindre tout le dashboard.
+   *
+   * Les mesures (SPRT, carnet fantôme, coûts) y sont incluses parce qu'elles
+   * sont devenues le cœur du projet : le P&L d'un compte de 100 $ n'apprend
+   * rien, le verdict statistique si.
+   *
+   * Chaque bloc de mesure est isolé : si l'un échoue, le dashboard s'affiche
+   * quand même. Un tableau de bord qui plante parce qu'une statistique manque
+   * serait un mauvais outil de diagnostic.
+   */
   router.get('/dashboard', asyncRoute(async (_req, res) => {
-    const [account, positions, trades, equityCurve] = await Promise.all([
+    const safe = (promise, fallback = null) => promise.then((v) => v).catch((err) => ({ error: err.message, ...fallback }));
+
+    const [account, positions, trades, equityCurve, capacity, sprt, shadow, spreads, execution, clock] = await Promise.all([
       broker.getAccount(),
       broker.getPositions(),
       broker.getTrades(25),
       broker.getEquityCurve(500),
+      safe(keyPool.capacity()),
+      safe(runSprt(shadowBook, { horizon: 3 })),
+      safe(shadowBook.stats({ horizon: 3 })),
+      safe(spreadLog.summary()),
+      safe(executionQuality.summary()),
+      safe(getMarketClock(), { is_open: null }),
     ]);
+
     res.json({
       account,
       positions,
@@ -113,7 +296,18 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
       equityCurve,
       journal: journal.entries(25),
       cycles: journal.cycles(10),
-      status: { ...engine.status, risk: risk.state, capacity: await keyPool.capacity() },
+      // L'état du marché est la première chose à vérifier quand « il ne se
+      // passe rien » : hors séance, le bot n'analyse pas, par économie de quota.
+      status: {
+        ...engine.status,
+        risk: risk.state,
+        capacity,
+        marketOpen: clock?.is_open ?? null,
+        nextMarketOpen: clock?.next_open ?? null,
+        nextMarketClose: clock?.next_close ?? null,
+      },
+      measurement: { sprt, shadow, spreads, execution },
+      calendar: calendarPhase(),
       serverTime: new Date().toISOString(),
     });
   }));
@@ -141,7 +335,7 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
   router.get('/prompt/:symbol', requireAdmin, asyncRoute(async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const snapshot = await getMarketSnapshot(symbol);
-    const fxRate = await getFxRate(snapshot.currency);
+    const fxRate = 1; // compte et actifs en USD
     const [news, account, position] = await Promise.all([
       getNews(symbol),
       broker.getAccount(),

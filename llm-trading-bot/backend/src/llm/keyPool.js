@@ -230,6 +230,40 @@ class KeyPool {
     return results;
   }
 
+  /**
+   * Recalibre le plafond journalier à partir du corps d'une erreur 429.
+   *
+   * Google ne renvoie AUCUN en-tête de quota quand l'appel réussit : le seul
+   * moment où l'API révèle la limite réelle, c'est dans le `QuotaFailure` du
+   * 429. On l'exploite pour corriger une valeur configurée à tort — un palier
+   * gratuit qui change, ou une clé sur un projet au quota différent.
+   *
+   * @returns {number|null} la limite détectée, ou null si illisible
+   */
+  calibrateFrom429(body) {
+    if (!body) return null;
+    try {
+      const payload = typeof body === 'string' ? JSON.parse(body) : body;
+      const violation = (payload?.error?.details || [])
+        .flatMap((d) => d.violations || [])
+        .find((v) => v.quotaValue != null);
+
+      const detected = Number(violation?.quotaValue);
+      if (!Number.isFinite(detected) || detected <= 0) return null;
+
+      if (detected !== config.llm.callsPerKeyPerDay) {
+        log.warn(
+          `Quota réel annoncé par Google : ${detected}/jour/clé ` +
+            `(configuré : ${config.llm.callsPerKeyPerDay}). Recalibrage automatique.`,
+        );
+        config.llm.callsPerKeyPerDay = detected;
+      }
+      return detected;
+    } catch {
+      return null;
+    }
+  }
+
   async add(key, label = null) {
     await this.#ensureLoaded();
     const trimmed = String(key || '').trim();

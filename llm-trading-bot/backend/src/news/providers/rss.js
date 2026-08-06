@@ -64,6 +64,11 @@ export const rssProvider = {
 
     const articles = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
     if (!articles.length) throw new Error('aucun flux RSS exploitable');
-    return articles.slice(0, maxArticles * 2);
+
+    // On collecte largement au-delà du besoin : le filtre de pertinence en aval
+    // est agressif, car le flux « headline » de Yahoo ne renvoie qu'environ
+    // 15 % d'articles réellement liés à l'entreprise. Trancher ici priverait le
+    // filtre de matière et laisserait le modèle avec deux articles au lieu de six.
+    return articles.slice(0, Math.max(maxArticles * 10, 60));
   },
 };

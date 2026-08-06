@@ -33,10 +33,15 @@ Toutes les variables sont documentées dans [`.env.example`](.env.example). Les 
 | `GEMINI_API_KEYS` | — | Clés du LLM, séparées par des virgules. Pool vide → moteur heuristique. |
 | `LLM_CALLS_PER_KEY_PER_DAY` | `20` | Quota journalier **par clé**. La capacité totale vaut nb de clés × cette valeur. |
 | `ADMIN_TOKEN` | — | Protège les routes d'écriture. **Absent → routes désactivées.** |
-| `SYMBOLS` | `TSLA,AAPL,MSFT` | Univers suivi (tickers Yahoo : `BTC-USD`, `EURUSD=X` acceptés). |
-| `CRON_SCHEDULE` | `*/30 * * * *` | Fréquence des cycles. |
-| `INITIAL_CAPITAL` | `100` | Capital de départ, en `BASE_CURRENCY`. |
-| `BROKER` | `paper` | `paper` (simulation) ou `alpaca` (réel, verrouillé). |
+| `SYMBOLS` | 10 large caps | **Watchlist**, pas le nombre de positions (plafonné à 3). |
+| `CANDLE_INTERVAL` | `1d` | Bougies journalières, détention visée 1-7 séances. |
+| `CRON_SCHEDULE` | `30 16,19,21 * * 1-5` | 3 cycles/jour × 10 actifs = 30 appels/jour. |
+| `BASE_CURRENCY` | `USD` | Le compte Alpaca est en dollars : aucune conversion. |
+| `BROKER` | `alpaca` | `alpaca` (compte paper réel) ou `paper` (simulateur interne). |
+| `ALPACA_DATA_FEED` | `iex` | `iex` gratuit, `sip` sur abonnement. |
+| `STOP_ATR_MULTIPLE` | `4` | Stop = 4 × ATR, borné par `STOP_MIN_PCT` / `STOP_MAX_PCT`. |
+| `MAX_MONTHLY_LOSS_PCT` | `0.15` | Coupe-circuit **mensuel** (un seuil journalier serait sous le bruit). |
+| `NEWS_ANONYMIZE` | `true` | Protocole Glasserman & Lin en 4 couches. |
 | `LLM_THINKING_BUDGET` | `0` | Raisonnement interne de Gemini 2.5. `0` = réponse directe. |
 | `LLM_COOLDOWN_MS` | `8000` | Pause entre deux actifs : respecte aussi la limite *par minute*. |
 
@@ -176,6 +181,12 @@ Lecture publique, écriture protégée par l'en-tête `X-Admin-Token`.
 | `GET /api/config` | Paramètres de stratégie (**aucune clé exposée**). |
 | `GET /api/market/:symbol` | Bougies + indicateurs calculés. |
 | `GET /api/news/:symbol` | Actualités récupérées pour cet actif. |
+| `GET /api/shadow` | **Carnet fantôme** : qualité de prédiction, segmentée par action, confiance, actualités et calendrier. |
+| `GET /api/sprt` | **Verdict séquentiel** : `CONTINUER` / `ARRETER` / `VALIDE` / `TRONQUE`. |
+| `GET /api/spreads` | Coût de transaction mesuré, par actif. |
+| `GET /api/execution` | Qualité d'exécution : fill vs cotation à la soumission. |
+| `GET /api/capacity` | Capacité du pool de clés et cycles possibles par jour. |
+| `GET /api/calendar` | Phase intra-mensuelle courante (PreTOM / TOM). |
 
 ### Écriture (`X-Admin-Token` requis)
 
