@@ -135,7 +135,14 @@ export const geminiProvider = {
           continue;
         }
         if (err instanceof HttpError && (err.status === 400 || err.status === 403)) {
-          await keyPool.markExhausted(entry.id, `HTTP ${err.status} (clé invalide ou révoquée)`);
+          // Le corps de la réponse est la SEULE façon de distinguer une clé
+          // réellement invalide d'une requête malformée pour une autre raison
+          // (mauvais nom de modèle, région non autorisée, champ manquant...).
+          // Il était capturé dans `err.body` mais jamais affiché : le message
+          // « clé invalide ou révoquée » s'appliquait à tout HTTP 400 sans
+          // distinction, y compris quand la clé n'y était pour rien.
+          log.error(`Réponse Gemini brute pour ${entry.masked} : ${err.body?.slice(0, 300)}`);
+          await keyPool.markExhausted(entry.id, `HTTP ${err.status} : ${err.body?.slice(0, 150) || 'sans détail'}`);
           continue;
         }
         // Erreur non liée à la clé (réseau, réponse illisible) : inutile d'en
