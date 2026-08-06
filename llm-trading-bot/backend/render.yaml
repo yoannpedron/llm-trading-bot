@@ -1,0 +1,58 @@
+# Déploiement Render — https://render.com/docs/blueprint-spec
+# Les valeurs `sync: false` doivent être saisies dans l'interface Render
+# (onglet Environment). Elles ne doivent JAMAIS figurer dans ce fichier.
+
+services:
+  - type: web
+    name: llm-trading-bot
+    runtime: node
+    plan: starter          # `free` se met en veille après 15 min → cycles cron interrompus
+    region: frankfurt
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+
+    # Conserve le portefeuille entre deux déploiements.
+    disk:
+      name: bot-data
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /data
+      - key: PORT
+        value: "8080"
+
+      # ── Secrets : à renseigner dans l'interface Render ──
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: NEWSAPI_KEY
+        sync: false
+
+      # ── Stratégie ──
+      - key: CORS_ORIGINS
+        value: https://llm-trading-bot-dashboard.netlify.app
+      - key: SYMBOLS
+        value: TSLA,AAPL,MSFT
+      - key: CANDLE_INTERVAL
+        value: 1h
+      # 6 cycles/jour × 3 actifs = 18 appels : compatible palier gratuit Gemini (20/jour).
+      - key: CRON_SCHEDULE
+        value: "0 */4 * * *"
+      - key: LLM_MAX_CALLS_PER_DAY
+        value: "20"
+      - key: CRON_TIMEZONE
+        value: Europe/Paris
+      - key: BASE_CURRENCY
+        value: EUR
+      - key: INITIAL_CAPITAL
+        value: "100"
+      - key: BROKER
+        value: paper

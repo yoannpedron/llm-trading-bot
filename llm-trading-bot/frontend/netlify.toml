@@ -1,0 +1,26 @@
+[build]
+  # Site statique : aucun build, on publie le dossier tel quel.
+  publish = "."
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+[[headers]]
+  for = "/assets/*"
+  # Les noms de fichiers ne portent pas d'empreinte : un max-age long servirait
+  # l'ancien JS pendant des heures après un déploiement. Netlify renvoie un ETag,
+  # donc la revalidation ne coûte qu'un 304.
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Le dashboard est une page unique : toute route inconnue y revient.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

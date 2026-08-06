@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Trading Bot — Tableau de bord</title>
+  <meta name="description" content="Suivi en lecture seule d'un bot de trading autonome piloté par un LLM.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◈</span>
+      <div>
+        <h1>LLM Trading Bot</h1>
+        <p class="brand-sub">Tableau de bord — lecture seule</p>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <span id="mode-badge" class="badge badge-muted">—</span>
+      <span id="conn-status" class="conn conn-idle">
+        <span class="dot"></span><span id="conn-text">Connexion…</span>
+      </span>
+      <button id="btn-refresh" class="btn" type="button">Actualiser</button>
+      <button id="btn-settings" class="btn btn-ghost" type="button" aria-expanded="false">Réglages</button>
+    </div>
+  </header>
+
+  <section id="settings" class="settings" hidden>
+    <label class="field">
+      <span>URL du back-end</span>
+      <input id="api-url" type="url" placeholder="https://mon-bot.onrender.com" autocomplete="off" spellcheck="false">
+      <small>L'adresse de ton API. Elle est stockée dans ce navigateur uniquement.</small>
+    </label>
+    <label class="field">
+      <span>Jeton administrateur <em>(optionnel)</em></span>
+      <input id="admin-token" type="password" placeholder="ADMIN_TOKEN de ton back-end" autocomplete="off" spellcheck="false">
+      <small>Débloque la gestion des clés API. Stocké dans ce navigateur uniquement, jamais publié.</small>
+    </label>
+    <label class="field field-sm">
+      <span>Rafraîchissement</span>
+      <select id="refresh-interval">
+        <option value="0">Manuel</option>
+        <option value="15000">15 s</option>
+        <option value="30000" selected>30 s</option>
+        <option value="60000">1 min</option>
+        <option value="300000">5 min</option>
+      </select>
+    </label>
+    <div class="settings-actions">
+      <button id="btn-save" class="btn btn-primary" type="button">Enregistrer</button>
+    </div>
+  </section>
+
+  <div id="alert" class="alert" hidden role="status"></div>
+
+  <main class="wrap">
+    <!-- ─── Indicateurs clés ─────────────────────────────────────────── -->
+    <section class="kpis" aria-label="Indicateurs clés">
+      <article class="kpi kpi-hero">
+        <h2>Capital total</h2>
+        <p id="kpi-equity" class="kpi-value">—</p>
+        <p id="kpi-pnl" class="kpi-delta">—</p>
+      </article>
+      <article class="kpi">
+        <h2>Liquidités</h2>
+        <p id="kpi-cash" class="kpi-value">—</p>
+        <p id="kpi-invested" class="kpi-sub">—</p>
+      </article>
+      <article class="kpi">
+        <h2>P&amp;L réalisé</h2>
+        <p id="kpi-realized" class="kpi-value">—</p>
+        <p id="kpi-fees" class="kpi-sub">—</p>
+      </article>
+      <article class="kpi">
+        <h2>Positions</h2>
+        <p id="kpi-positions" class="kpi-value">—</p>
+        <p id="kpi-unrealized" class="kpi-sub">—</p>
+      </article>
+    </section>
+
+    <!-- ─── Courbe d'équity ──────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Évolution du capital</h2>
+        <span id="chart-range" class="card-meta">—</span>
+      </div>
+      <div id="chart" class="chart" role="img" aria-label="Courbe d'évolution du capital"></div>
+    </section>
+
+    <div class="grid-2">
+      <!-- ─── Positions ──────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Positions ouvertes</h2>
+          <span id="positions-count" class="card-meta">—</span>
+        </div>
+        <div class="table-scroll">
+          <table id="positions-table">
+            <thead>
+              <tr>
+                <th>Actif</th><th class="num">Qté</th><th class="num">PRU</th>
+                <th class="num">Cours</th><th class="num">Valeur</th><th class="num">P&amp;L latent</th>
+                <th class="num">Stop / Objectif</th>
+              </tr>
+            </thead>
+            <tbody><tr class="empty"><td colspan="7">Aucune position ouverte.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── État du bot ────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="card-head"><h2>État du moteur</h2></div>
+        <dl id="status-list" class="status-list">
+          <div><dt>Statut</dt><dd id="st-state">—</dd></div>
+          <div class="status-actions" hidden id="engine-actions">
+            <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle maintenant</button>
+            <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
+          </div>
+          <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
+          <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
+          <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
+          <div><dt>Clés Gemini</dt><dd id="st-keys">—</dd></div>
+          <div><dt>Quota IA du jour</dt><dd id="st-quota">—</dd></div>
+          <div><dt>Cycles possibles / jour</dt><dd id="st-cycles">—</dd></div>
+          <div><dt>Univers suivi</dt><dd id="st-symbols">—</dd></div>
+          <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
+          <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
+          <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <!-- ─── Clés API Gemini ──────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Clés API Gemini</h2>
+        <div class="head-actions">
+          <span id="keys-summary" class="card-meta">—</span>
+          <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
+        </div>
+      </div>
+
+      <div class="capacity-bar-wrap">
+        <div class="capacity-bar"><span id="capacity-fill"></span></div>
+        <p id="capacity-detail" class="capacity-detail">—</p>
+      </div>
+
+      <div class="table-scroll">
+        <table id="keys-table">
+          <thead>
+            <tr>
+              <th>Nom</th><th>Clé</th><th>Source</th>
+              <th class="num">Consommé</th><th>Quota du jour</th><th>État</th><th></th>
+            </tr>
+          </thead>
+          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages pour voir tes clés.</td></tr></tbody>
+        </table>
+      </div>
+
+      <form id="add-key-form" class="add-key" hidden>
+        <label class="field">
+          <span>Nouvelle clé Gemini</span>
+          <input id="new-key" type="password" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" required>
+        </label>
+        <label class="field field-sm">
+          <span>Nom <em>(optionnel)</em></span>
+          <input id="new-key-label" type="text" placeholder="compte perso" autocomplete="off">
+        </label>
+        <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+
+      <p id="keys-feedback" class="keys-feedback" hidden></p>
+    </section>
+
+    <!-- ─── Journal de l'IA ──────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Journal de l'IA</h2>
+        <div class="filters" id="journal-filters" role="group" aria-label="Filtrer le journal">
+          <button class="chip chip-active" data-filter="all" type="button">Tout</button>
+          <button class="chip" data-filter="executed" type="button">Exécutés</button>
+          <button class="chip" data-filter="BUY" type="button">Achats</button>
+          <button class="chip" data-filter="SELL" type="button">Ventes</button>
+        </div>
+      </div>
+      <div id="journal" class="journal">
+        <p class="empty-block">Aucune décision enregistrée pour l'instant.</p>
+      </div>
+    </section>
+
+    <!-- ─── Historique des ordres ────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Historique des ordres</h2>
+        <span id="trades-count" class="card-meta">—</span>
+      </div>
+      <div class="table-scroll">
+        <table id="trades-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
+              <th class="num">Prix</th><th class="num">Montant</th><th class="num">Frais</th>
+              <th class="num">P&amp;L</th><th>Origine</th>
+            </tr>
+          </thead>
+          <tbody><tr class="empty"><td colspan="9">Aucun ordre passé.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      Simulation de trading à but pédagogique. Les décisions sont produites par un modèle de langage
+      et <strong>ne constituent pas un conseil en investissement</strong>.
+      Dernière mise à jour : <span id="last-update">—</span>
+    </p>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
