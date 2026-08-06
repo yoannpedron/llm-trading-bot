@@ -2,6 +2,10 @@ node_modules/
 .env
 .env.*
 !.env.example
-data/
+# Ancrée à la racine du dépôt (/) : sans ce slash, le motif « data/ » masquait
+# aussi src/data/ — le code source des fournisseurs de marché, indicateurs et
+# calendrier — qui n'a donc jamais été poussé sur GitHub depuis le premier
+# commit. Découvert en déployant : `Cannot find module '.../marketData.js'`.
+/data/
 *.log
 .DS_Store
