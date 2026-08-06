@@ -6,6 +6,14 @@ Documentation=https://github.com/
 After=network-online.target
 Wants=network-online.target
 
+# Empeche une boucle de redemarrage de saturer la machine si la configuration
+# est fausse (cle Alpaca invalide, par exemple) : au-dela de 5 echecs en
+# 5 minutes, systemd s'arrete et laisse l'erreur visible dans le journal.
+# Ces deux cles appartiennent a [Unit], pas [Service] — systemd les ignore
+# silencieusement (avec un avertissement) si elles sont mises au mauvais endroit.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=botuser
@@ -28,12 +36,6 @@ Environment=NODE_ENV=production
 Restart=always
 RestartSec=10
 
-# Empeche une boucle de redemarrage de saturer la machine si la configuration
-# est fausse (cle Alpaca invalide, par exemple) : au-dela de 5 echecs en
-# 5 minutes, systemd s'arrete et laisse l'erreur visible dans le journal.
-StartLimitBurst=5
-StartLimitIntervalSec=300
-
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=trading-bot
@@ -53,7 +55,13 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# PAS de MemoryDenyWriteExecute : Node.js compile du JavaScript en code machine
+# à la volée (JIT V8) et a besoin de pages mémoire écriture+exécution pour ça.
+# Avec ce paramètre activé, le tout premier appel au compilateur JIT échoue —
+# observé en production : `Check failed: 12 == (*__errno_location())` (ENOMEM
+# sur mprotect), un plantage immédiat au démarrage, avant même que le port
+# 8099 ne s'ouvre. Ce durcissement est fait pour des binaires statiques, pas
+# pour un moteur JIT.
 RestrictRealtime=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
