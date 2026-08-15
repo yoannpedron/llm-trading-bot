@@ -16,8 +16,12 @@ const { normalizeForecast, deriveAction } = await import('../src/llm/agent.js');
 const { RiskManager } = await import('../src/core/riskManager.js');
 const { executionQuality } = await import('../src/data/executionQuality.js');
 const { calibration } = await import('../src/core/calibration.js');
+const { SqliteStore } = await import('../src/storage/SqliteStore.js');
 
 after(async () => {
+  // SQLite garde ses fichiers ouverts : sous Windows la suppression du dossier
+  // échoue avec EBUSY tant qu'un descripteur subsiste.
+  SqliteStore.closeAll();
   await fs.rm(TMP_DIR, { recursive: true, force: true });
 });
 
@@ -100,13 +104,13 @@ describe('carnet fantôme — dégroupage des corrélations', () => {
     // Trois cycles le même jour sur le même actif : en bougies journalières
     // c'est quasiment la même décision. Les compter trois fois sous-estimerait
     // la variance et validerait à tort.
-    book.store.data.entries = [
+    await book.replaceAll([
       { t: '2026-08-03T14:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, confidence: 0.7, hadPosition: false, newsAvailable: true, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: 0.01 } } },
       { t: '2026-08-03T17:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, confidence: 0.7, hadPosition: false, newsAvailable: true, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: 0.011 } } },
       { t: '2026-08-03T19:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, confidence: 0.7, hadPosition: false, newsAvailable: true, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: 0.012 } } },
       { t: '2026-08-03T14:30:00Z', symbol: 'AAPL', action: 'HOLD', ruleVersion: RULE_VERSION, confidence: 0.4, hadPosition: false, newsAvailable: true, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: -0.004 } } },
       { t: '2026-08-04T14:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, confidence: 0.6, hadPosition: true, newsAvailable: false, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: 0.02 } } },
-    ];
+    ]);
 
     const series = await book.scoreSeries({ horizon: 3 });
     assert.equal(series.length, 3, 'NVDA jour 1 + AAPL jour 1 + NVDA jour 2');
@@ -116,10 +120,10 @@ describe('carnet fantôme — dégroupage des corrélations', () => {
   test('ignore les décisions non résolues', async () => {
     const book = new ShadowBook();
     await book.init();
-    book.store.data.entries = [
+    await book.replaceAll([
       { t: '2026-08-03T14:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, outcomes: null },
       { t: '2026-08-04T14:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, outcomes: { d3: { score: 0.01 } } },
-    ];
+    ]);
     assert.equal((await book.scoreSeries({ horizon: 3 })).length, 1);
   });
 });
@@ -690,11 +694,11 @@ describe('version de stratégie — le SPRT ne mélange pas deux règles', () =>
     // auraient porté sur un bot remplacé le jour même.
     const book = new ShadowBook();
     await book.init();
-    book.store.data.entries = [
+    await book.replaceAll([
       entry('2026-08-01T14:30:00Z', 'NVDA', 'action-choisie-par-le-modele', 0.05),
       entry('2026-08-02T14:30:00Z', 'AAPL', 'action-choisie-par-le-modele', 0.04),
       entry('2026-08-03T14:30:00Z', 'NVDA', RULE_VERSION, 0.01),
-    ];
+    ]);
 
     const series = await book.scoreSeries({ horizon: 3 });
     assert.equal(series.length, 1, 'seule la décision de la règle courante compte');
@@ -704,10 +708,10 @@ describe('version de stratégie — le SPRT ne mélange pas deux règles', () =>
   test('les décisions antérieures restent consultables', async () => {
     const book = new ShadowBook();
     await book.init();
-    book.store.data.entries = [
+    await book.replaceAll([
       entry('2026-08-01T14:30:00Z', 'NVDA', 'action-choisie-par-le-modele', 0.05),
       entry('2026-08-03T14:30:00Z', 'AAPL', RULE_VERSION, 0.01),
-    ];
+    ]);
     // Le carnet ne jette rien : des observations réelles restent des
     // observations, même produites par une règle remplacée.
     assert.equal((await book.scoreSeries({ horizon: 3, allRules: true })).length, 2);
@@ -716,18 +720,18 @@ describe('version de stratégie — le SPRT ne mélange pas deux règles', () =>
   test('une entrée sans version est traitée comme antérieure', async () => {
     const book = new ShadowBook();
     await book.init();
-    book.store.data.entries = [entry('2026-08-01T14:30:00Z', 'NVDA', undefined, 0.05)];
+    await book.replaceAll([entry('2026-08-01T14:30:00Z', 'NVDA', undefined, 0.05)]);
     assert.equal((await book.scoreSeries({ horizon: 3 })).length, 0);
   });
 
   test('la répartition par règle est exposée, pas masquée', async () => {
     const book = new ShadowBook();
     await book.init();
-    book.store.data.entries = [
+    await book.replaceAll([
       entry('2026-08-01T14:30:00Z', 'NVDA', 'action-choisie-par-le-modele', 0.05),
       entry('2026-08-02T14:30:00Z', 'AAPL', 'action-choisie-par-le-modele', 0.04),
       entry('2026-08-03T14:30:00Z', 'NVDA', RULE_VERSION, 0.01),
-    ];
+    ]);
     const stats = await book.stats({ horizon: 3 });
     assert.equal(stats.rules.usable, 1);
     assert.equal(stats.rules.excluded, 2);

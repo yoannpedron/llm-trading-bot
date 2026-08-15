@@ -23,7 +23,11 @@ Group=botuser
 # pointer sur backend/, sinon les secrets ne sont jamais charges et le bot
 # demarre en croyant n'avoir aucune cle.
 WorkingDirectory=/opt/llm-trading-bot/src/llm-trading-bot/backend
-ExecStart=/usr/bin/node src/server.js
+# --experimental-sqlite : le carnet fantome utilise le module natif node:sqlite,
+# qui reclame ce drapeau sur Node 22 (le serveur). Node 24 l'accepte sans effet,
+# donc la meme ligne fonctionne sur les deux versions. Sans lui, le demarrage
+# echoue sur « No such built-in module: node:sqlite ».
+ExecStart=/usr/bin/node --experimental-sqlite src/server.js
 
 # DATA_DIR est force en absolu, hors du depot. Sans cela, un `git clean` ou un
 # redeploiement effacerait le carnet fantome — c'est-a-dire la totalite de la

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
-import { JsonStore } from '../storage/JsonStore.js';
+import { SqliteStore } from '../storage/SqliteStore.js';
 import { calibration } from './calibration.js';
 
 const log = createLogger('shadow');
@@ -71,18 +71,17 @@ const RULE_VERSION = 'seuil-sur-prevision-v1';
 const LEGACY_RULE = 'action-choisie-par-le-modele';
 
 export class ShadowBook {
-  constructor() {
-    this.store = new JsonStore(config.storage.dir, 'shadow-book.json', {
-      entries: [],
-      resolvedCount: 0,
-      lastResolutionAt: null,
-    });
+  constructor(filename = 'shadow-book.db') {
+    this.store = new SqliteStore(config.storage.dir, filename);
+    // Le seul état hors base : la date de dernière résolution, purement
+    // informative. Elle ne mérite pas une table à elle seule.
+    this.lastResolutionAt = null;
     this.loaded = false;
   }
 
   async init() {
     if (!this.loaded) {
-      await this.store.load();
+      await this.store.init();
       this.loaded = true;
     }
     return this;
@@ -96,9 +95,12 @@ export class ShadowBook {
   async record(decision) {
     await this.init();
 
+    const t = new Date().toISOString();
     const entry = {
       id: crypto.randomUUID(),
-      t: new Date().toISOString(),
+      t,
+      // Dupliqué pour indexer le dégroupage par jour côté SQL.
+      day: t.slice(0, 10),
       symbol: decision.symbol,
       action: decision.action,
       confidence: decision.confidence ?? 0,
@@ -133,11 +135,10 @@ export class ShadowBook {
       resolved: false,
     };
 
-    this.store.data.entries.push(entry);
-    if (this.store.data.entries.length > 50000) {
-      this.store.data.entries.splice(0, this.store.data.entries.length - 50000);
-    }
-    await this.store.save();
+    // Insertion incrémentale : plus de réécriture du fichier entier, et donc
+    // plus de plafond arbitraire à 50 000 entrées qui supprimait les plus
+    // anciennes en silence — c'est-à-dire qui vidait la mesure par le fond.
+    this.store.insert(entry);
     return entry;
   }
 
@@ -176,7 +177,7 @@ export class ShadowBook {
   async resolve(getBars) {
     await this.init();
 
-    const pending = this.store.data.entries.filter((e) => !e.resolved);
+    const pending = this.store.pending();
     if (!pending.length) return { resolved: 0, pending: 0 };
 
     // Une seule série par symbole, réutilisée pour toutes ses décisions.
@@ -198,6 +199,9 @@ export class ShadowBook {
     }
 
     let resolved = 0;
+    // Les mises à jour sont accumulées puis écrites en UNE transaction : à
+    // 150 actifs, résoudre décision par décision ferait autant de commits.
+    const updates = [];
 
     for (const entry of pending) {
       const bars = series[entry.symbol];
@@ -226,19 +230,17 @@ export class ShadowBook {
       }
 
       if (Object.keys(outcomes).length) {
-        entry.outcomes = outcomes;
         // Une décision n'est close que lorsque le plus long horizon est échu.
-        entry.resolved = complete;
+        updates.push({ id: entry.id, outcomes, resolved: complete });
         if (complete) resolved += 1;
       }
     }
 
-    this.store.data.resolvedCount += resolved;
-    this.store.data.lastResolutionAt = new Date().toISOString();
-    await this.store.save();
+    if (updates.length) this.store.updateManyOutcomes(updates);
+    this.lastResolutionAt = new Date().toISOString();
 
-    if (resolved) log.info(`${resolved} décision(s) résolue(s) — ${this.store.data.entries.filter((e) => !e.resolved).length} en attente`);
-    return { resolved, pending: this.store.data.entries.filter((e) => !e.resolved).length };
+    if (resolved) log.info(`${resolved} décision(s) résolue(s) — ${this.store.pendingCount()} en attente`);
+    return { resolved, pending: this.store.pendingCount() };
   }
 
   /**
@@ -252,22 +254,20 @@ export class ShadowBook {
   async scoreSeries({ horizon = 3, filter = null, allRules = false } = {}) {
     await this.init();
     const key = `d${horizon}`;
-    const seen = new Set();
     const out = [];
 
-    const sorted = [...this.store.data.entries].sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+    // Le dégroupage par actif et par jour est fait en SQL (GROUP BY indexé) :
+    // à 150 actifs sur un an, trier 110 000 entrées en mémoire à chaque appel
+    // du dashboard serait absurde.
+    const rows = this.store.scoredSeries({
+      horizon,
+      ruleVersion: allRules ? null : RULE_VERSION,
+    });
 
-    for (const entry of sorted) {
+    for (const entry of rows) {
       const outcome = entry.outcomes?.[key];
       if (!outcome || outcome.score == null) continue;
-      // Seules les décisions de la règle courante alimentent la mesure : le
-      // SPRT teste une stratégie, pas une succession de stratégies.
-      if (!allRules && (entry.ruleVersion ?? LEGACY_RULE) !== RULE_VERSION) continue;
       if (filter && !filter(entry)) continue;
-
-      const dayKey = `${entry.symbol}:${entry.t.slice(0, 10)}`;
-      if (seen.has(dayKey)) continue;
-      seen.add(dayKey);
 
       out.push({
         t: entry.t,
@@ -299,14 +299,14 @@ export class ShadowBook {
       // attente » alors que vingt décisions attendaient leur résolution : on
       // croyait le carnet vide, donc le bot muet, alors qu'il enregistrait
       // normalement et qu'il fallait juste laisser passer trois séances.
-      const pending = this.store.data.entries.filter((e) => !e.resolved).length;
+      const pending = this.store.pendingCount();
       return {
         horizon,
         samples: 0,
         pendingResolution: pending,
-        recorded: this.store.data.entries.length,
+        recorded: this.store.count(),
         rules: this.#ruleBreakdown(),
-        lastResolutionAt: this.store.data.lastResolutionAt,
+        lastResolutionAt: this.lastResolutionAt,
         note: pending
           ? `${pending} décision(s) enregistrée(s), aucune encore échue : le premier score arrive ${horizon} séances après la décision.`
           : 'Aucune décision enregistrée pour le moment.',
@@ -387,10 +387,48 @@ export class ShadowBook {
       // l'action du seuil plutôt que de la lui demander est justifié.
       advisory: advisorySummary(all),
 
-      pendingResolution: this.store.data.entries.filter((e) => !e.resolved).length,
+      pendingResolution: this.store.pendingCount(),
       rules: this.#ruleBreakdown(),
-      lastResolutionAt: this.store.data.lastResolutionAt,
+      lastResolutionAt: this.lastResolutionAt,
     };
+  }
+
+  /**
+   * Remplace tout le contenu du carnet. Réservé aux tests et à une remise à
+   * zéro explicite — jamais appelé par le moteur.
+   *
+   * Les champs absents reçoivent une valeur par défaut : les fixtures de test
+   * décrivent le cas qu'elles vérifient, pas les vingt colonnes du schéma.
+   */
+  async replaceAll(entries) {
+    await this.init();
+    this.store.clear();
+    this.store.insertMany(entries.map((e) => ({
+      id: e.id ?? crypto.randomUUID(),
+      t: e.t,
+      day: e.day ?? e.t.slice(0, 10),
+      symbol: e.symbol,
+      action: e.action,
+      confidence: e.confidence ?? 0,
+      price: e.price ?? null,
+      executed: e.executed ?? false,
+      hadPosition: e.hadPosition ?? false,
+      newsAvailable: e.newsAvailable ?? false,
+      newsCount: e.newsCount ?? 0,
+      calendarPhase: e.calendarPhase ?? null,
+      model: e.model ?? null,
+      source: e.source ?? 'llm',
+      ruleVersion: e.ruleVersion ?? LEGACY_RULE,
+      pUp: e.pUp ?? null,
+      pUpGivenMove: e.pUpGivenMove ?? null,
+      edge: e.edge ?? null,
+      advisedAction: e.advisedAction ?? null,
+      advisoryConflict: e.advisoryConflict ?? false,
+      voided: e.voided ?? false,
+      outcomes: e.outcomes ?? null,
+      resolved: e.resolved ?? false,
+    })));
+    return entries.length;
   }
 
   /**
@@ -399,13 +437,10 @@ export class ShadowBook {
    * carnet entier alimente le verdict.
    */
   #ruleBreakdown() {
-    const counts = {};
-    for (const e of this.store.data.entries) {
-      const v = e.ruleVersion ?? LEGACY_RULE;
-      counts[v] = (counts[v] || 0) + 1;
-    }
+    // Agrégation en SQL : un GROUP BY plutôt qu'un parcours de toute la table.
+    const counts = this.store.countByRule();
     const current = counts[RULE_VERSION] || 0;
-    const total = this.store.data.entries.length;
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
     return {
       current: RULE_VERSION,
       counts,

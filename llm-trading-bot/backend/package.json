@@ -8,13 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "cycle": "node src/scripts/runOnce.js",
+    "start": "node --experimental-sqlite src/server.js",
+    "dev": "node --experimental-sqlite --watch src/server.js",
+    "cycle": "node --experimental-sqlite src/scripts/runOnce.js",
     "keys": "node src/scripts/keys.js list",
     "keys:add": "node src/scripts/keys.js add",
     "keys:remove": "node src/scripts/keys.js remove",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --experimental-sqlite --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "cors": "^2.8.5",
