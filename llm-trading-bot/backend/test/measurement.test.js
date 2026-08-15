@@ -17,6 +17,8 @@ const { RiskManager } = await import('../src/core/riskManager.js');
 const { executionQuality } = await import('../src/data/executionQuality.js');
 const { calibration } = await import('../src/core/calibration.js');
 const { SqliteStore } = await import('../src/storage/SqliteStore.js');
+const { rankAndSelect, MIN_DISPERSION } = await import('../src/core/ranking.js');
+const { rankIC, rankCalibrationError } = await import('../src/core/rankMetrics.js');
 
 after(async () => {
   // SQLite garde ses fichiers ouverts : sous Windows la suppression du dossier
@@ -112,9 +114,24 @@ describe('carnet fantôme — dégroupage des corrélations', () => {
       { t: '2026-08-04T14:30:00Z', symbol: 'NVDA', action: 'BUY', ruleVersion: RULE_VERSION, confidence: 0.6, hadPosition: true, newsAvailable: false, calendarPhase: 'NEUTRAL', outcomes: { d3: { score: 0.02 } } },
     ]);
 
+    // Deux dégroupages distincts s'appliquent, et il faut les séparer :
+    //
+    //   • INTRAJOURNALIER : les trois cycles NVDA du 03 se réduisent à un ;
+    //   • SÉRIEL : le NVDA du 04 chevauche encore la fenêtre à 3 jours ouvrée
+    //     par celui du 03 — les deux observations partagent deux tiers de leur
+    //     période de rendement. Les compter séparément gonflerait la taille
+    //     d'échantillon d'un facteur 3 sans apporter d'information nouvelle.
+    //
+    // Reste donc : NVDA 03 + AAPL 03.
     const series = await book.scoreSeries({ horizon: 3 });
-    assert.equal(series.length, 3, 'NVDA jour 1 + AAPL jour 1 + NVDA jour 2');
+    assert.equal(series.length, 2, 'NVDA jour 1 + AAPL jour 1 ; le NVDA du lendemain chevauche');
     assert.equal(series[0].score, 0.01, 'la première observation du jour est retenue');
+
+    // Le dégroupage sériel est désactivable, et sans lui on retrouve exactement
+    // la troisième observation : la preuve que c'est bien cette règle-là — et
+    // non le dégroupage intrajournalier — qui l'a écartée.
+    const avecChevauchement = await book.scoreSeries({ horizon: 3, allowOverlap: true });
+    assert.equal(avecChevauchement.length, 3, 'sans la règle sérielle, NVDA jour 2 revient');
   });
 
   test('ignore les décisions non résolues', async () => {
@@ -654,7 +671,7 @@ describe('seuil de probabilité haussière — ce qu\'il vise vraiment', () => {
     // c'était le commentaire qui avait tort.
     const d = deriveAction(fc(40, 20, 40), seuils);
     assert.equal(d.action, 'BUY');
-    assert.equal(d.sizePct, 0.25, 'au seuil, la mise reste au plancher');
+    assert.equal(d.sizePct, 1, 'poids égal : passer le seuil donne le même poids que tout le monde');
   });
 });
 
@@ -760,5 +777,199 @@ describe('flux de données inexploitable', () => {
     const spread = 20;
     assert.ok(spread < 50, 'le plafond seul le laisse passer');
     assert.ok(spread > Math.max(2 * 3, 3), 'le critère relatif l\'attrape');
+  });
+});
+
+describe('sélection transversale — classer plutôt que seuiller', () => {
+  const ev = (symbol, edge) => ({ symbol, decision: { forecast: { edge } } });
+
+  test('retient les meilleurs par ordre, sans regarder le niveau', () => {
+    const r = rankAndSelect(
+      [ev('A', 0.10), ev('B', 0.50), ev('C', 0.30), ev('D', 0.05), ev('E', 0.40)],
+      { maxSelected: 3 },
+    );
+    // K = 3 est demandé, mais seuls B et E sont STRICTEMENT au-dessus de la
+    // médiane transversale — laquelle vaut ici 0,30, c'est-à-dire C lui-même.
+    // Sur un nombre impair d'actifs la médiane est un point de données, et
+    // l'actif qui l'occupe est écarté : « au milieu du classement » n'est pas
+    // une raison d'acheter. Ce n'est pénalisant que sur un univers minuscule ;
+    // à 150 actifs, environ 75 passent le filtre et K mord bien avant.
+    assert.deepEqual([...r.selected].sort(), ['B', 'E'], 'strictement au-dessus de la médiane');
+    assert.equal(r.ranks.get('B').rank, 1);
+    assert.equal(r.ranks.get('B').fractional, 1, 'le meilleur vaut 1 en rang fractionnaire');
+    assert.equal(r.ranks.get('D').fractional, 0, 'le dernier vaut 0');
+    assert.equal(r.ranks.get('C').rank, 3);
+  });
+
+  test('un décalage constant de toutes les probabilités ne change rien', () => {
+    // C'est la propriété qui justifie tout le module. Un modèle globalement
+    // trop optimiste — 20 points de trop sur CHAQUE actif — produisait sous
+    // seuil absolu six achats au lieu de zéro. Le classement, lui, est
+    // invariant : seul l'ordre compte.
+    const base = [ev('A', 0.10), ev('B', 0.50), ev('C', 0.30), ev('D', 0.05), ev('E', 0.40)];
+    const gonfle = base.map((e) => ev(e.symbol, e.decision.forecast.edge + 0.20));
+    const a = rankAndSelect(base, { maxSelected: 3 });
+    const b = rankAndSelect(gonfle, { maxSelected: 3 });
+    assert.deepEqual([...a.selected].sort(), [...b.selected].sort());
+  });
+
+  test('s\'abstient quand le modèle répond la même chose partout', () => {
+    // Cas observé en production : « 40/45/15 » à l'identique sur trois actifs
+    // différents du même cycle. Sans ce garde-fou, le premier de la liste
+    // serait acheté par pur hasard d'ordonnancement — un bruit de tri promu au
+    // rang de signal.
+    const r = rankAndSelect(
+      [ev('A', 0.25), ev('B', 0.25), ev('C', 0.26), ev('D', 0.25), ev('E', 0.24)],
+      { maxSelected: 3 },
+    );
+    assert.equal(r.selected.size, 0, 'aucune sélection sous le seuil de dispersion');
+    assert.ok(r.dispersion < MIN_DISPERSION);
+    assert.match(r.reason, /dispersion/);
+    assert.ok(r.ranks.size > 0, 'les rangs restent calculés : la mesure continue même sans trade');
+  });
+
+  test('ne descend jamais sous la médiane transversale', () => {
+    // K = 3 demandé, mais seuls deux actifs dépassent la médiane. Compléter
+    // jusqu'à K reviendrait à acheter un actif que le modèle place dans sa
+    // moitié basse — exactement le « choisir le moins pire » que le classement
+    // doit empêcher.
+    const r = rankAndSelect(
+      [ev('A', 0.60), ev('B', 0.55), ev('C', 0.10), ev('D', 0.08), ev('E', 0.05)],
+      { maxSelected: 3 },
+    );
+    assert.deepEqual([...r.selected].sort(), ['A', 'B']);
+  });
+
+  test('un seul actif évaluable ne se classe pas', () => {
+    const r = rankAndSelect([ev('A', 0.9)], { maxSelected: 3 });
+    assert.equal(r.selected.size, 0, 'un classement à un élément n\'est pas un classement');
+  });
+
+  test('les prévisions manquantes sont écartées, pas classées dernières', () => {
+    const r = rankAndSelect(
+      [ev('A', 0.50), { symbol: 'B', decision: null }, ev('C', 0.40), ev('D', 0.10)],
+      { maxSelected: 2 },
+    );
+    assert.equal(r.ranks.has('B'), false, 'un actif sans prévision n\'a pas de rang');
+    assert.equal(r.ranks.get('A').total, 3, 'le total ne compte que les évaluables');
+  });
+});
+
+describe('mesures de rang — Rank IC et RCE', () => {
+  // Générateur déterministe : `signal` contrôle la part de l'ordre annoncé qui
+  // se retrouve dans la réalisation, `marche` ajoute un facteur commun au jour.
+  const panneau = ({ signal, marche = 0, jours = 120, actifs = 8, graine = 7 }) => {
+    let s = graine;
+    const rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+    const rows = [];
+    for (let d = 0; d < jours; d += 1) {
+      const commun = (rnd() - 0.5) * 0.06 * marche;
+      for (let a = 0; a < actifs; a += 1) {
+        const p = rnd();
+        const bruit = (rnd() + rnd() + rnd() - 1.5) * 0.03;
+        rows.push({
+          day: `j${String(d).padStart(3, '0')}`,
+          symbol: `S${a}`,
+          predicted: p,
+          realized: commun + signal * (p - 0.5) * 0.1 + bruit,
+        });
+      }
+    }
+    return rows;
+  };
+
+  test('un modèle sans information donne un IC indistinguable de zéro', () => {
+    const r = rankIC(panneau({ signal: 0 }));
+    assert.ok(Math.abs(r.icMoyen) < 0.05, `IC proche de zéro, obtenu ${r.icMoyen}`);
+    assert.equal(r.significatif, false);
+    assert.match(r.verdict, /INDISTINGUABLE DE ZÉRO/);
+  });
+
+  test('un signal injecté est détecté et croît avec sa force', () => {
+    const faible = rankIC(panneau({ signal: 0.3 }));
+    const fort = rankIC(panneau({ signal: 1.5 }));
+    assert.ok(fort.icMoyen > faible.icMoyen, `${fort.icMoyen} doit dépasser ${faible.icMoyen}`);
+    assert.equal(fort.significatif, true);
+  });
+
+  test('le facteur marché ne se fait PAS passer pour de la sélection', () => {
+    // C'est la raison d'être du calcul transversal. Un jour où tout monte, un
+    // IC calculé sur l'échantillon groupé mesurerait « le modèle était-il
+    // haussier les jours de hausse ? » — du market timing, pas du choix de
+    // titres. À l'intérieur d'une journée le facteur commun s'annule.
+    const sans = rankIC(panneau({ signal: 0.5, marche: 0 }));
+    const avec = rankIC(panneau({ signal: 0.5, marche: 1 }));
+    assert.ok(
+      Math.abs(avec.icMoyen - sans.icMoyen) < 0.05,
+      `l'IC ne doit pas bouger : ${sans.icMoyen} vs ${avec.icMoyen}`,
+    );
+  });
+
+  test('la corrélation entre actifs effondre l\'ampleur exploitable', () => {
+    // Le fait le plus important du module : 8 actifs corrélés ne sont pas
+    // 8 paris. Sans cette correction, l'IR théorique était surestimé d'un
+    // facteur √(N/N_eff).
+    const sans = rankIC(panneau({ signal: 0.5, marche: 0 }));
+    const avec = rankIC(panneau({ signal: 0.5, marche: 1 }));
+    assert.ok(avec.ampleur.correlationMoyenne > 0.25, `corrélation détectée : ${avec.ampleur.correlationMoyenne}`);
+    assert.ok(sans.ampleur.actifsEffectifs > 6, 'sans corrélation, l\'ampleur reste proche de N');
+    assert.ok(avec.ampleur.actifsEffectifs < 4, `avec corrélation, elle s'effondre : ${avec.ampleur.actifsEffectifs}`);
+    assert.ok(avec.irPlafondAnnuel < sans.irPlafondAnnuel);
+  });
+
+  test('l\'horizon divise le nombre de périodes indépendantes par an', () => {
+    // Une prévision à 3 jours ne se renouvelle pas 252 fois par an. Compter
+    // 252 était l'autre moitié de l'erreur qui produisait un IR de 16.
+    const j1 = rankIC(panneau({ signal: 0.5 }), { horizon: 1 });
+    const j3 = rankIC(panneau({ signal: 0.5 }), { horizon: 3 });
+    assert.equal(j1.ampleur.periodesParAn, 252);
+    assert.equal(j3.ampleur.periodesParAn, 84);
+    assert.ok(j3.irPlafondAnnuel < j1.irPlafondAnnuel);
+  });
+
+  const courbe = (moyennes, parTranche = 40) => moyennes.flatMap(
+    (m, b) => Array.from({ length: parTranche }, () => ({ rank: (b + 0.5) / moyennes.length, realized: m })),
+  );
+
+  test('une courbe croissante ne produit aucune erreur de rang', () => {
+    const r = rankCalibrationError(courbe([-0.02, -0.01, 0, 0.01, 0.02]));
+    assert.equal(r.rce, 0);
+    assert.equal(r.monotone, true);
+    assert.match(r.verdict, /RESPECTÉ/);
+  });
+
+  test('une inversion au milieu est détectée sans condamner l\'ensemble', () => {
+    // Le cas traître : bon aux extrémités, faux au centre. Le Rank IC reste
+    // positif ; seul le RCE le voit.
+    const r = rankCalibrationError(courbe([-0.02, 0.01, -0.01, 0, 0.02]));
+    assert.ok(r.rce > 0, 'l\'inversion doit coûter quelque chose');
+    assert.equal(r.monotone, false);
+    assert.ok(r.ecartHautBas > 0, 'les extrémités restent dans le bon ordre');
+    assert.match(r.verdict, /inversions/);
+  });
+
+  test('un classement à l\'envers est appelé par son nom', () => {
+    const r = rankCalibrationError(courbe([0.02, 0.01, 0, -0.01, -0.02]));
+    assert.ok(r.ecartHautBas < 0);
+    assert.match(r.verdict, /INVERSÉ/);
+  });
+
+  test('une absence de signal n\'est pas annoncée comme une inversion', () => {
+    // Écart haut-bas nul et écart négatif se ressemblent numériquement et sont
+    // deux diagnostics opposés : « il ne sait rien » contre « il sait et le dit
+    // à l'envers ». Une première version confondait les deux et affichait
+    // « ordre INVERSÉ » sur une courbe parfaitement plate.
+    const r = rankCalibrationError(courbe([0.005, 0.005, 0.005, 0.005, 0.005]));
+    assert.equal(r.ecartHautBas, 0);
+    assert.match(r.verdict, /AUCUNE information/);
+    assert.doesNotMatch(r.verdict, /INVERSÉ/);
+  });
+
+  test('la projection isotone fusionne les violations, sans toucher au reste', () => {
+    const r = rankCalibrationError(courbe([-0.02, 0.01, -0.01, 0, 0.02]));
+    const t = r.tranches;
+    assert.equal(t[0].apresProjection, t[0].resultatMoyen, 'la première tranche ne violait rien');
+    assert.equal(t[4].apresProjection, t[4].resultatMoyen, 'la dernière non plus');
+    assert.equal(t[1].apresProjection, t[2].apresProjection, 'les deux tranches en conflit sont mises en commun');
   });
 });

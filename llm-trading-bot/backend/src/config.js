@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// entities.js ne dépend que de node: — pas de cycle d'import avec config.
+import { entityCoverage } from './llm/entities.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -236,6 +238,28 @@ export function validateConfig() {
     warnings.push(
       `${callsPerCycle} actifs pour ${config.llm.callsPerKeyPerDay} appels/jour/clé : un seul cycle épuise le quota.`,
     );
+  }
+
+  // ── Couverture de l'anonymisation ───────────────────────────────────────
+  // Un symbole sans dictionnaire d'entités part avec ses dirigeants et ses
+  // produits en clair. Le modèle identifie alors l'entreprise et répond depuis
+  // sa mémoire plutôt que depuis les faits du jour — ce que le carnet fantôme
+  // enregistrera comme une prévision, sans moyen de le distinguer.
+  //
+  // L'avertissement est ici, et pas seulement dans un script à lancer à la
+  // main, parce que c'est au démarrage qu'il faut le voir : une fois le bot
+  // parti, les décisions contaminées s'accumulent en silence.
+  if (config.news.anonymize) {
+    const c = entityCoverage(config.universe.symbols);
+    const manquants = c.partiels.length + c.absents.length;
+    if (manquants > 0) {
+      warnings.push(
+        `Anonymisation incomplète : ${c.couverts}/${c.total} symboles couverts. `
+        + `${manquants} partiront avec dirigeants et produits en clair — leurs décisions sont `
+        + 'contaminées par la mémoire du modèle. Corriger avec `npm run entities:build`, '
+        + 'détail avec `npm run entities`.',
+      );
+    }
   }
 
   return warnings;

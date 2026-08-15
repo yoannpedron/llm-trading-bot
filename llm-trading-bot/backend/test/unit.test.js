@@ -342,7 +342,7 @@ describe('normalisation des décisions LLM', () => {
     const d = normalizeDecision(base);
     assert.equal(d.action, 'BUY');
     assert.equal(d.confidence, 0.65, 'la confiance est la probabilité annoncée, pas un nombre inventé');
-    assert.ok(d.sizePct > 0.25 && d.sizePct < 1, `taille proportionnée à l'écart, obtenu ${d.sizePct}`);
+    assert.equal(d.sizePct, 1, 'poids égal — la taille ne traduit plus la conviction');
     assert.deepEqual(d.warnings, []);
   });
 
@@ -427,20 +427,30 @@ describe('normalisation des décisions LLM', () => {
 describe('dérivation de l\'action depuis la prévision', () => {
   const seuils = { minEdge: 0.2, minUpProbability: 0.4 };
 
-  test('la taille croît avec l\'écart de probabilité', () => {
+  test('la taille NE dépend PAS de l\'écart de probabilité', () => {
+    // Ce test affirmait l'inverse. Il a changé de sens avec le passage au poids
+    // égal : dimensionner proportionnellement à l'écart revient à faire
+    // confiance au NIVEAU des probabilités du modèle, c'est-à-dire à engager le
+    // capital maximal exactement là où il est le plus exagérément confiant. Le
+    // niveau est justement la propriété qu'on soupçonne fausse ; seul l'ordre
+    // est présumé porteur d'information, et l'ordre est traité par le
+    // classement transversal, pas ici.
     const petit = deriveAction(normalizeForecast({ sur_100_surperforme: 55, sur_100_sousperforme: 30, sur_100_indistinct: 15 }), seuils);
     const grand = deriveAction(normalizeForecast({ sur_100_surperforme: 85, sur_100_sousperforme: 5, sur_100_indistinct: 10 }), seuils);
     assert.equal(petit.action, 'BUY');
     assert.equal(grand.action, 'BUY');
-    assert.ok(grand.sizePct > petit.sizePct, `${grand.sizePct} doit dépasser ${petit.sizePct}`);
+    assert.equal(grand.sizePct, petit.sizePct, 'poids égal : 65 points d\'écart ne pèsent pas plus que 25');
+    assert.equal(grand.sizePct, 1);
+    // La probabilité annoncée continue d'être transmise telle quelle : elle
+    // reste mesurée, elle n'est simplement plus utilisée pour dimensionner.
+    assert.equal(grand.confidence, 0.85);
+    assert.equal(petit.confidence, 0.55);
   });
 
-  test('franchir tout juste le seuil engage une taille non nulle', () => {
-    // Sans plancher de taille, un écart pile au seuil donnerait 0 donc un HOLD :
-    // une zone morte où le signal suffit à agir mais la mise est trop faible.
+  test('franchir tout juste le seuil engage la même taille que tout le reste', () => {
     const d = deriveAction(normalizeForecast({ sur_100_surperforme: 55, sur_100_sousperforme: 35, sur_100_indistinct: 10 }), seuils);
     assert.equal(d.action, 'BUY');
-    assert.equal(d.sizePct, 0.25);
+    assert.equal(d.sizePct, 1, 'plus de plancher à 0,25 : le poids est le même pour tous les retenus');
   });
 
   test('un écart suffisant mais une probabilité haussière faible reste un HOLD', () => {

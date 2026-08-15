@@ -20,7 +20,41 @@
  * connaissances. Sur un univers de dix valeurs, un dictionnaire curé est plus
  * fiable qu'un NER probabiliste : pas de faux négatifs sur les entités qui
  * comptent, et aucune dépendance Python à installer.
+ *
+ * ── Passage à 150 valeurs ────────────────────────────────────────────────
+ * Le dictionnaire curé ne tient plus à la main. Deux sources se superposent
+ * désormais, et l'ordre compte :
+ *
+ *   1. UNIVERSE_ENTITIES ci-dessous, écrit à la main, qui fait autorité ;
+ *   2. `entities.generated.json`, produit par `npm run entities:build`, qui
+ *      complète les symboles absents de (1).
+ *
+ * Cette superposition crée un risque qu'il faut nommer : une couverture
+ * PARTIELLE est pire qu'aucune couverture, parce qu'elle donne l'illusion que
+ * la mesure est propre. Un article sur AMD dont on masque « AMD » mais pas
+ * « Lisa Su » n'est pas anonymisé — il est seulement plus difficile à lire.
+ * Le modèle, lui, identifie la société au premier nom de dirigeant venu.
+ *
+ * D'où `entityCoverage()` : la couverture est VÉRIFIÉE au démarrage et les
+ * symboles non couverts sont signalés, jamais ignorés en silence.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+/**
+ * Dictionnaire généré. Absent tant que `npm run entities:build` n'a pas
+ * tourné — ce n'est pas une erreur, c'est l'état initial, et la couverture le
+ * dira.
+ */
+const GENERATED = (() => {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    return JSON.parse(readFileSync(path.join(here, 'entities.generated.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+})();
 
 /**
  * Entités de notre univers. `names` inclut les variantes orthographiques
@@ -121,11 +155,50 @@ export const THIRD_PARTY_ENTITIES = [
   'Jim Cramer', 'Cathie Wood', 'Jerome Powell', 'Powell',
 ];
 
-/** Toutes les entités connues d'un symbole, à plat. */
+const VIDE = { names: [], executives: [], products: [], subsidiaries: [] };
+
+/**
+ * Toutes les entités connues d'un symbole, à plat.
+ * Le dictionnaire écrit à la main l'emporte sur le généré.
+ */
 export function entitiesFor(symbol) {
-  const e = UNIVERSE_ENTITIES[symbol];
-  if (!e) return { names: [], executives: [], products: [], subsidiaries: [] };
-  return e;
+  return UNIVERSE_ENTITIES[symbol] ?? GENERATED[symbol] ?? VIDE;
+}
+
+/**
+ * État de la couverture d'anonymisation sur un univers.
+ *
+ * Le critère de « couvert » n'est pas « existe dans le dictionnaire » mais
+ * « possède un nom ET des dirigeants ET des produits ». Un symbole réduit à sa
+ * raison sociale est déjà traité par `buildRedactionTerms`, qui ajoute le
+ * ticker et le nom de société : l'entrée n'apporterait rien. Ce qui fait la
+ * différence entre MASQUER et ANONYMISER, ce sont précisément les dirigeants
+ * et les produits — les deux voies de réidentification les plus directes.
+ */
+export function entityCoverage(symbols) {
+  const couverts = [];
+  const partiels = [];
+  const absents = [];
+
+  for (const s of symbols) {
+    const e = UNIVERSE_ENTITIES[s] ?? GENERATED[s];
+    if (!e) { absents.push(s); continue; }
+    const complet = (e.names?.length ?? 0) > 0
+      && (e.executives?.length ?? 0) > 0
+      && (e.products?.length ?? 0) > 0;
+    (complet ? couverts : partiels).push(s);
+  }
+
+  const total = symbols.length || 1;
+  return {
+    total: symbols.length,
+    couverts: couverts.length,
+    partiels,
+    absents,
+    part: couverts.length / total,
+    manuels: Object.keys(UNIVERSE_ENTITIES).length,
+    generes: Object.keys(GENERATED).length,
+  };
 }
 
 /** Personnalités publiques tierces, distinguées des sociétés pour la lisibilité. */

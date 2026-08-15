@@ -4,6 +4,7 @@ import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js'
 import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
+import { rankAndSelect } from './ranking.js';
 import { getNews } from '../news/newsService.js';
 import { decide } from '../llm/agent.js';
 
@@ -123,8 +124,17 @@ export class TradingEngine {
     return exits;
   }
 
-  /** Analyse un actif et exécute (ou non) la décision du LLM. */
-  async #processSymbol(symbol, { quotes, circuitBreaker }) {
+  /**
+   * PHASE 1 — évalue un actif SANS rien exécuter.
+   *
+   * La séparation évaluation / exécution est ce qui rend possible le classement
+   * transversal : on ne peut pas choisir les meilleurs sans les avoir tous vus.
+   * Auparavant chaque actif était jugé isolément contre un seuil absolu et
+   * exécuté dans la foulée, si bien qu'avec un univers large le bot achetait
+   * simplement les premiers de la liste à franchir la barre — l'ordre du
+   * fichier de configuration décidait du portefeuille.
+   */
+  async #evaluateSymbol(symbol, { quotes, circuitBreaker }) {
     const outcome = { symbol, action: 'HOLD', executed: false, reason: null };
 
     try {
@@ -189,11 +199,42 @@ export class TradingEngine {
 
       outcome.action = decision.action;
 
+      // L'évaluation s'arrête ici : le classement transversal, la sélection et
+      // l'exécution appartiennent à la phase 2.
+      return {
+        ...outcome,
+        evaluated: true,
+        decision, snapshot, news, phase, price, fxRate, position, account, budget,
+      };
+    } catch (err) {
+      log.error(`Échec de l'évaluation de ${symbol} : ${err.message}`);
+      outcome.reason = err.message;
+      return outcome;
+    }
+  }
+
+  /** Exécute une décision déjà évaluée, puis la consigne. */
+  async #executeEvaluation(evaluation, { selected, rankInfo, rankingReason }) {
+    const { symbol, decision, snapshot, news, phase, price, fxRate, position, account, budget } = evaluation;
+    const outcome = { symbol, action: decision.action, executed: false, reason: null };
+
+    try {
+      // La sélection transversale prime : un actif hors du top K ne s'achète
+      // pas, même si sa prévision est bonne dans l'absolu.
+      const effective = { ...decision };
+      if (decision.action === 'BUY' && !selected.has(symbol)) {
+        effective.action = 'HOLD';
+        effective.sizePct = 0;
+      }
+      outcome.action = effective.action;
+
       // La validation, elle, s'appuie sur le budget RÉEL, verrous compris.
-      const validation = this.risk.validate({ decision, account, position, price, fxRate, budget });
+      const validation = this.risk.validate({
+        decision: effective, account, position, price, fxRate, budget,
+      });
 
       let tradeResult = null;
-      if (validation.approved && decision.action === 'BUY') {
+      if (validation.approved && effective.action === 'BUY') {
         tradeResult = await this.broker.buy({
           symbol,
           quantity: validation.quantity,
@@ -220,7 +261,7 @@ export class TradingEngine {
             + `ATR ${levels.atrUsed}, PRU ${reference})`,
           );
         }
-      } else if (validation.approved && decision.action === 'SELL') {
+      } else if (validation.approved && effective.action === 'SELL') {
         tradeResult = await this.broker.sell({
           symbol,
           quantity: validation.quantity,
@@ -236,7 +277,7 @@ export class TradingEngine {
       await this.journal.record({
         symbol,
         source: 'llm',
-        action: decision.action,
+        action: effective.action,
         executed: outcome.executed,
         confidence: decision.confidence,
         sizePct: decision.sizePct,
@@ -286,6 +327,12 @@ export class TradingEngine {
         advisedAction: decision.advisedAction,
         advisoryConflict: decision.advisoryConflict,
         voided: decision.voided,
+        // Rang transversal du jour : c'est cette valeur, et non la probabilité
+        // brute, qui se confronte au rendement réalisé pour mesurer le Rank IC.
+        rank: rankInfo?.rank ?? null,
+        rankTotal: rankInfo?.total ?? null,
+        rankFractional: rankInfo?.fractional ?? null,
+        selected: selected.has(symbol),
       });
 
       const f = decision.forecast;
@@ -356,14 +403,37 @@ export class TradingEngine {
 
       const exits = await this.#applyProtectiveExits(quotes);
 
-      const results = [];
+      // ── PHASE 1 : évaluer TOUT l'univers, sans rien exécuter ──────────────
       // Traitement séquentiel : ménage les quotas d'API et garde une
       // valorisation cohérente entre deux décisions du même cycle.
       // Le palier gratuit de Gemini limite les requêtes par minute : sans cette
       // pause, un univers de 3+ actifs déclenche des 429 dès le second symbole.
+      const evaluations = [];
       for (const [index, symbol] of config.universe.symbols.entries()) {
         if (index > 0 && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
-        results.push(await this.#processSymbol(symbol, { quotes, circuitBreaker }));
+        evaluations.push(await this.#evaluateSymbol(symbol, { quotes, circuitBreaker }));
+      }
+
+      // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
+      // On ne peut pas choisir les meilleurs sans les avoir tous vus. C'est
+      // toute la raison d'être de la séparation en deux phases.
+      const held = new Set((await this.broker.getPositions()).map((p) => p.symbol));
+      const ranking = rankAndSelect(evaluations.filter((e) => e.evaluated), {
+        maxSelected: config.risk.maxPositions,
+        held,
+      });
+
+      const results = [];
+      for (const evaluation of evaluations) {
+        if (!evaluation.evaluated) {
+          results.push(evaluation); // marché fermé ou échec : rien à exécuter
+          continue;
+        }
+        results.push(await this.#executeEvaluation(evaluation, {
+          selected: ranking.selected,
+          rankInfo: ranking.ranks.get(evaluation.symbol) ?? null,
+          rankingReason: ranking.reason,
+        }));
       }
 
       // Récapitulatif des spreads observés : c'est la mesure qui, séance après

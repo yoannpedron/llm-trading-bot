@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { createLogger } from '../logger.js';
 import { SqliteStore } from '../storage/SqliteStore.js';
 import { calibration } from './calibration.js';
+import { rankIC, rankCalibrationError } from './rankMetrics.js';
 
 const log = createLogger('shadow');
 
@@ -64,8 +65,27 @@ const BENCHMARK = 'SPY';
  *
  * À incrémenter dès qu'une modification change les décisions produites : seuils,
  * schéma de sortie, dérivation de l'action. Pas pour un correctif d'affichage.
+ *
+ * ── v2 : passage au classement transversal ────────────────────────────────
+ * Trois changements simultanés, chacun suffisant à lui seul pour invalider la
+ * comparaison avec la série v1 :
+ *
+ *   • la décision d'acheter ne dépend plus d'un seuil appliqué à un actif isolé
+ *     mais du RANG de cet actif parmi tous ceux du cycle ;
+ *   • la taille de position ne dépend plus de la conviction annoncée — poids
+ *     égal sur les retenus ;
+ *   • le bot s'abstient entièrement quand la dispersion transversale est trop
+ *     faible, situation qui n'existait pas en v1.
+ *
+ * S'y ajoute une contamination indépendante : des trades passés à la main ont
+ * modifié les positions détenues, donc le contexte `hadPosition` d'une partie
+ * des décisions v1. Ces décisions ne décrivent plus ce que le bot aurait fait.
+ *
+ * Le compteur repart de zéro. C'est le coût réel du changement de stratégie ;
+ * le masquer coûterait la validité du verdict. La série v1 reste en base et
+ * consultable — rien n'est effacé.
  */
-const RULE_VERSION = 'seuil-sur-prevision-v1';
+const RULE_VERSION = 'classement-transversal-v2';
 
 /** Étiquette des décisions antérieures à l'introduction du champ. */
 const LEGACY_RULE = 'action-choisie-par-le-modele';
@@ -130,6 +150,14 @@ export class ShadowBook {
       advisedAction: decision.advisedAction ?? null,
       advisoryConflict: Boolean(decision.advisoryConflict),
       voided: Boolean(decision.voided),
+      // Rang transversal du jour. C'est cette valeur — et non la probabilité
+      // brute — qui porte l'information exploitable : chez un modèle de
+      // langage, le NIVEAU des probabilités est fréquemment faux là où leur
+      // ORDRE reste valide. Le Rank IC se calcule dessus.
+      rank: decision.rank ?? null,
+      rankTotal: decision.rankTotal ?? null,
+      rankFractional: decision.rankFractional ?? null,
+      selected: Boolean(decision.selected),
       // Renseigné plus tard par resolve()
       outcomes: null,
       resolved: false,
@@ -246,12 +274,31 @@ export class ShadowBook {
   /**
    * Série de scores prête pour le test séquentiel.
    *
-   * **Dégroupage des corrélations** : trois cycles quotidiens sur le même actif
-   * en bougies journalières produisent quasiment la même décision. Les compter
-   * trois fois sous-estimerait la variance et validerait à tort. On ne retient
-   * donc qu'une observation par symbole et par jour.
+   * ── Deux dégroupages, pas un ──────────────────────────────────────────────
+   *
+   * 1. PAR JOUR (fait en SQL) : trois cycles quotidiens sur le même actif en
+   *    bougies journalières produisent quasiment la même décision. Les compter
+   *    trois fois sous-estimerait la variance et validerait à tort.
+   *
+   * 2. PAR FENÊTRE DE SCORE (fait ici) : c'est celui qui manquait, et il pesait
+   *    plus lourd que le premier.
+   *
+   *    Une décision du lundi est notée sur mardi-mercredi-jeudi ; celle du mardi
+   *    sur mercredi-jeudi-vendredi. Elles partagent DEUX jours sur trois. La
+   *    série est donc un processus à moyenne mobile MA(h−1), d'autocorrélation
+   *    voisine de 2/3 au décalage 1 et 1/3 au décalage 2.
+   *
+   *    Le SPRT accumule ses preuves en supposant les incréments conditionnel-
+   *    lement indépendants. Sous ce recouvrement, l'inflation de variance vaut
+   *    1 + 2(2/3 + 1/3) ≈ 3 — soit davantage que la correction transversale
+   *    déjà appliquée (≈ 1,32). Le test concluait environ trois fois trop vite.
+   *
+   *    On espace donc les observations d'au moins `horizon` jours de bourse par
+   *    actif. Cela divise le nombre d'observations par trois, sans rien coûter
+   *    en information réelle : ces trois observations n'en contenaient qu'une.
+   *    C'est de la comptabilité honnête, pas une perte.
    */
-  async scoreSeries({ horizon = 3, filter = null, allRules = false } = {}) {
+  async scoreSeries({ horizon = 3, filter = null, allRules = false, allowOverlap = false } = {}) {
     await this.init();
     const key = `d${horizon}`;
     const out = [];
@@ -264,10 +311,30 @@ export class ShadowBook {
       ruleVersion: allRules ? null : RULE_VERSION,
     });
 
+    // Jours de bourse observés, par actif : sert de calendrier pour mesurer
+    // l'espacement réel entre deux décisions (les week-ends et fériés ne
+    // comptent pas, puisqu'aucune décision n'y est prise).
+    const daysBySymbol = new Map();
+    for (const r of rows) {
+      if (!daysBySymbol.has(r.symbol)) daysBySymbol.set(r.symbol, []);
+      const list = daysBySymbol.get(r.symbol);
+      if (list[list.length - 1] !== r.day) list.push(r.day);
+    }
+    const lastKeptIndex = new Map();
+
     for (const entry of rows) {
       const outcome = entry.outcomes?.[key];
       if (!outcome || outcome.score == null) continue;
       if (filter && !filter(entry)) continue;
+
+      if (!allowOverlap) {
+        const calendar = daysBySymbol.get(entry.symbol);
+        const index = calendar.indexOf(entry.day);
+        const previous = lastKeptIndex.get(entry.symbol);
+        // Fenêtres qui se chevauchent : on saute.
+        if (previous != null && index - previous < horizon) continue;
+        lastKeptIndex.set(entry.symbol, index);
+      }
 
       out.push({
         t: entry.t,
@@ -284,6 +351,10 @@ export class ShadowBook {
         advisedAction: entry.advisedAction ?? null,
         advisoryConflict: Boolean(entry.advisoryConflict),
         voided: Boolean(entry.voided),
+        rank: entry.rank ?? null,
+        rankTotal: entry.rankTotal ?? null,
+        rankFractional: entry.rankFractional ?? null,
+        selected: Boolean(entry.selected),
       });
     }
 
@@ -379,6 +450,22 @@ export class ShadowBook {
           .map((s) => ({ p: s.pUpGivenMove, y: s.excessReturn > 0 ? 1 : 0 })),
       ),
 
+      // ── Calibration ACTIF PAR ACTIF ─────────────────────────────────────
+      // La calibration globale ci-dessus mélange tous les titres. Or « 60 »
+      // sur une valeur volatile et « 60 » sur une défensive ne décrivent pas
+      // le même degré de certitude : le modèle produit des probabilités
+      // polarisées là où les mouvements sont tranchés, tempérées ailleurs.
+      // Agrégés, ces deux régimes se compensent et donnent une calibration
+      // globale flatteuse alors qu'AUCUN actif n'est bien calibré.
+      calibrationParActif: calibrationBySymbol(all),
+
+      // ── Le classement ordonne-t-il correctement ? ────────────────────────
+      // C'est LA question dont dépend la stratégie depuis le passage au rang :
+      // le bot n'utilise plus le niveau des probabilités, seulement leur ordre.
+      // Mesuré à l'intérieur de chaque journée pour que « tout a monté
+      // aujourd'hui » ne se fasse pas passer pour de la sélection de titres.
+      rangs: rankSection(all, horizon),
+
       // ── Biais d'inaction, mesuré et non supposé ─────────────────────────
       // Part des décisions où le modèle recommandait autre chose que ce que sa
       // propre répartition impliquait, et dans quel sens. Si les conflits
@@ -425,6 +512,10 @@ export class ShadowBook {
       advisedAction: e.advisedAction ?? null,
       advisoryConflict: e.advisoryConflict ?? false,
       voided: e.voided ?? false,
+      rank: e.rank ?? null,
+      rankTotal: e.rankTotal ?? null,
+      rankFractional: e.rankFractional ?? null,
+      selected: e.selected ?? false,
       outcomes: e.outcomes ?? null,
       resolved: e.resolved ?? false,
     })));
@@ -455,6 +546,143 @@ export class ShadowBook {
 }
 
 /** Divergences entre la recommandation du modèle et le seuil appliqué. */
+/**
+ * Calibration par actif.
+ *
+ * Le seuil de 30 observations n'est pas décoratif : en dessous, la fréquence
+ * réalisée d'un actif est dominée par sa propre variance et on lirait du bruit
+ * comme un biais. Les actifs sous le seuil sont COMPTÉS et déclarés, pas
+ * silencieusement omis — sinon on croirait avoir mesuré tout l'univers.
+ */
+function calibrationBySymbol(all, { minPerSymbol = 30 } = {}) {
+  const bySymbol = new Map();
+  for (const s of all) {
+    if (s.pUpGivenMove == null || s.excessReturn == null) continue;
+    if (!bySymbol.has(s.symbol)) bySymbol.set(s.symbol, []);
+    bySymbol.get(s.symbol).push({ p: s.pUpGivenMove, y: s.excessReturn > 0 ? 1 : 0 });
+  }
+
+  const mesures = [];
+  let insuffisants = 0;
+  for (const [symbol, pairs] of bySymbol) {
+    if (pairs.length < minPerSymbol) {
+      insuffisants += 1;
+      continue;
+    }
+    const c = calibration(pairs);
+    mesures.push({
+      symbol,
+      n: c.n,
+      brier: c.brier ?? null,
+      ece: c.ece ?? null,
+      pente: c.penteDeCalibration ?? null,
+      biais: c.biaisMoyen ?? null,
+    });
+  }
+
+  mesures.sort((a, b) => (b.ece ?? 0) - (a.ece ?? 0));
+
+  // Dispersion des pentes entre actifs : c'est le nombre qui tranche la
+  // question « peut-on comparer un 60 à un autre 60 ? ». Si les pentes varient
+  // fortement d'un actif à l'autre, les probabilités ne sont pas comparables
+  // entre actifs, et un seuil absolu commun à tous n'a aucun sens — ce qui est
+  // exactement l'argument du passage au classement transversal.
+  const pentes = mesures.map((m) => m.pente).filter((p) => Number.isFinite(p));
+  let dispersionDesPentes = null;
+  if (pentes.length >= 3) {
+    const moy = pentes.reduce((a, b) => a + b, 0) / pentes.length;
+    dispersionDesPentes = Math.sqrt(
+      pentes.reduce((a, b) => a + (b - moy) ** 2, 0) / (pentes.length - 1),
+    );
+  }
+
+  return {
+    actifsMesures: mesures.length,
+    actifsInsuffisants: insuffisants,
+    seuil: minPerSymbol,
+    dispersionDesPentes: round(dispersionDesPentes, 3),
+    verdict: verdictParActif(mesures.length, dispersionDesPentes),
+    parActif: mesures,
+  };
+}
+
+function verdictParActif(n, dispersion) {
+  if (n < 3) return `Seulement ${n} actif(s) au-delà du seuil — pas encore de comparaison possible entre actifs.`;
+  if (dispersion == null) return `${n} actifs mesurés, pentes non calculables.`;
+  if (dispersion > 0.4) {
+    return `Les probabilités NE SONT PAS COMPARABLES entre actifs (dispersion des pentes ${dispersion.toFixed(2)}). `
+      + 'Un « 60 » ne veut pas dire la même chose selon le titre : un seuil absolu commun sélectionnerait '
+      + 'la volatilité plutôt que la qualité. Le classement transversal est justifié par les données.';
+  }
+  return `Pentes homogènes entre actifs (dispersion ${dispersion.toFixed(2)}) : les probabilités sont `
+    + 'grossièrement comparables d\'un titre à l\'autre.';
+}
+
+/**
+ * Section « rangs » : Rank IC et RCE, calculés à partir de l'écart de
+ * probabilité et du rendement EXCÉDENTAIRE.
+ *
+ * Deux choix qui méritent d'être justifiés :
+ *
+ *   • On repart de `edge` plutôt que du rang enregistré au moment de la
+ *     décision. Le rang enregistré portait sur TOUS les actifs du cycle, alors
+ *     que la série mesurée en a écarté certains (dégroupage). Reclasser à
+ *     l'intérieur de l'échantillon effectivement mesuré évite de confronter un
+ *     rang sur 150 à une réalisation observée sur 12. Le rang enregistré reste
+ *     en base : il sert de trace d'audit de ce que le bot a réellement fait.
+ *
+ *   • La cible est le rendement excédentaire, pas le score de l'action. Le
+ *     score est retourné pour un SELL et pour un HOLD sans position ; il
+ *     mesure la justesse de la DÉCISION. Ici on mesure la justesse de la
+ *     PRÉVISION, qui est toujours orientée « surperformance ».
+ */
+function rankSection(all, horizon) {
+  const rows = all
+    .filter((s) => Number.isFinite(s.edge) && Number.isFinite(s.excessReturn))
+    .map((s) => ({
+      day: s.t.slice(0, 10),
+      symbol: s.symbol,
+      predicted: s.edge,
+      realized: s.excessReturn,
+    }));
+
+  const ic = rankIC(rows, { horizon });
+
+  // Rang fractionnaire recalculé dans chaque journée, sur les seuls actifs
+  // retenus ce jour-là.
+  const byDay = new Map();
+  for (const r of rows) {
+    if (!byDay.has(r.day)) byDay.set(r.day, []);
+    byDay.get(r.day).push(r);
+  }
+  const pairs = [];
+  for (const group of byDay.values()) {
+    if (group.length < 3) continue;
+    const sorted = [...group].sort((a, b) => b.predicted - a.predicted);
+    sorted.forEach((g, i) => {
+      pairs.push({ rank: 1 - i / (sorted.length - 1), realized: g.realized });
+    });
+  }
+
+  return {
+    rankIC: ic,
+    rce: rankCalibrationError(pairs),
+    // Ce que le bot a effectivement retenu, par opposition à tout ce qu'il a
+    // jugé. L'écart entre les deux mesure la valeur ajoutée de la sélection
+    // elle-même — et non celle du modèle.
+    retenus: (() => {
+      const sel = all.filter((s) => s.selected && Number.isFinite(s.excessReturn));
+      const reste = all.filter((s) => !s.selected && Number.isFinite(s.excessReturn));
+      const moy = (xs) => (xs.length ? xs.reduce((a, s) => a + s.excessReturn, 0) / xs.length : null);
+      return {
+        n: sel.length,
+        excesMoyenRetenusPct: round(moy(sel) == null ? null : moy(sel) * 100, 3),
+        excesMoyenEcartesPct: round(moy(reste) == null ? null : moy(reste) * 100, 3),
+      };
+    })(),
+  };
+}
+
 function advisorySummary(all) {
   const withAdvice = all.filter((s) => s.advisedAction);
   if (!withAdvice.length) return null;

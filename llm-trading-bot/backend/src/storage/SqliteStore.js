@@ -42,6 +42,7 @@ const COLUMNS = [
   'model', 'source', 'ruleVersion',
   'pUp', 'pUpGivenMove', 'edge',
   'advisedAction', 'advisoryConflict', 'voided',
+  'rank', 'rankTotal', 'rankFractional', 'selected',
   'outcomes', 'resolved',
 ];
 
@@ -71,6 +72,13 @@ const SCHEMA = `
     advisedAction  TEXT,
     advisoryConflict INTEGER NOT NULL DEFAULT 0,
     voided         INTEGER NOT NULL DEFAULT 0,
+    -- Rang transversal du jour. Cest cette valeur, et non la probabilite brute,
+    -- qui porte linformation exploitable : le niveau des probabilites dun LLM
+    -- est frequemment faux la ou leur ordre reste valide.
+    rank           INTEGER,
+    rankTotal      INTEGER,
+    rankFractional REAL,
+    selected       INTEGER NOT NULL DEFAULT 0,
     -- Résultats par horizon, en JSON : structure creuse (un horizon peut être
     -- échu et pas les autres) et interrogeable via json_extract.
     outcomes       TEXT,
@@ -265,6 +273,7 @@ function fromSql(row) {
     advisoryConflict: Boolean(row.advisoryConflict),
     voided: Boolean(row.voided),
     resolved: Boolean(row.resolved),
+    selected: Boolean(row.selected),
     outcomes: row.outcomes ? JSON.parse(row.outcomes) : null,
   };
 }

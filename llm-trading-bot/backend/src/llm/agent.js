@@ -13,7 +13,9 @@ const ACTIONS = new Set(['BUY', 'SELL', 'HOLD']);
 const SENTIMENTS = new Set(['POSITIF', 'NEUTRE', 'NEGATIF', 'INDISPONIBLE']);
 
 /** Extrait un objet JSON même si le modèle l'a entouré de texte ou de ```json. */
-function extractJson(raw) {
+// Exporté pour le test contrefactuel (src/scripts/entitySwap.js), qui appelle
+// le fournisseur directement sans passer par decide().
+export function extractJson(raw) {
   const trimmed = raw.trim();
   try {
     return JSON.parse(trimmed);
@@ -160,18 +162,27 @@ export function deriveAction(forecast, { minEdge, minUpProbability }) {
   const { pUp, pDown, edge } = forecast;
 
   if (edge >= minEdge && pUp >= minUpProbability) {
-    // Plancher de taille : sans lui, un écart pile au seuil donnerait une taille
-    // nulle, donc un HOLD — une zone morte juste au-dessus du seuil, où le
-    // signal est jugé suffisant pour agir mais la mise trop faible pour le
-    // faire. Franchir le seuil engage un quart du budget, l'unanimité le
-    // totalité.
-    const span = Math.max(1 - minEdge, 1e-6);
-    const scaled = Math.min(1, Math.max(0, (edge - minEdge) / span));
-    return {
-      action: 'BUY',
-      sizePct: Number((0.25 + 0.75 * scaled).toFixed(4)),
-      confidence: pUp,
-    };
+    // ── Poids égal, plus de taille dérivée de l'écart ──────────────────────
+    //
+    // La version précédente dimensionnait proportionnellement à l'écart de
+    // probabilité, avec un plancher à 25 %. Les deux sont abandonnés.
+    //
+    // La taille proportionnelle est une variante du critère de Kelly, et Kelly
+    // suppose les probabilités connues avec certitude. Alimenté par un modèle
+    // dont la calibration est incertaine, il engage le capital maximal
+    // exactement là où le modèle est le plus exagérément confiant — il
+    // amplifie l'erreur au lieu de l'absorber.
+    //
+    // Le plancher de 25 % était pire encore : je l'avais ajouté pour supprimer
+    // une « zone morte » où un écart tout juste au seuil donnait une taille
+    // nulle. Cette zone morte était le comportement CORRECT. Le plancher
+    // forçait à sur-parier précisément quand l'avantage était le plus faible,
+    // et imposait 75 % d'exposition minimale sur trois positions.
+    //
+    // Tant que la calibration n'est pas mesurée, seul le RANG du modèle est
+    // exploitable — pas le niveau. La taille ne doit donc dépendre que de
+    // l'appartenance au top K, décidée en aval par `core/ranking.js`.
+    return { action: 'BUY', sizePct: 1, confidence: pUp };
   }
 
   if (-edge >= minEdge && pDown >= minUpProbability) {
