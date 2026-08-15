@@ -8,7 +8,7 @@ const TMP_DIR = path.join(os.tmpdir(), `bot-prompt-${Date.now()}`);
 process.env.DATA_DIR = TMP_DIR;
 process.env.GEMINI_API_KEY = '';
 
-const { buildRedactionTerms, redact, anonymizeNews, redactAll } = await import('../src/llm/anonymize.js');
+const { buildRedactionTerms, redact, anonymizeNews, redactAll, requiresExactCase } = await import('../src/llm/anonymize.js');
 const { entitiesFor, competitorEntities } = await import('../src/llm/entities.js');
 const { verifyEvidence, normalizeDecision } = await import('../src/llm/agent.js');
 
@@ -283,5 +283,66 @@ describe('normalisation avec grille et preuves', () => {
     );
     assert.equal(d.checksPassed, 1);
     assert.equal(d.action, 'HOLD');
+  });
+});
+
+describe('tickers ambigus — la censure ne doit pas manger la langue', () => {
+  // Défaut réel, invisible sur l'univers de dix valeurs parce qu'aucun de leurs
+  // tickers n'est un mot anglais. À 150 valeurs il devient massif : SO
+  // (Southern), MO (Altria), PM (Philip Morris), NOW (ServiceNow), CAT
+  // (Caterpillar), DE (Deere), ALL (Allstate) sont tous des mots courants.
+  //
+  // La conséquence n'était pas cosmétique : le modèle recevait des phrases dont
+  // les mots de liaison avaient disparu, et c'est sa lecture entière qui était
+  // dégradée — en croyant améliorer la mesure, on la corrompait.
+  const censure = (ticker, texte) => redact(texte, buildRedactionTerms(ticker, null)).text;
+
+  test('un ticker en minuscules dans une phrase n\'est pas censuré', () => {
+    assert.equal(
+      censure('NOW', 'The company said it will now expand'),
+      'The company said it will now expand',
+    );
+    assert.equal(
+      censure('SO', 'Analysts see upside, so the stock rose'),
+      'Analysts see upside, so the stock rose',
+    );
+  });
+
+  test('mais le ticker réellement cité l\'est toujours', () => {
+    assert.match(censure('NOW', 'NOW shares jumped'), /\[ENTREPRISE_A\] shares jumped/);
+    assert.match(censure('SO', 'SO raised its dividend'), /\[ENTREPRISE_A\] raised/);
+  });
+
+  test('les deux usages coexistent dans la même phrase', () => {
+    assert.equal(
+      censure('SO', 'Analysts see upside, so SO raised its dividend.'),
+      'Analysts see upside, so [ENTREPRISE_A] raised its dividend.',
+    );
+  });
+
+  test('une heure n\'est pas confondue avec Philip Morris', () => {
+    // « PM » l'heure et « PM » le ticker s'écrivent identiquement, majuscules
+    // comprises : la règle de casse ne peut pas les départager, seul le
+    // contexte le peut. Un chiffre devant, c'est une heure.
+    const r = censure('PM', 'Shares rose 3% at 4 PM ET, and PM lagged after 9:30 AM.');
+    assert.match(r, /at 4 PM ET/, 'l\'heure est préservée');
+    assert.match(r, /9:30 AM/, 'l\'autre heure aussi');
+    assert.match(r, /and \[ENTREPRISE_A\] lagged/, 'le ticker cité est bien censuré');
+  });
+
+  test('les noms longs restent insensibles à la casse', () => {
+    // La règle ne doit pas affaiblir le cas normal : « nvidia » en minuscules
+    // dans une dépêche mal formatée doit rester censuré.
+    const terms = buildRedactionTerms('NVDA', 'NVIDIA Corporation');
+    const { text } = redact('nvidia and NVIDIA and Nvidia', terms);
+    assert.equal(text, '[ENTREPRISE_A] and [ENTREPRISE_A] and [ENTREPRISE_A]');
+  });
+
+  test('la règle elle-même est explicite, pas seulement ses effets', () => {
+    assert.equal(requiresExactCase('SO'), true, 'trop court');
+    assert.equal(requiresExactCase('NOW'), true, 'trop court ET mot courant');
+    assert.equal(requiresExactCase('Target'), true, 'long mais mot courant');
+    assert.equal(requiresExactCase('Blackwell'), false, 'long et distinctif');
+    assert.equal(requiresExactCase('NVIDIA'), false);
   });
 });

@@ -40,6 +40,82 @@ const STOPWORDS = new Set([
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
+ * ── Termes ambigus : masqués en respectant la casse ───────────────────────
+ *
+ * La censure était insensible à la casse, ce qui est correct pour « Nvidia »
+ * ou « NVIDIA » mais catastrophique pour les tickers courts qui sont aussi des
+ * mots anglais courants. Vérifié sur un texte réel :
+ *
+ *   NOW (ServiceNow) → « it will [ENTREPRISE_A] expand »
+ *   SO  (Southern)   → « expand, [ENTREPRISE_A] analysts see »
+ *   PM  (Philip Morris) → « Shares rose 3% at 4 [ENTREPRISE_A] »
+ *
+ * Le défaut était invisible sur l'univers de dix valeurs — aucun de leurs
+ * tickers n'est un mot anglais — et devient massif à 150, où figurent SO, MO,
+ * PM, NOW, CAT, DE, ALL. Il ne s'agissait pas d'un excès de prudence : le
+ * modèle recevait des phrases dont les mots de liaison avaient disparu, et
+ * c'est sa lecture entière qui était dégradée.
+ *
+ * La règle : un terme court ou ambigu n'est masqué que s'il apparaît dans la
+ * casse EXACTE où on le connaît. « NOW » en majuscules dans une dépêche désigne
+ * probablement ServiceNow ; « now » en minuscules est un adverbe. Les termes
+ * longs et distinctifs — « Nvidia », « Blackwell » — restent insensibles à la
+ * casse, où le risque de collision est nul.
+ *
+ * Le seuil est fixé à 4 caractères : en dessous, aucun terme n'a assez de
+ * spécificité pour qu'une collision soit improbable.
+ */
+const LONGUEUR_SANS_AMBIGUITE = 5;
+
+/**
+ * Mots anglais courants qui sont aussi des raisons sociales ou des tickers.
+ * Même longs, ils exigent la correspondance de casse.
+ */
+const MOTS_COURANTS = new Set([
+  'now', 'all', 'key', 'cat', 'see', 'has', 'was', 'one', 'two', 'off', 'out',
+  'target', 'discover', 'progressive', 'core', 'prime', 'vision', 'united',
+  'general', 'standard', 'national', 'american', 'global', 'first', 'power',
+  'energy', 'digital', 'mobile', 'express', 'direct', 'secure', 'smart', 'open',
+  'java', 'mint', 'arc', 'gobi', 'hill', 'dram', 'nand', 'live', 'next', 'edge',
+]);
+
+/**
+ * Un terme doit-il être masqué en respectant la casse ?
+ * Exporté pour que le test puisse vérifier la règle elle-même, et pas seulement
+ * ses conséquences sur un exemple.
+ */
+export function requiresExactCase(term) {
+  return term.length < LONGUEUR_SANS_AMBIGUITE || MOTS_COURANTS.has(term.toLowerCase());
+}
+
+/**
+ * ── Collisions que la casse ne peut pas trancher ──────────────────────────
+ *
+ * « PM », ticker de Philip Morris, et « PM », l'heure, s'écrivent exactement
+ * pareil : majuscules dans les deux cas. La règle de casse ne sert à rien ici,
+ * et la presse financière écrit constamment « closed at 4 PM ET ».
+ *
+ * Ce qui les sépare est le CONTEXTE, pas l'orthographe : une heure est précédée
+ * d'un chiffre. On refuse donc la censure dans ce seul cas, ce qui laisse
+ * intacte la censure du ticker cité normalement (« PM lagged »).
+ *
+ * La liste est courte et le restera : elle ne doit contenir que des termes dont
+ * l'homographe est à la fois fréquent ET reconnaissable à un motif fixe. Tout
+ * le reste relève de la règle de casse.
+ */
+const CONTEXTES_A_EPARGNER = {
+  // Heures : « 4 PM », « 9:30 AM », « 16h30 PM ».
+  PM: /(?<=\d[\s:h.]*)$/,
+  AM: /(?<=\d[\s:h.]*)$/,
+};
+
+/** Le terme, à cette position, est-il un homographe à épargner ? */
+function estHomographe(term, texteAvant) {
+  const motif = CONTEXTES_A_EPARGNER[term];
+  return Boolean(motif) && motif.test(texteAvant);
+}
+
+/**
  * Termes identifiant directement l'entreprise cible.
  * Sert à la fois à l'anonymisation et au filtre de pertinence des actualités :
  * ce qui identifie une entreprise est aussi ce qui rend un article pertinent.
@@ -75,8 +151,11 @@ function applyLayer(text, terms, token) {
 
   for (const term of [...terms].sort((a, b) => b.length - a.length)) {
     if (!term || term.length < 2) continue;
-    const pattern = new RegExp(`\\b${escapeRegex(term)}\\b`, 'gi');
-    out = out.replace(pattern, () => {
+    // `i` seulement pour les termes assez longs et assez distinctifs pour que
+    // la collision soit impossible. Voir requiresExactCase.
+    const pattern = new RegExp(`\\b${escapeRegex(term)}\\b`, requiresExactCase(term) ? 'g' : 'gi');
+    out = out.replace(pattern, (match, offset, whole) => {
+      if (estHomographe(term, whole.slice(0, offset))) return match;
       count += 1;
       return token;
     });

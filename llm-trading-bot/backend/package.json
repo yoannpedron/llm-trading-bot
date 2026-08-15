@@ -17,7 +17,8 @@
     "test": "node --experimental-sqlite --test \"test/**/*.test.js\"",
     "test:entity": "node --experimental-sqlite src/scripts/entitySwap.js",
     "entities": "node --experimental-sqlite src/scripts/entitiesReport.js",
-    "entities:build": "node --experimental-sqlite src/scripts/buildEntities.js"
+    "entities:build": "node --experimental-sqlite src/scripts/buildEntities.js",
+    "entities:audit": "node --experimental-sqlite src/scripts/auditEntities.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
