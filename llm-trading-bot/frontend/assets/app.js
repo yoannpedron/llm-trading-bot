@@ -28,6 +28,13 @@ const $ = (id) => document.getElementById(id);
 // chartSymbol pour resurligner la ligne active. Une déclaration placée plus
 // bas tomberait dans la zone morte temporelle du « let » et ferait échouer le
 // tout premier rendu avec une ReferenceError.
+// État du portefeuille, déclaré ici pour la même raison que ci-dessous :
+// renderPositions et renderTrades s'exécutent au premier rendu, avant la fin
+// du fichier.
+let ongletPortefeuille = 'open';
+let nbPositions = 0;
+let nbOrdres = 0;
+
 let chartSymbol = null;
 let chartRange = '1y';
 
@@ -713,7 +720,8 @@ function renderChart(curve, account, serverTime) {
 
 function renderPositions(positions, currency) {
   const tbody = $('positions-table').querySelector('tbody');
-  $('positions-count').textContent = `${positions.length} ligne${positions.length > 1 ? 's' : ''}`;
+  nbPositions = positions.length;
+  majCompteurPortefeuille();
 
   if (!positions.length) {
     tbody.innerHTML = '<tr class="empty"><td colspan="7">Aucune position ouverte.</td></tr>';
@@ -1471,7 +1479,8 @@ let lastTrades = null;
 function renderTrades(trades, currency) {
   if (trades) lastTrades = trades;
   const tbody = $('trades-table').querySelector('tbody');
-  $('trades-count').textContent = `${Math.min(trades.length, tradesLimit)} / ${trades.length} ordre${trades.length > 1 ? 's' : ''}`;
+  nbOrdres = trades.length;
+  majCompteurPortefeuille();
 
   if (!trades.length) {
     tbody.innerHTML = '<tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr>';
@@ -2107,6 +2116,13 @@ $('ranking-body').addEventListener('toggle', (event) => {
   const item = event.target.closest('details.rank-item');
   if (!item || !item.open) return;
 
+  // Une seule ligne ouverte à la fois. Un raisonnement déplié fait ~380 px :
+  // en laisser plusieurs ouverts repousse le classement hors de l'écran et
+  // ramène le mur que la fusion du journal venait de supprimer.
+  for (const autre of $('ranking-body').querySelectorAll('details.rank-item[open]')) {
+    if (autre !== item) autre.open = false;
+  }
+
   const hote = item.querySelector('.rank-detail');
   if (hote.dataset.rempli === '1') return;
 
@@ -2117,3 +2133,45 @@ $('ranking-body').addEventListener('toggle', (event) => {
       + 'il a pu être écarté avant l\'appel au modèle (marché fermé, cotation absente).</p>';
   hote.dataset.rempli = '1';
 }, true);
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PORTEFEUILLE — deux onglets dans une seule carte
+
+   Positions ouvertes et ordres passés décrivent le même objet à deux moments :
+   ce qu'on tient, et comment on y est arrivé. Séparés en deux cartes, il
+   fallait faire défiler de l'une à l'autre pour relier un P&L latent à l'ordre
+   qui l'a créé.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+/**
+ * Un seul compteur pour les deux onglets.
+ *
+ * Il annonce ce que montre l'onglet affiché ET rappelle le volume de l'autre :
+ * sans ce rappel, rien n'indique qu'un historique existe derrière le second
+ * onglet, et un onglet dont on ignore le contenu ne se clique pas.
+ */
+function majCompteurPortefeuille() {
+  const el = $('positions-count');
+  if (!el) return;
+  const pos = `${nbPositions} position${nbPositions > 1 ? 's' : ''}`;
+  const ord = `${nbOrdres} ordre${nbOrdres > 1 ? 's' : ''}`;
+  el.textContent = ongletPortefeuille === 'open'
+    ? `${pos} ouverte${nbPositions > 1 ? 's' : ''} · ${ord} au total`
+    : `${ord} · ${pos} ouverte${nbPositions > 1 ? 's' : ''}`;
+}
+
+$('portfolio-tabs').addEventListener('click', (event) => {
+  const bouton = event.target.closest('button[data-pf]');
+  if (!bouton) return;
+  ongletPortefeuille = bouton.dataset.pf;
+  for (const chip of $('portfolio-tabs').querySelectorAll('.chip')) {
+    const actif = chip === bouton;
+    chip.classList.toggle('chip-active', actif);
+    chip.setAttribute('aria-selected', String(actif));
+  }
+  $('pf-open').hidden = ongletPortefeuille !== 'open';
+  $('pf-past').hidden = ongletPortefeuille !== 'past';
+  majCompteurPortefeuille();
+});

@@ -1048,3 +1048,213 @@ details.rank-item[open] .rank-chevron { transform: rotate(90deg); }
 .rank-row {
   grid-template-columns: 34px 1fr auto auto 14px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PASSE D'AÉRATION
+
+   Le tableau de bord était compact au point d'être fatigant : cartes collées,
+   lignes de tableau serrées, en-têtes à peine détachés du contenu. Rien n'était
+   faux, mais tout demandait un effort de lecture — et sur une page qu'on
+   consulte plusieurs fois par jour, cet effort se paie.
+
+   Les valeurs ci-dessous suivent une échelle unique (4 / 8 / 12 / 16 / 24 / 32)
+   plutôt que des nombres choisis au cas par cas : c'est ce qui produit
+   l'impression de régularité, davantage que la quantité d'espace elle-même.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --pas: 8px;
+  --rayon: 14px;
+}
+
+/* ── Respiration générale ────────────────────────────────────────────── */
+.wrap {
+  padding: 32px 24px 56px;
+  gap: 24px;
+}
+.tab-panel { gap: 24px; }
+
+.card {
+  border-radius: var(--rayon);
+}
+
+/* L'en-tête portait 16px de haut comme de bas : le titre semblait posé sur le
+   contenu. En augmentant, le bloc respire et la séparation devient lisible. */
+.card-head {
+  padding: 18px 22px;
+}
+.card-head h2 {
+  font-size: 15px;
+  letter-spacing: -0.005em;
+}
+
+/* La note explicative de chaque carte est le texte le plus lu de la page —
+   c'est elle qui dit à quoi sert le panneau. Elle était à l'étroit. */
+.card-note {
+  padding: 14px 22px;
+  line-height: 1.6;
+}
+
+/* ── Tableaux ────────────────────────────────────────────────────────── */
+table th,
+table td {
+  padding: 12px 14px;
+}
+table thead th {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+/* Une ligne survolée doit se détacher : sur sept colonnes de chiffres, l'œil
+   perd la ligne sans repère. */
+table tbody tr:hover { background: var(--bg-elev-2); }
+
+/* ── Listes libellé / valeur ─────────────────────────────────────────── */
+.status-list {
+  padding: 6px 22px 18px;
+}
+.status-list > div {
+  padding: 12px 0;
+}
+
+/* ── Indicateurs clés ────────────────────────────────────────────────── */
+.kpis { gap: 16px; }
+.kpi { padding: 20px 22px; }
+.kpi h2 { margin-bottom: 10px; }
+.kpi-value { line-height: 1.15; }
+.kpi-sub, .kpi-delta { margin-top: 8px; }
+
+/* ── Verdict ─────────────────────────────────────────────────────────── */
+.verdict { padding: 24px 26px; border-radius: var(--rayon); }
+.verdict-reason { line-height: 1.6; margin: 14px 0; }
+.verdict-progress { margin-top: 18px; }
+
+/* ── Classement ──────────────────────────────────────────────────────── */
+#ranking-card .dispersion {
+  padding: 18px 22px 0;
+  margin-bottom: 0;
+}
+#ranking-card > .filters,
+#ranking-card .ranking-search {
+  padding: 0 22px;
+}
+#ranking-card > .filters { margin-top: 18px; }
+#ranking-card .ranking-search { margin: 12px 0 0; }
+#ranking-body { padding: 14px 12px 18px; }
+#ranking-abstention { margin: 16px 22px 0; }
+
+.rank-row {
+  padding: 11px 10px;
+  gap: 12px;
+}
+.rank-row + .rank-row { margin-top: 3px; }
+details.rank-item + details.rank-item { margin-top: 3px; }
+
+/* Le séparateur de médiane portait la même couleur que les bordures de ligne :
+   il se confondait avec elles alors qu'il marque la frontière entre « peut
+   être acheté » et « ne le sera jamais ». */
+.rank-median {
+  margin: 16px 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sector-group { margin-bottom: 20px; }
+.sector-head { padding: 0 10px 8px; margin-bottom: 8px; }
+
+.heatmap { gap: 4px; padding: 2px; }
+.heat-cell { border-radius: 6px; }
+
+/* ── Rang → résultat ─────────────────────────────────────────────────── */
+.rank-buckets { padding: 18px 22px 10px; height: 200px; gap: 12px; }
+.rank-stats { padding: 18px 22px; gap: 16px; }
+.rank-verdict { padding: 0 22px 20px; line-height: 1.6; }
+
+/* ── Raisonnement déplié sous une ligne de classement ────────────────── */
+.rank-detail {
+  padding: 10px 16px 18px;
+  margin: 4px 0 10px 14px;
+  border-left: 2px solid var(--accent-soft);
+}
+.entry-quote { line-height: 1.65; margin: 14px 0; }
+.entry-grid { gap: 18px; margin: 16px 0; }
+.entry-block h4 { margin-bottom: 6px; }
+.headlines { margin: 16px 0 0; line-height: 1.7; }
+.entry-meta { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* ── Panneau du portefeuille ─────────────────────────────────────────── */
+/*
+ * Hauteur bornée avec défilement interne. L'historique des ordres ne décroît
+ * jamais : sans plafond, la carte grandirait indéfiniment et repousserait tout
+ * ce qui la suit. 380 px laissent voir sept à huit lignes, assez pour saisir la
+ * tendance sans faire du panneau le centre de la page.
+ */
+.pf-panel.scrollable {
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* L'en-tête du tableau reste visible pendant le défilement — sans quoi on perd
+   la signification des colonnes dès la troisième ligne. */
+.pf-panel table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elev);
+}
+
+/* Barres de défilement discrètes : une barre système épaisse dans une carte de
+   380 px attire l'œil plus que son contenu. */
+.pf-panel.scrollable::-webkit-scrollbar { width: 10px; }
+.pf-panel.scrollable::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 3px solid var(--bg-elev);
+}
+.pf-panel.scrollable::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+.pf-panel.scrollable::-webkit-scrollbar-track { background: transparent; }
+.pf-panel.scrollable { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+/* ── Onglets ─────────────────────────────────────────────────────────── */
+.tabs { margin-bottom: 24px; gap: 6px; }
+.tab { padding: 11px 18px; font-size: 14.5px; }
+
+/* ── Réglages ────────────────────────────────────────────────────────── */
+.settings { padding: 24px; gap: 24px; }
+.settings-row { gap: 20px; }
+.settings-block { padding-top: 20px; }
+.settings-actions { padding-top: 20px; }
+
+/* ── Puces ───────────────────────────────────────────────────────────── */
+.chip { padding: 6px 14px; font-size: 12.5px; }
+.filters { gap: 8px; }
+
+/* Onglets internes à une carte : posés sous l'en-tête, ils gardent le titre
+   visible tout en montrant que les deux vues sont de même niveau. */
+.card-tabs {
+  padding: 14px 22px 0;
+}
+
+/* ═══ État du moteur en colonnes ════════════════════════════════════════
+   Quatre lignes seulement restent visibles depuis l'allègement, chacune très
+   courte. Empilées sur toute la largeur, elles laissaient une carte à moitié
+   vide avec des valeurs perdues à l'extrême droite. En colonnes, l'œil relie
+   chaque libellé à sa valeur sans traverser l'écran. */
+#status-list {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0 32px;
+}
+#status-list > div:not(.status-actions) {
+  border-bottom: 1px solid var(--border);
+}
+/* Les boutons de pilotage occupent leur propre rangée entière. */
+#status-list > .status-actions {
+  grid-column: 1 / -1;
+  border-bottom: none;
+}
+.status-config .status-list {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0 32px;
+}

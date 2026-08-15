@@ -218,13 +218,25 @@
       <div id="chart" class="chart" role="img" aria-label="Courbe d'évolution du capital"></div>
     </section>
 
-    <div class="grid-2">
-      <!-- ═══ Positions ═══════════════════════════════════════════════ -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Positions ouvertes</h2>
-          <span id="positions-count" class="card-meta">—</span>
-        </div>
+    <!-- ═══ Portefeuille ═════════════════════════════════════════
+         Positions ouvertes et ordres passés décrivent le même objet à deux
+         moments : ce qu'on tient, et comment on y est arrivé. Deux cartes
+         séparées obligeaient à faire défiler entre les deux pour relier un
+         P&L latent à l'ordre qui l'a créé.                              -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Portefeuille</h2>
+        <span id="positions-count" class="card-meta">—</span>
+      </div>
+      <!-- Les onglets sous l'en-tête plutôt que dedans : la carte garde un
+           titre pour être repérée d'un coup d'œil, et les deux vues restent
+           visiblement au même niveau. -->
+      <div class="filters card-tabs" id="portfolio-tabs" role="tablist">
+        <button class="chip chip-active" data-pf="open" role="tab" aria-selected="true">Positions ouvertes</button>
+        <button class="chip" data-pf="past" role="tab" aria-selected="false">Ordres passés</button>
+      </div>
+
+      <div id="pf-open" class="pf-panel scrollable">
         <div class="table-scroll">
           <table id="positions-table" aria-label="Positions ouvertes">
             <thead>
@@ -234,57 +246,9 @@
             <tbody><tr class="empty"><td colspan="7">Aucune position ouverte.</td></tr></tbody>
           </table>
         </div>
-      </section>
-
-      <!-- ═══ État du moteur ══════════════════════════════════════════ -->
-      <section class="card">
-        <div class="card-head"><h2>État du moteur</h2></div>
-        <dl id="status-list" class="status-list">
-          <div><dt>Statut</dt><dd id="st-state">—</dd></div>
-          <!-- Un cycle dure une vingtaine de minutes sur 150 actifs : sans
-               compteur, rien ne distingue « ça travaille » de « c'est planté ». -->
-          <div id="st-progress-row" hidden>
-            <dt>Progression</dt>
-            <dd>
-              <div class="progress-track"><div id="st-progress-fill" class="progress-fill"></div></div>
-              <span id="st-progress-label" class="progress-label">—</span>
-            </dd>
-          </div>
-          <div class="status-actions" hidden id="engine-actions">
-            <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
-            <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
-          </div>
-          <!-- Ne restent visibles que les lignes qui CHANGENT. Le reste est
-               de la configuration : elle ne bouge qu'à l'installation et n'a
-               pas à occuper l'écran en permanence. « Univers » était le pire
-               cas — il déverse maintenant 150 symboles. -->
-          <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
-          <div><dt>Marché</dt><dd id="st-market">—</dd></div>
-          <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
-          <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
-        </dl>
-        <details class="status-config">
-          <summary>Configuration</summary>
-          <dl class="status-list">
-            <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
-            <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
-            <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
-            <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
-            <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
-            <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
-          </dl>
-        </details>
-      </section>
-    </div>
-
-
-
-    <!-- ═══ Ordres ════════════════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Historique des ordres</h2>
-        <span id="trades-count" class="card-meta">—</span>
       </div>
+
+      <div id="pf-past" class="pf-panel scrollable" hidden>
       <div class="table-scroll">
         <table id="trades-table" aria-label="Historique des ordres">
           <thead><tr><th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
@@ -292,7 +256,51 @@
           <tbody><tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr></tbody>
         </table>
       </div>
+      </div>
     </section>
+
+    <!-- ═══ État du moteur ══════════════════════════════════════════ -->
+    <section class="card">
+      <div class="card-head"><h2>État du moteur</h2></div>
+      <dl id="status-list" class="status-list">
+        <div><dt>Statut</dt><dd id="st-state">—</dd></div>
+        <!-- Un cycle dure une vingtaine de minutes sur 150 actifs : sans
+             compteur, rien ne distingue « ça travaille » de « c'est planté ». -->
+        <div id="st-progress-row" hidden>
+          <dt>Progression</dt>
+          <dd>
+            <div class="progress-track"><div id="st-progress-fill" class="progress-fill"></div></div>
+            <span id="st-progress-label" class="progress-label">—</span>
+          </dd>
+        </div>
+        <div class="status-actions" hidden id="engine-actions">
+          <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
+          <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
+        </div>
+        <!-- Ne restent visibles que les lignes qui CHANGENT. Le reste est
+             de la configuration : elle ne bouge qu'à l'installation et n'a
+             pas à occuper l'écran en permanence. « Univers » était le pire
+             cas — il déverse maintenant 150 symboles. -->
+        <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
+        <div><dt>Marché</dt><dd id="st-market">—</dd></div>
+        <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
+        <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
+      </dl>
+      <details class="status-config">
+        <summary>Configuration</summary>
+        <dl class="status-list">
+          <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
+          <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
+          <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
+          <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
+          <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
+          <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
+        </dl>
+      </details>
+    </section>
+
+
+
 
     <!-- ═══ PANNEAU DE DIAGNOSTIC ═════════════════════════════════════ -->
     <section id="debug-panel" class="card debug" hidden>
