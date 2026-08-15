@@ -797,3 +797,95 @@ details.raw pre {
 .rank-stat { font-size: 12px; color: var(--text-dim); }
 .rank-stat strong { display: block; font-size: 16px; font-family: var(--mono); color: var(--text); margin-top: 2px; }
 .rank-verdict { font-size: 13px; color: var(--text-dim); line-height: 1.55; margin: 0; }
+
+/* ═══ Onglets ═══════════════════════════════════════════════════════════
+   La page atteignait 16,3 écrans. Les panneaux de mesure se consultent de
+   temps en temps, pas à chaque coup d'œil.                                */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 9px 16px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+/*
+ * Le panneau reprend la grille que .wrap fournissait aux sections.
+ * En s'intercalant entre les deux, il avait cassé l'espacement (les cartes
+ * se touchaient) et la mise en deux colonnes des blocs .grid-2.
+ */
+.tab-panel { display: grid; gap: 20px; align-content: start; }
+.tab-panel[hidden] { display: none; }
+
+/* ═══ Journal replié ════════════════════════════════════════════════════
+   Chaque entrée dépliée mesurait 467 px. À 150 actifs × 3 cycles, le journal
+   aurait atteint 200 écrans par jour. La ligne fermée en fait 40.          */
+.entry-summary {
+  display: grid;
+  grid-template-columns: 62px 52px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 13px;
+  list-style: none;
+}
+.entry-summary::-webkit-details-marker { display: none; }
+.entry-summary:hover { background: var(--bg-elev-2); }
+.entry-summary .entry-sym { font-weight: 600; }
+.entry-summary .entry-edge { font-family: var(--mono); color: var(--text-dim); }
+.entry-summary .entry-gist {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-summary .entry-time { color: var(--text-faint); font-size: 11px; }
+.entry-chevron { color: var(--text-faint); transition: transform 0.15s ease; }
+details[open] > .entry-summary .entry-chevron { transform: rotate(90deg); }
+details.entry { border: 0; padding: 0; }
+details.entry + details.entry { border-top: 1px solid var(--border); }
+details.entry > .entry-body { padding: 4px 10px 16px; }
+
+.load-more {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.load-more:hover { color: var(--text); border-color: var(--text-faint); }
+
+/* ═══ Graphique d'un actif ══════════════════════════════════════════════ */
+.chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.chart-ranges { display: flex; gap: 4px; }
+.chart-ranges .chip { padding: 3px 10px; font-size: 12px; }
+.position-row { cursor: pointer; }
+.position-row:hover { background: var(--bg-elev-2); }
+.position-row.active { background: var(--accent-soft); }
+
+/* Les clés API vivent maintenant dans Réglages : elles ne changent qu'à
+   l'installation et n'ont aucune raison d'occuper la page en permanence. */
+.settings-card { margin-top: 4px; }

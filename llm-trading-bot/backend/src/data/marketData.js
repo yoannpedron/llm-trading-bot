@@ -157,3 +157,54 @@ export async function isTradeable(snapshot) {
   const nextOpen = clock.next_open ? ` — réouverture ${new Date(clock.next_open).toLocaleString('fr-FR')}` : '';
   return { open: false, reason: `marché fermé${nextOpen}${clock.estimated ? ' (estimation)' : ''}` };
 }
+
+/**
+ * Série de bougies destinée à l'AFFICHAGE, pas à la décision.
+ *
+ * `getMarketSnapshot` calcule au passage RSI, EMA20/50, SMA200, ATR, bandes de
+ * Bollinger. Ces indicateurs justifient le seuil de 30 bougies minimum : une
+ * SMA200 sur vingt points n'a aucun sens, et une décision prise dessus serait
+ * du bruit.
+ *
+ * Un graphique n'a besoin d'aucun de ces calculs, et vingt bougies s'y tracent
+ * très bien. Réutiliser le chemin de décision faisait donc échouer les fenêtres
+ * courtes — « historique insuffisant » sur une vue à un jour — pour protéger
+ * des indicateurs que personne ne regardait.
+ *
+ * D'où un chemin séparé, sans indicateurs et sans plancher.
+ */
+export async function getCandleSeries(symbol, { interval = '1d', range = '1y' } = {}) {
+  const key = `series:${symbol}:${interval}:${range}`;
+  const cached = readCache(key);
+  if (cached) return cached;
+
+  let series;
+  try {
+    series = await primary.getCandles(symbol, { interval, range, minCandles: 0 });
+  } catch (err) {
+    log.warn(`${primary.name} en échec sur ${symbol} (${err.message}) → tentative ${fallback.name}`);
+    series = await fallback.getCandles(symbol, { interval, range, minCandles: 0 });
+  }
+
+  let candles = series.candles;
+
+  // ── « 1 jour » veut dire LA DERNIÈRE SÉANCE ─────────────────────────────
+  // On remonte de 4 jours calendaires pour attraper une séance même le lundi
+  // ou après un week-end férié, ce qui ramène jusqu'à trois journées de
+  // bougies. On ne garde que la dernière date effectivement cotée : sans ce
+  // filtre, la vue « 1 jour » en affichait trois.
+  if (range === '1d' && candles.length) {
+    const dernierJour = candles[candles.length - 1].time.slice(0, 10);
+    candles = candles.filter((c) => c.time.slice(0, 10) === dernierJour);
+  }
+
+  return writeCache(key, {
+    symbol,
+    currency: series.currency,
+    exchange: series.exchange,
+    interval,
+    range,
+    lastPrice: series.lastPrice,
+    candles: candles.map((c) => ({ t: c.time, c: c.close, h: c.high, l: c.low })),
+  });
+}

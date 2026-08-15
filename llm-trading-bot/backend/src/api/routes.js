@@ -1,7 +1,7 @@
 import express from 'express';
 import { config } from '../config.js';
 import { getRecentLogs } from '../logger.js';
-import { getMarketSnapshot, getMarketClock } from '../data/marketData.js';
+import { getMarketSnapshot, getMarketClock, getCandleSeries } from '../data/marketData.js';
 import { spreadLog } from '../data/spreadLog.js';
 import { executionQuality } from '../data/executionQuality.js';
 import { calendarPhase } from '../data/calendar.js';
@@ -313,8 +313,35 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
   }));
 
   /** Aperçu des données brutes d'un actif (debug / transparence). */
+  /**
+   * Bougies d'un actif, sur la fenêtre demandée.
+   *
+   * Chaque fenêtre a son pas de temps : tracer un an en bougies 5 minutes
+   * enverrait ~20 000 points pour un graphique large de 700 pixels, et tracer
+   * une journée en bougies journalières donnerait un seul point. Les paires
+   * ci-dessous visent 60 à 250 points, ce qui remplit le tracé sans le noyer.
+   */
+  const FENETRES = {
+    '1d': { interval: '5m', range: '1d' },
+    '1w': { interval: '30m', range: '5d' },
+    '1m': { interval: '1d', range: '1mo' },
+    '6m': { interval: '1d', range: '6mo' },
+    '1y': { interval: '1d', range: '1y' },
+  };
+
   router.get('/market/:symbol', asyncRoute(async (req, res) => {
-    const snapshot = await getMarketSnapshot(req.params.symbol.toUpperCase());
+    const symbol = req.params.symbol.toUpperCase();
+    const fenetre = FENETRES[String(req.query.range || '').toLowerCase()];
+
+    // Une fenêtre demandée = graphique. On sert alors la série brute, sans
+    // indicateurs : ils ne sont pas affichés, et ce sont eux qui imposaient un
+    // minimum de 30 bougies incompatible avec une vue à un jour.
+    if (fenetre) {
+      res.json(await getCandleSeries(symbol, fenetre));
+      return;
+    }
+
+    const snapshot = await getMarketSnapshot(symbol);
     res.json({
       symbol: snapshot.symbol,
       currency: snapshot.currency,

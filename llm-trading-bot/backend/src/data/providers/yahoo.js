@@ -44,7 +44,7 @@ export const yahooProvider = {
           // Yahoo insère des trous (jours fériés, halts) : on les élimine.
           .filter((c) => [c.open, c.high, c.low, c.close].every((v) => typeof v === 'number' && Number.isFinite(v)));
 
-        if (candles.length < 30) {
+        if (candles.length < (options?.minCandles ?? 30)) {
           throw new Error(`historique insuffisant pour ${symbol} (${candles.length} bougies)`);
         }
 

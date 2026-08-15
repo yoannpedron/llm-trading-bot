@@ -9,7 +9,28 @@ const INTERVAL_MAP = {
   '1d': '1Day',
 };
 
-const RANGE_DAYS = { '1mo': 30, '3mo': 90, '6mo': 190, '1y': 400, '2y': 760 };
+/**
+ * Fenêtres exprimées en jours CALENDAIRES à remonter.
+ *
+ * Les valeurs sont plus larges que la fenêtre nominale — 190 jours pour six
+ * mois, 400 pour un an — parce que les week-ends et jours fériés ne produisent
+ * pas de bougie : viser exactement 180 jours en rendrait environ 124.
+ *
+ * `1d` et `5d` manquaient, et leur absence était silencieuse : `?? 400`
+ * ramenait 400 jours de bougies 5 minutes, soit 21 000 points pour un
+ * graphique qui en affiche 80. Le défaut ne se voyait qu'au temps de réponse.
+ */
+const RANGE_DAYS = { '1d': 4, '5d': 9, '1mo': 30, '3mo': 90, '6mo': 190, '1y': 400, '2y': 760 };
+
+/**
+ * Nombre minimal de bougies exigé.
+ *
+ * Le seuil protège la chaîne de DÉCISION : les indicateurs (EMA50, SMA200)
+ * n'ont aucun sens sur vingt points, et une décision prise dessus serait du
+ * bruit. Il n'a en revanche rien à faire dans un graphique d'affichage, où
+ * vingt bougies se tracent très bien — d'où `minCandles: 0` pour ce cas.
+ */
+const MIN_CANDLES = 30;
 
 /**
  * Données de marché Alpaca — source primaire depuis la migration.
@@ -37,7 +58,7 @@ export const alpacaProvider = {
     };
   },
 
-  async getCandles(symbol, { interval = '1d', range = '1y' } = {}) {
+  async getCandles(symbol, { interval = '1d', range = '1y', minCandles = MIN_CANDLES } = {}) {
     if (!this.isConfigured) throw new Error('Clés Alpaca absentes (ALPACA_KEY_ID / ALPACA_SECRET_KEY).');
 
     const timeframe = INTERVAL_MAP[interval] || '1Day';
@@ -71,7 +92,7 @@ export const alpacaProvider = {
       pageToken = data.next_page_token || null;
     } while (pageToken && candles.length < 20000);
 
-    if (candles.length < 30) {
+    if (candles.length < minCandles) {
       throw new Error(`historique Alpaca insuffisant pour ${symbol} (${candles.length} bougies, flux ${config.universe.feed})`);
     }
 

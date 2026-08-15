@@ -24,6 +24,15 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
+// ── État du panneau graphique ─────────────────────────────────────────
+// Déclarés ici, et non près des fonctions qui s'en servent : le démarrage en
+// fin de fichier appelle refresh(), donc renderPositions(), qui lit
+// chartSymbol pour resurligner la ligne active. Une déclaration placée plus
+// bas tomberait dans la zone morte temporelle du « let » et ferait échouer le
+// tout premier rendu avec une ReferenceError.
+let chartSymbol = null;
+let chartRange = '1y';
+
 // ── Utilitaires de formatage ─────────────────────────────────
 
 const fmtMoney = (value, currency = 'EUR') => {
@@ -224,11 +233,16 @@ async function refresh() {
 
 // ── Rendu ────────────────────────────────────────────────────
 
+let lastData = null;
+
 function render(data) {
+  lastData = data;
   const m = data.measurement || {};
   renderVerdict(m.sprt);
   renderKpis(data.account, m.shadow);
-  renderChart(data.equityCurve, data.account, data.serverTime);
+  // Un rafraîchissement ne doit pas ramener de force la courbe d'équity
+  // alors que l'utilisateur consulte le cours d'une action.
+  if (!chartSymbol) renderChart(data.equityCurve, data.account, data.serverTime);
   renderPositions(data.positions, data.account.currency);
   renderStatus(data.status, data.calendar);
   renderProgress(data.status);
@@ -651,7 +665,13 @@ function renderPositions(positions, currency) {
 
   tbody.innerHTML = positions
     .map(
-      (p) => `<tr>
+      // Ligne cliquable : elle bascule le graphique du capital vers le cours
+      // de cette action. Le panneau est réutilisé plutôt que dupliqué — la page
+      // est déjà longue.
+      // La classe `active` est réappliquée ICI, et pas seulement au clic : le
+      // tableau est reconstruit à chaque rafraîchissement, ce qui effaçait le
+      // surlignage de la ligne dont on consulte justement le cours.
+      (p) => `<tr class="position-row${chartSymbol === p.symbol ? ' active' : ''}" data-symbol="${esc(p.symbol)}" title="Voir le cours de ${esc(p.symbol)}">
         <td class="sym">${esc(p.symbol)}</td>
         <td class="num">${fmtNum(p.quantity, 4)}</td>
         <td class="num">${fmtNum(p.avgPrice, 2)} ${esc(p.currency || '')}</td>
@@ -1219,6 +1239,8 @@ async function writeToClipboard(text) {
 
 const SENTIMENT_CLASS = { POSITIF: 'pill-pos', NEGATIF: 'pill-neg', NEUTRE: 'pill-neu', INDISPONIBLE: 'pill-skip' };
 
+const JOURNAL_PAGE = 30;
+let journalLimit = JOURNAL_PAGE;
 let lastJournal = null;
 
 function renderJournal(entries) {
@@ -1240,14 +1262,19 @@ function renderJournal(entries) {
     return e.action === state.journalFilter;
   });
 
-  $('journal-count').textContent = `${filtered.length} / ${(entries || []).length} entrées`;
+  $('journal-count').textContent = `${Math.min(filtered.length, journalLimit)} / ${filtered.length} affichées`;
 
   if (!filtered.length) {
     host.innerHTML = '<p class="empty-block">Aucune décision ne correspond à ce filtre.</p>';
     return;
   }
 
-  host.innerHTML = filtered
+  // Plafond d'affichage. Au-delà, le navigateur peine à construire le DOM et
+  // personne ne fait défiler 450 entrées : on en montre une tranche, avec un
+  // bouton pour la suite.
+  const visibles = filtered.slice(0, journalLimit);
+
+  host.innerHTML = visibles
     .map((e) => {
       const tag = e.action === 'BUY' ? 'tag-buy' : e.action === 'SELL' ? 'tag-sell' : 'tag-hold';
       const confidence = Math.round((e.confidence ?? 0) * 100);
@@ -1261,6 +1288,17 @@ function renderJournal(entries) {
           return `<li>${label} <span class="src">— ${esc(h.source || '')}</span></li>`;
         })
         .join('');
+
+  if (filtered.length > journalLimit) {
+    host.insertAdjacentHTML(
+      'beforeend',
+      `<button class="load-more" id="journal-more">Voir ${Math.min(JOURNAL_PAGE, filtered.length - journalLimit)} entrées de plus (${filtered.length - journalLimit} restantes)</button>`,
+    );
+    $('journal-more').addEventListener('click', () => {
+      journalLimit += JOURNAL_PAGE;
+      renderJournal(lastJournal);
+    });
+  }
 
       const flags = (e.riskFlags || []).length
         ? `<div class="entry-block"><h4>Risques identifiés</h4><p>${esc(e.riskFlags.join(' · '))}</p></div>`
@@ -1307,7 +1345,25 @@ function renderJournal(entries) {
         ? `<span class="pill pill-conflict" title="Le seuil a tranché autrement que le modèle">modèle : ${esc(e.advisedAction)}</span>`
         : '';
 
-      return `<article class="entry">
+      // ── Entrée repliée par défaut ─────────────────────────────────────
+      // Dépliée, une entrée mesure 467 px : à 150 actifs × 3 cycles le journal
+      // atteindrait 200 écrans par jour et deviendrait inconsultable. Fermée,
+      // elle en fait 40 et tient la ligne : symbole, action, écart, résumé.
+      // Rien n'est perdu, tout est à un clic.
+      const gist = (e.justification || e.technicalRationale || '').slice(0, 120);
+      const ecart = e.forecast?.edge != null
+        ? `${e.forecast.edge >= 0 ? '+' : ''}${Math.round(e.forecast.edge * 100)} pts`
+        : `${confidence} %`;
+
+      return `<details class="entry">
+        <summary class="entry-summary">
+          <span class="tag ${tag}">${esc(e.action)}</span>
+          <span class="entry-sym">${esc(e.symbol)}</span>
+          <span class="entry-gist">${esc(gist)}</span>
+          <span class="entry-edge">${esc(ecart)}</span>
+          <span class="entry-time">${esc(fmtDate(e.timestamp))}</span>
+        </summary>
+        <div class="entry-body">
         <div class="entry-head">
           <span class="entry-sym">${esc(e.symbol)}</span>
           <span class="tag ${tag}">${esc(e.action)}</span>
@@ -1350,14 +1406,28 @@ function renderJournal(entries) {
             ? `<details class="raw"><summary>Données techniques du moment</summary><pre>${esc(JSON.stringify(e.indicators, null, 2))}</pre></details>`
             : ''
         }
-      </article>`;
+        </div>
+      </details>`;
     })
     .join('');
 }
 
+const TRADES_PAGE = 25;
+let tradesLimit = TRADES_PAGE;
+let lastTrades = null;
+
+/**
+ * Historique des ordres.
+ *
+ * Le bot vise 3 positions et vend peu, donc la table grandit lentement — mais
+ * elle ne décroît jamais. Sur un an elle atteindrait plusieurs centaines de
+ * lignes, toutes rendues d'un coup. On en montre 25, avec un bouton pour la
+ * suite : c'est un historique, il se consulte, il ne se surveille pas.
+ */
 function renderTrades(trades, currency) {
+  if (trades) lastTrades = trades;
   const tbody = $('trades-table').querySelector('tbody');
-  $('trades-count').textContent = `${trades.length} ordre${trades.length > 1 ? 's' : ''}`;
+  $('trades-count').textContent = `${Math.min(trades.length, tradesLimit)} / ${trades.length} ordre${trades.length > 1 ? 's' : ''}`;
 
   if (!trades.length) {
     tbody.innerHTML = '<tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr>';
@@ -1365,6 +1435,7 @@ function renderTrades(trades, currency) {
   }
 
   tbody.innerHTML = trades
+    .slice(0, tradesLimit)
     .map(
       (t) => `<tr>
         <td class="muted">${esc(fmtDate(t.timestamp))}</td>
@@ -1378,6 +1449,17 @@ function renderTrades(trades, currency) {
       </tr>`,
     )
     .join('');
+
+  if (trades.length > tradesLimit) {
+    tbody.insertAdjacentHTML(
+      'beforeend',
+      `<tr><td colspan="8"><button class="load-more" id="trades-more">Voir ${Math.min(TRADES_PAGE, trades.length - tradesLimit)} ordres de plus (${trades.length - tradesLimit} restants)</button></td></tr>`,
+    );
+    $('trades-more').addEventListener('click', () => {
+      tradesLimit += TRADES_PAGE;
+      renderTrades(lastTrades, currency);
+    });
+  }
 }
 
 // ── Événements ───────────────────────────────────────────────
@@ -1413,6 +1495,7 @@ $('journal-filters').addEventListener('click', (event) => {
   const button = event.target.closest('.chip');
   if (!button) return;
   state.journalFilter = button.dataset.filter;
+  journalLimit = JOURNAL_PAGE;
   document.querySelectorAll('#journal-filters .chip').forEach((c) => c.classList.toggle('chip-active', c === button));
   if (state.data) renderJournal(state.data.journal);
 });
@@ -1775,5 +1858,148 @@ function stopProgressWatch() {
 // Recherche dans le journal : le rendu est purement local, aucun appel réseau.
 $('journal-search').addEventListener('input', (event) => {
   state.journalSearch = event.target.value;
+  journalLimit = JOURNAL_PAGE;
   if (lastJournal) renderJournal(lastJournal);
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ONGLETS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+$('tabs').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-tab]');
+  if (!button) return;
+  for (const tab of $('tabs').querySelectorAll('.tab')) {
+    tab.classList.toggle('tab-active', tab === button);
+  }
+  $('tab-aujourdhui').hidden = button.dataset.tab !== 'aujourdhui';
+  $('tab-mesures').hidden = button.dataset.tab !== 'mesures';
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GRAPHIQUE D'UNE ACTION
+
+   Le même panneau sert à deux choses : la courbe d'équity par défaut, le cours
+   d'une action dès qu'on clique sur une position. Réutiliser l'emplacement
+   plutôt qu'en ajouter un évite d'allonger encore une page déjà longue.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+async function showSymbolChart(symbol, range = chartRange) {
+  chartSymbol = symbol;
+  chartRange = range;
+
+  $('chart-title').textContent = symbol;
+  $('chart-ranges').hidden = false;
+  $('chart-back').hidden = false;
+  $('chart-range').textContent = 'chargement…';
+  for (const chip of $('chart-ranges').querySelectorAll('[data-range]')) {
+    chip.classList.toggle('chip-active', chip.dataset.range === range);
+  }
+  for (const row of document.querySelectorAll('.position-row')) {
+    row.classList.toggle('active', row.dataset.symbol === symbol);
+  }
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/market/${encodeURIComponent(symbol)}?range=${range}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Le symbole a pu changer pendant la requête — un clic rapide sur une
+    // autre position. Sans ce test, la réponse lente écrase la récente.
+    if (chartSymbol !== symbol || chartRange !== range) return;
+    drawSeries(data);
+  } catch (err) {
+    $('chart').innerHTML = `<p class="chart-empty">Cours indisponible : ${esc(err.message)}.</p>`;
+    $('chart-range').textContent = '—';
+  }
+}
+
+function showEquityChart() {
+  chartSymbol = null;
+  $('chart-title').textContent = 'Évolution du capital';
+  $('chart-ranges').hidden = true;
+  $('chart-back').hidden = true;
+  for (const row of document.querySelectorAll('.position-row')) row.classList.remove('active');
+  if (lastData) renderChart(lastData.equityCurve, lastData.account, lastData.serverTime);
+}
+
+/**
+ * Tracé d'une série de cours.
+ *
+ * Volontairement distinct de `renderChart` : la courbe d'équity impose une
+ * fenêtre minimale de 2 % pour ne pas dramatiser quelques centimes de bruit sur
+ * un capital de 100 $. Un cours d'action n'a pas ce problème — sa variation
+ * réelle est l'information — et lui appliquer le même plancher écraserait un
+ * mouvement de 1 % qui, lui, compte.
+ */
+function drawSeries(data) {
+  const host = $('chart');
+  const points = (data.candles || []).filter((c) => Number.isFinite(c.c));
+
+  if (points.length < 2) {
+    host.innerHTML = '<p class="chart-empty">Pas de cotation sur cette période.</p>';
+    $('chart-range').textContent = '—';
+    return;
+  }
+
+  const W = 1000;
+  const H = 260;
+  const PAD = { top: 16, right: 56, bottom: 24, left: 12 };
+
+  const values = points.map((p) => p.c);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  // Marge de 4 % de l'amplitude en haut et en bas, pour que la courbe ne colle
+  // jamais aux bords. Sur une série parfaitement plate on retombe sur ±1 %.
+  const marge = (max - min) * 0.04 || max * 0.01;
+  const lo = min - marge;
+  const hi = max + marge;
+
+  const x = (i) => PAD.left + (i / (points.length - 1)) * (W - PAD.left - PAD.right);
+  const y = (v) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
+
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join(' ');
+  const premier = points[0].c;
+  const dernier = points[points.length - 1].c;
+  const hausse = dernier >= premier;
+  const couleur = hausse ? 'var(--up)' : 'var(--down)';
+
+  // Nombre de décimales adapté au prix : deux suffisent au-dessus de 10 $,
+  // mais un titre à 3,20 $ mérite trois décimales pour que les graduations ne
+  // soient pas toutes identiques.
+  const dec = max >= 10 ? 2 : 3;
+  const graduations = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const v = lo + f * (hi - lo);
+    return `<line x1="${PAD.left}" y1="${y(v).toFixed(1)}" x2="${W - PAD.right}" y2="${y(v).toFixed(1)}" class="grid-line"/>`
+      + `<text x="${W - PAD.right + 6}" y="${(y(v) + 3.5).toFixed(1)}" class="axis-label">${v.toFixed(dec)}</text>`;
+  }).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${graduations}
+    <path d="${d} L${x(points.length - 1).toFixed(1)},${H - PAD.bottom} L${PAD.left},${H - PAD.bottom} Z"
+          fill="${couleur}" opacity="0.10"/>
+    <path d="${d}" fill="none" stroke="${couleur}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(dernier).toFixed(1)}" r="3.5" fill="${couleur}"/>
+  </svg>`;
+
+  const variation = ((dernier - premier) / premier) * 100;
+  $('chart-range').textContent = `${points.length} points · ${dernier.toFixed(dec)} ${data.currency || 'USD'} · `
+    + `${variation >= 0 ? '+' : ''}${variation.toFixed(2)} % sur la période`;
+}
+
+$('chart-ranges').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-range]');
+  if (bouton && chartSymbol) { showSymbolChart(chartSymbol, bouton.dataset.range); return; }
+  if (event.target.closest('#chart-back')) showEquityChart();
+});
+
+// Clic sur une position : le graphique bascule sur le cours de l'action.
+$('positions-table').addEventListener('click', (event) => {
+  const row = event.target.closest('.position-row');
+  if (!row) return;
+  // Re-cliquer sur la ligne active revient au capital : c'est le geste
+  // attendu, et ça évite d'obliger à viser le petit bouton « ← Capital ».
+  if (chartSymbol === row.dataset.symbol) showEquityChart();
+  else showSymbolChart(row.dataset.symbol);
+  document.getElementById('chart').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });

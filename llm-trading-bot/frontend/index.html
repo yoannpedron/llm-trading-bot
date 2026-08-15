@@ -51,6 +51,39 @@
         <option value="300000">5 min</option>
       </select>
     </label>
+    <!-- ═══ Clés API ══════════════════════════════════════════════════ -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Clés API Gemini</h2>
+        <div class="head-actions">
+          <span id="keys-summary" class="card-meta">—</span>
+          <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
+        </div>
+      </div>
+      <div class="capacity-bar-wrap">
+        <div class="capacity-bar"><span id="capacity-fill"></span></div>
+        <p id="capacity-detail" class="capacity-detail">—</p>
+      </div>
+      <div class="table-scroll">
+        <table id="keys-table">
+          <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>Quota</th><th>État</th><th></th></tr></thead>
+          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages.</td></tr></tbody>
+        </table>
+      </div>
+      <form id="add-key-form" class="add-key" hidden>
+        <label class="field">
+          <span>Nouvelle clé Gemini</span>
+          <input id="new-key" type="password" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" required>
+        </label>
+        <label class="field field-sm">
+          <span>Nom <em>(optionnel)</em></span>
+          <input id="new-key-label" type="text" placeholder="compte perso" autocomplete="off">
+        </label>
+        <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <p id="keys-feedback" class="keys-feedback" hidden></p>
+    </section>
+
     <div class="settings-actions">
       <button id="btn-save" class="btn btn-primary" type="button">Enregistrer</button>
     </div>
@@ -59,6 +92,16 @@
   <div id="alert" class="alert" hidden role="status"></div>
 
   <main class="wrap">
+    <!-- ═══ Onglets ═════════════════════════════════════════════════
+         La page faisait 16 écrans de haut. Les panneaux de mesure se
+         consultent de temps en temps, pas à chaque coup d'œil : les
+         séparer évite de faire défiler ce qu'on ne lit jamais.      -->
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab tab-active" data-tab="aujourdhui" role="tab">Aujourd'hui</button>
+      <button class="tab" data-tab="mesures" role="tab">Mesures</button>
+    </nav>
+
+    <div id="tab-aujourdhui" class="tab-panel">
     <!-- ═══ LE VERDICT — l'élément central du projet ═══════════════════ -->
     <section id="verdict" class="verdict verdict-unknown">
       <div class="verdict-head">
@@ -120,23 +163,6 @@
       <div id="ranking-body"></div>
     </section>
 
-    <!-- ═══ Rang → résultat ═══════════════════════════════════════════ -->
-    <!-- Le graphique le plus important du projet : si cette courbe monte, la
-         sélection par classement repose sur quelque chose de réel. Si elle est
-         plate, tout le mécanisme ci-dessus ne sert à rien. -->
-    <section class="card" id="rankic-card">
-      <div class="card-head">
-        <h2>Le classement prédit-il vraiment ?</h2>
-        <span id="rankic-meta" class="card-meta">—</span>
-      </div>
-      <p class="card-note">
-        On regroupe les décisions par tranche de rang et on regarde le rendement moyen
-        de chacune. Une courbe croissante = mieux classé veut dire mieux performant.
-      </p>
-      <div id="rankic-chart" class="rank-buckets"></div>
-      <div id="rankic-stats" class="rank-stats"></div>
-      <p id="rankic-verdict" class="rank-verdict">—</p>
-    </section>
 
     <!-- ═══ Indicateurs clés ══════════════════════════════════════════ -->
     <section class="kpis" aria-label="Indicateurs clés">
@@ -165,8 +191,22 @@
     <!-- ═══ Courbe d'équity ═══════════════════════════════════════════ -->
     <section class="card">
       <div class="card-head">
-        <h2>Évolution du capital</h2>
-        <span id="chart-range" class="card-meta">—</span>
+        <!-- Le titre change : ce panneau montre l'équity par défaut, et le
+             cours d'une action dès qu'on clique sur une position. -->
+        <h2 id="chart-title">Évolution du capital</h2>
+        <div class="chart-head">
+          <!-- Fenêtres visibles seulement en mode « action » : la courbe
+               d'équity n'a qu'un historique, celui du bot. -->
+          <div class="chart-ranges" id="chart-ranges" hidden>
+            <button class="chip" data-range="1d">1 j</button>
+            <button class="chip" data-range="1w">1 sem</button>
+            <button class="chip" data-range="1m">1 mois</button>
+            <button class="chip" data-range="6m">6 mois</button>
+            <button class="chip chip-active" data-range="1y">1 an</button>
+            <button class="btn btn-ghost btn-sm" id="chart-back" hidden>← Capital</button>
+          </div>
+          <span id="chart-range" class="card-meta">—</span>
+        </div>
       </div>
       <div id="chart" class="chart" role="img" aria-label="Courbe d'évolution du capital"></div>
     </section>
@@ -207,19 +247,122 @@
             <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
             <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
           </div>
+          <!-- Ne restent visibles que les lignes qui CHANGENT. Le reste est
+               de la configuration : elle ne bouge qu'à l'installation et n'a
+               pas à occuper l'écran en permanence. « Univers » était le pire
+               cas — il déverse maintenant 150 symboles. -->
           <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
-          <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
           <div><dt>Marché</dt><dd id="st-market">—</dd></div>
-          <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
-          <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
           <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
-          <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
-          <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
-          <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
           <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
         </dl>
+        <details class="status-config">
+          <summary>Configuration</summary>
+          <dl class="status-list">
+            <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
+            <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
+            <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
+            <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
+            <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
+            <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
+          </dl>
+        </details>
       </section>
     </div>
+
+
+    <!-- ═══ Journal de l'IA ═══════════════════════════════════════════ -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Journal de l'IA</h2>
+        <div class="filters" id="journal-filters" role="group" aria-label="Filtrer le journal">
+          <button class="chip chip-active" data-filter="all" type="button">Tout</button>
+          <button class="chip" data-filter="selected" type="button">Retenus</button>
+          <button class="chip" data-filter="executed" type="button">Exécutés</button>
+          <button class="chip" data-filter="BUY" type="button">Achats</button>
+          <button class="chip" data-filter="SELL" type="button">Ventes</button>
+        </div>
+      </div>
+      <!-- À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour :
+           suivre une action précise devenait impossible sans recherche. -->
+      <div class="journal-search">
+        <input id="journal-search" type="search" placeholder="Chercher un symbole…" autocomplete="off">
+        <span id="journal-count" class="card-meta">—</span>
+      </div>
+      <div id="journal" class="journal">
+        <p class="empty-block">Aucune décision enregistrée.</p>
+      </div>
+    </section>
+
+    <!-- ═══ Ordres ════════════════════════════════════════════════════ -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Historique des ordres</h2>
+        <span id="trades-count" class="card-meta">—</span>
+      </div>
+      <div class="table-scroll">
+        <table id="trades-table">
+          <thead><tr><th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
+                     <th class="num">Prix</th><th class="num">Montant payé</th><th class="num">P&amp;L</th><th>Origine</th></tr></thead>
+          <tbody><tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══ PANNEAU DE DIAGNOSTIC ═════════════════════════════════════ -->
+    <section id="debug-panel" class="card debug" hidden>
+      <div class="card-head">
+        <h2>🔧 Diagnostic</h2>
+        <div class="head-actions">
+          <button id="btn-copy-diag" class="btn btn-primary btn-sm" type="button">Copier le diagnostic</button>
+          <button id="btn-close-debug" class="btn btn-ghost btn-sm" type="button">Fermer</button>
+        </div>
+      </div>
+
+      <p class="card-note">
+        Le bouton copie un rapport texte complet — état du moteur, quota, verdict, erreurs et logs.
+        Colle-le dans la conversation si quelque chose te semble anormal.
+      </p>
+
+      <div class="debug-grid" id="debug-health"></div>
+
+      <div class="debug-section">
+        <div class="debug-section-head">
+          <h3>Logs en direct</h3>
+          <div class="filters" id="log-filters">
+            <button class="chip chip-active" data-log="all" type="button">Tout</button>
+            <button class="chip" data-log="warn" type="button">Avertissements</button>
+            <button class="chip" data-log="error" type="button">Erreurs</button>
+          </div>
+        </div>
+        <div id="log-view" class="log-view"><p class="empty-block">Chargement…</p></div>
+      </div>
+
+      <details class="raw">
+        <summary>Réponse brute de l'API (JSON complet)</summary>
+        <pre id="debug-raw">—</pre>
+      </details>
+    </section>
+    </div>
+
+    <div id="tab-mesures" class="tab-panel" hidden>
+    <!-- ═══ Rang → résultat ═══════════════════════════════════════════ -->
+    <!-- Le graphique le plus important du projet : si cette courbe monte, la
+         sélection par classement repose sur quelque chose de réel. Si elle est
+         plate, tout le mécanisme ci-dessus ne sert à rien. -->
+    <section class="card" id="rankic-card">
+      <div class="card-head">
+        <h2>Le classement prédit-il vraiment ?</h2>
+        <span id="rankic-meta" class="card-meta">—</span>
+      </div>
+      <p class="card-note">
+        On regroupe les décisions par tranche de rang et on regarde le rendement moyen
+        de chacune. Une courbe croissante = mieux classé veut dire mieux performant.
+      </p>
+      <div id="rankic-chart" class="rank-buckets"></div>
+      <div id="rankic-stats" class="rank-stats"></div>
+      <p id="rankic-verdict" class="rank-verdict">—</p>
+    </section>
 
     <!-- ═══ Les mesures ═══════════════════════════════════════════════ -->
     <div class="grid-2">
@@ -303,112 +446,8 @@
         <p id="adv-note" class="card-note" hidden></p>
       </section>
     </div>
+    </div>
 
-    <!-- ═══ Clés API ══════════════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Clés API Gemini</h2>
-        <div class="head-actions">
-          <span id="keys-summary" class="card-meta">—</span>
-          <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
-        </div>
-      </div>
-      <div class="capacity-bar-wrap">
-        <div class="capacity-bar"><span id="capacity-fill"></span></div>
-        <p id="capacity-detail" class="capacity-detail">—</p>
-      </div>
-      <div class="table-scroll">
-        <table id="keys-table">
-          <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>Quota</th><th>État</th><th></th></tr></thead>
-          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages.</td></tr></tbody>
-        </table>
-      </div>
-      <form id="add-key-form" class="add-key" hidden>
-        <label class="field">
-          <span>Nouvelle clé Gemini</span>
-          <input id="new-key" type="password" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" required>
-        </label>
-        <label class="field field-sm">
-          <span>Nom <em>(optionnel)</em></span>
-          <input id="new-key-label" type="text" placeholder="compte perso" autocomplete="off">
-        </label>
-        <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
-      </form>
-      <p id="keys-feedback" class="keys-feedback" hidden></p>
-    </section>
-
-    <!-- ═══ Journal de l'IA ═══════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Journal de l'IA</h2>
-        <div class="filters" id="journal-filters" role="group" aria-label="Filtrer le journal">
-          <button class="chip chip-active" data-filter="all" type="button">Tout</button>
-          <button class="chip" data-filter="selected" type="button">Retenus</button>
-          <button class="chip" data-filter="executed" type="button">Exécutés</button>
-          <button class="chip" data-filter="BUY" type="button">Achats</button>
-          <button class="chip" data-filter="SELL" type="button">Ventes</button>
-        </div>
-      </div>
-      <!-- À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour :
-           suivre une action précise devenait impossible sans recherche. -->
-      <div class="journal-search">
-        <input id="journal-search" type="search" placeholder="Chercher un symbole…" autocomplete="off">
-        <span id="journal-count" class="card-meta">—</span>
-      </div>
-      <div id="journal" class="journal">
-        <p class="empty-block">Aucune décision enregistrée.</p>
-      </div>
-    </section>
-
-    <!-- ═══ Ordres ════════════════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Historique des ordres</h2>
-        <span id="trades-count" class="card-meta">—</span>
-      </div>
-      <div class="table-scroll">
-        <table id="trades-table">
-          <thead><tr><th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
-                     <th class="num">Prix</th><th class="num">Montant payé</th><th class="num">P&amp;L</th><th>Origine</th></tr></thead>
-          <tbody><tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ═══ PANNEAU DE DIAGNOSTIC ═════════════════════════════════════ -->
-    <section id="debug-panel" class="card debug" hidden>
-      <div class="card-head">
-        <h2>🔧 Diagnostic</h2>
-        <div class="head-actions">
-          <button id="btn-copy-diag" class="btn btn-primary btn-sm" type="button">Copier le diagnostic</button>
-          <button id="btn-close-debug" class="btn btn-ghost btn-sm" type="button">Fermer</button>
-        </div>
-      </div>
-
-      <p class="card-note">
-        Le bouton copie un rapport texte complet — état du moteur, quota, verdict, erreurs et logs.
-        Colle-le dans la conversation si quelque chose te semble anormal.
-      </p>
-
-      <div class="debug-grid" id="debug-health"></div>
-
-      <div class="debug-section">
-        <div class="debug-section-head">
-          <h3>Logs en direct</h3>
-          <div class="filters" id="log-filters">
-            <button class="chip chip-active" data-log="all" type="button">Tout</button>
-            <button class="chip" data-log="warn" type="button">Avertissements</button>
-            <button class="chip" data-log="error" type="button">Erreurs</button>
-          </div>
-        </div>
-        <div id="log-view" class="log-view"><p class="empty-block">Chargement…</p></div>
-      </div>
-
-      <details class="raw">
-        <summary>Réponse brute de l'API (JSON complet)</summary>
-        <pre id="debug-raw">—</pre>
-      </details>
-    </section>
   </main>
 
   <footer class="footer">
