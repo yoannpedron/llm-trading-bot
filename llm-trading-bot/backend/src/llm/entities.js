@@ -47,10 +47,82 @@ import path from 'node:path';
  * tourné — ce n'est pas une erreur, c'est l'état initial, et la couverture le
  * dira.
  */
+/**
+ * ── Termes interdits de censure ───────────────────────────────────────────
+ *
+ * Certains patronymes de dirigeants et certains noms de produits sont aussi du
+ * vocabulaire courant de la presse financière. Les censurer ne masque rien —
+ * « Wall » seul ne désigne pas Cadence — mais mutile les textes. Vérifié :
+ *
+ *   Wall      (dirigeant CDNS) → « [ENTREPRISE_A] Street analysts raised… »
+ *   Core      (produit INTC)   → « [ENTREPRISE_A] inflation cooled in July »
+ *   Hill      (dirigeant AMAT) → « Capitol [ENTREPRISE_A] lawmakers debated… »
+ *   Pegasus   (produit NKE)    → « [ENTREPRISE_A] spyware allegations… »
+ *   LTC       (produit ADI)    → « [ENTREPRISE_A] and other tokens rallied »
+ *
+ * « Wall Street » est le cas décisif : l'expression figure dans une dépêche
+ * financière sur trois. La règle de casse de `anonymize.js` n'y peut rien,
+ * puisque ces mots sont naturellement capitalisés dans ces phrases.
+ *
+ * Le compromis est asymétrique et c'est ce qui rend l'arbitrage facile :
+ *
+ *   • garder le terme coûte la lisibilité de TOUS les textes du corpus ;
+ *   • le retirer ne coûte presque rien, parce que le NOM COMPLET du dirigeant
+ *     (« Wall » vient de son patronyme, mais « [Prénom] Wall » reste dans la
+ *     liste) et le ticker continuent d'être censurés.
+ *
+ * On retire donc le fragment ambigu et on garde la forme complète.
+ *
+ * La liste est curée, donc incomplète par construction : `npm run
+ * entities:audit` sert précisément à repérer les suivantes.
+ */
+const JAMAIS_CENSURER = new Set([
+  // Vocabulaire de marché
+  'wall', 'street', 'core', 'hill', 'precision', 'summit', 'apex', 'prime',
+  'vision', 'edge', 'flow', 'connect', 'access', 'capital', 'select', 'premier',
+  'signature', 'freedom', 'liberty', 'legacy', 'venture', 'advance', 'bridge',
+  'anchor', 'pioneer', 'frontier', 'horizon', 'beacon', 'compass',
+  // Homographes techniques ou d'actualité
+  'pegasus', 'ltc', 'arc', 'mint', 'java', 'eos', 'dram', 'nand', 'ufs',
+  'gobi', 'atlas', 'titan', 'apollo', 'phoenix', 'orion',
+  // Patronymes trop répandus pour désigner quelqu'un à eux seuls
+  'young', 'wallace', 'armstrong', 'archer', 'murphy', 'johnston', 'cook',
+  'hall', 'wood', 'stone', 'field', 'park', 'cross', 'west', 'king', 'bell',
+]);
+
+/**
+ * Retire les termes interdits d'une entrée du dictionnaire.
+ * `cook` est dans la liste alors que Tim Cook dirige Apple : c'est délibéré.
+ * « Cook » seul apparaît dans « cook the books », « Cook County » et comme
+ * patronyme banal, tandis que « Tim Cook » — conservé — désigne bien Apple.
+ */
+function filtrerEntree(entree) {
+  const nettoie = (liste) => (liste ?? []).filter((t) => !JAMAIS_CENSURER.has(t.toLowerCase()));
+  return {
+    names: nettoie(entree.names),
+    executives: nettoie(entree.executives),
+    products: nettoie(entree.products),
+    subsidiaries: nettoie(entree.subsidiaries),
+  };
+}
+
+/** Termes effectivement écartés au chargement, pour que l'audit les montre. */
+export const TERMES_ECARTES = [];
+
 const GENERATED = (() => {
   try {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    return JSON.parse(readFileSync(path.join(here, 'entities.generated.json'), 'utf8'));
+    const brut = JSON.parse(readFileSync(path.join(here, 'entities.generated.json'), 'utf8'));
+    const out = {};
+    for (const [symbol, entree] of Object.entries(brut)) {
+      const filtre = filtrerEntree(entree);
+      for (const champ of ['names', 'executives', 'products', 'subsidiaries']) {
+        const perdus = (entree[champ] ?? []).filter((t) => !filtre[champ].includes(t));
+        for (const t of perdus) TERMES_ECARTES.push({ symbol, champ, terme: t });
+      }
+      out[symbol] = filtre;
+    }
+    return out;
   } catch {
     return {};
   }

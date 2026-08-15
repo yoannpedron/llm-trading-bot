@@ -9,7 +9,7 @@ process.env.DATA_DIR = TMP_DIR;
 process.env.GEMINI_API_KEY = '';
 
 const { buildRedactionTerms, redact, anonymizeNews, redactAll, requiresExactCase } = await import('../src/llm/anonymize.js');
-const { entitiesFor, competitorEntities } = await import('../src/llm/entities.js');
+const { entitiesFor, competitorEntities, TERMES_ECARTES } = await import('../src/llm/entities.js');
 const { verifyEvidence, normalizeDecision } = await import('../src/llm/agent.js');
 
 after(async () => {
@@ -344,5 +344,59 @@ describe('tickers ambigus — la censure ne doit pas manger la langue', () => {
     assert.equal(requiresExactCase('Target'), true, 'long mais mot courant');
     assert.equal(requiresExactCase('Blackwell'), false, 'long et distinctif');
     assert.equal(requiresExactCase('NVIDIA'), false);
+  });
+});
+
+describe('termes interdits de censure — vocabulaire de la presse financière', () => {
+  // Trouvés par `npm run entities:audit` sur le dictionnaire des 150 valeurs.
+  // Ce sont des patronymes de dirigeants et des noms de produits qui sont AUSSI
+  // du vocabulaire courant. La règle de casse ne les attrape pas : ils sont
+  // naturellement capitalisés dans ces phrases.
+  const tousLesTermes = (symbol) => {
+    const e = entitiesFor(symbol);
+    return [...e.names, ...e.executives, ...e.products, ...e.subsidiaries];
+  };
+
+  test('« Wall Street » survit — c\'est le cas décisif', () => {
+    // « Wall » vient du patronyme d'un dirigeant de Cadence. L'expression
+    // « Wall Street » figure dans une dépêche financière sur trois : la
+    // censurer dégraderait la lecture de tout le corpus, pour masquer un mot
+    // qui ne désigne personne à lui seul.
+    const phrase = 'Wall Street analysts raised their targets after the print.';
+    assert.equal(redact(phrase, tousLesTermes('CDNS')).text, phrase);
+  });
+
+  test('« Core inflation » n\'est pas un produit Intel', () => {
+    const phrase = 'Core inflation cooled in July, supporting a rate cut.';
+    assert.equal(redact(phrase, tousLesTermes('INTC')).text, phrase);
+  });
+
+  test('« Capitol Hill » n\'est pas un dirigeant d\'Applied Materials', () => {
+    const phrase = 'Capitol Hill lawmakers debated the chips subsidy.';
+    assert.equal(redact(phrase, tousLesTermes('AMAT')).text, phrase);
+  });
+
+  test('les homographes techniques et d\'actualité sont épargnés', () => {
+    const spyware = 'Pegasus spyware allegations weighed on the sector.';
+    assert.equal(redact(spyware, tousLesTermes('NKE')).text, spyware);
+    const crypto = 'LTC and other tokens rallied overnight.';
+    assert.equal(redact(crypto, tousLesTermes('ADI')).text, crypto);
+  });
+
+  test('retirer le fragment ne désarme PAS la censure du nom complet', () => {
+    // C'est ce qui rend l'arbitrage acceptable : on perd « Hill », on garde
+    // « Elliott Hill ». L'identité reste masquée, la langue reste lisible.
+    const { text } = redact('Elliott Hill leads the group.', tousLesTermes('NKE'));
+    assert.match(text, /\[ENTREPRISE_A\] leads/);
+    assert.doesNotMatch(text, /Elliott/);
+  });
+
+  test('les termes écartés sont déclarés, pas supprimés en douce', () => {
+    // Une censure qui disparaît sans trace serait indétectable à la relecture.
+    assert.ok(TERMES_ECARTES.length > 0);
+    assert.ok(
+      TERMES_ECARTES.some((t) => t.terme === 'Core' && t.symbol === 'INTC'),
+      'le retrait de « Core » chez INTC doit être traçable',
+    );
   });
 });

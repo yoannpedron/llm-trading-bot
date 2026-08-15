@@ -126,3 +126,26 @@ if (!partages.length) {
 }
 
 console.log('');
+
+// ── Termes déjà écartés au chargement ────────────────────────────────────
+// Les afficher est indispensable : une censure qui disparaît sans trace serait
+// indétectable à la relecture, et on croirait le terme encore protégé.
+const { TERMES_ECARTES } = await import('../llm/entities.js');
+console.log(`── Termes écartés automatiquement : ${TERMES_ECARTES.length} ─────────────────`);
+if (!TERMES_ECARTES.length) {
+  console.log('  Aucun.');
+} else {
+  const parSymbole = new Map();
+  for (const t of TERMES_ECARTES) {
+    if (!parSymbole.has(t.symbol)) parSymbole.set(t.symbol, []);
+    parSymbole.get(t.symbol).push(t.terme);
+  }
+  for (const [symbol, termes] of parSymbole) {
+    console.log(`  ${symbol.padEnd(6)} ${termes.join(', ')}`);
+  }
+  console.log('');
+  console.log('  Ces termes sont du vocabulaire de la presse financière : les censurer');
+  console.log('  mutilerait les textes sans masquer personne. Le nom complet du dirigeant');
+  console.log('  et le ticker restent censurés.');
+}
+console.log('');

@@ -1,0 +1,3869 @@
+{
+  "CRM": {
+    "names": [
+      "Salesforce",
+      "Salesforce.com",
+      "CRM"
+    ],
+    "executives": [
+      "Marc Benioff",
+      "Benioff",
+      "Brian Millham",
+      "Millham",
+      "Amy Weaver",
+      "Weaver"
+    ],
+    "products": [
+      "Sales Cloud",
+      "Service Cloud",
+      "Marketing Cloud",
+      "Commerce Cloud",
+      "Slack",
+      "Tableau",
+      "MuleSoft",
+      "Data Cloud"
+    ],
+    "subsidiaries": [
+      "Slack Technologies",
+      "Tableau Software",
+      "MuleSoft"
+    ]
+  },
+  "ORCL": {
+    "names": [
+      "Oracle",
+      "Oracle Corporation",
+      "Oracle Corp"
+    ],
+    "executives": [
+      "Safra Catz",
+      "Catz",
+      "Larry Ellison",
+      "Ellison"
+    ],
+    "products": [
+      "Oracle Database",
+      "Java",
+      "MySQL",
+      "NetSuite",
+      "Oracle Cloud Infrastructure",
+      "OCI",
+      "PeopleSoft",
+      "Siebel",
+      "Hyperion"
+    ],
+    "subsidiaries": [
+      "Cerner",
+      "Sun Microsystems",
+      "Dyanatek"
+    ]
+  },
+  "ADBE": {
+    "names": [
+      "Adobe",
+      "Adobe Inc.",
+      "Adobe Systems"
+    ],
+    "executives": [
+      "Shantanu Narayen",
+      "Narayen",
+      "David Wadhwani",
+      "Wadhwani",
+      "Anil Chakravarthy",
+      "Chakravarthy"
+    ],
+    "products": [
+      "Photoshop",
+      "Illustrator",
+      "Acrobat",
+      "Premiere Pro",
+      "After Effects",
+      "InDesign",
+      "Lightroom",
+      "Adobe XD",
+      "Creative Cloud",
+      "Adobe Sign"
+    ],
+    "subsidiaries": [
+      "Behance",
+      "Figma",
+      "Marketo",
+      "Adobe Stock",
+      "Adobe Fonts"
+    ]
+  },
+  "CSCO": {
+    "names": [
+      "Cisco Systems",
+      "Cisco",
+      "CSCO"
+    ],
+    "executives": [
+      "Chuck Robbins",
+      "Robbins",
+      "Machtfy",
+      "Scott Herren",
+      "Herren"
+    ],
+    "products": [
+      "Catalyst",
+      "Webex",
+      "AppDynamics",
+      "Nexus",
+      "Meraki",
+      "SecureX",
+      "Duetto",
+      "ThousandEyes"
+    ],
+    "subsidiaries": [
+      "Splunk",
+      "Duo Security",
+      "Brท่าน"
+    ]
+  },
+  "ACN": {
+    "names": [
+      "Accenture",
+      "Accenture plc",
+      "Accenture Consulting"
+    ],
+    "executives": [
+      "Julie Sweet",
+      "Sweet",
+      "KC McClure",
+      "McClure"
+    ],
+    "products": [
+      "Accenture Song",
+      "Accenture Interactive",
+      "Accenture Operations",
+      "Accenture Strategy",
+      "Accenture Technology"
+    ],
+    "subsidiaries": [
+      "Avanade",
+      "Accenture Federal Services"
+    ]
+  },
+  "INTC": {
+    "names": [
+      "Intel Corporation",
+      "Intel",
+      "Intel Corp"
+    ],
+    "executives": [
+      "Pat Gelsinger",
+      "Gelsinger",
+      "David Zinsner",
+      "Zinsner",
+      "Lip-Bu Tan"
+    ],
+    "products": [
+      "Core",
+      "Xeon",
+      "Pentium",
+      "Arc",
+      "Gaudi",
+      "vPro",
+      "Quicksync"
+    ],
+    "subsidiaries": [
+      "Mobileye",
+      "Altera"
+    ]
+  },
+  "QCOM": {
+    "names": [
+      "Qualcomm",
+      "Qualcomm Incorporated",
+      "Qualcomm Inc."
+    ],
+    "executives": [
+      "Cristiano Amon",
+      "Amon",
+      "Akash Palkhiwala",
+      "Palkhiwala"
+    ],
+    "products": [
+      "Snapdragon",
+      "Kryo",
+      "Adreno",
+      "Hexagon",
+      "Snapdragon X Elite",
+      "Gobi",
+      "Quick Charge",
+      "Mirasol"
+    ],
+    "subsidiaries": [
+      "Qualcomm Technologies",
+      "Nuvia",
+      "Flarion",
+      "CSR"
+    ]
+  },
+  "TXN": {
+    "names": [
+      "Texas Instruments",
+      "Texas Instruments Incorporated"
+    ],
+    "executives": [
+      "Haviv Ilan",
+      "Ilan",
+      "Rafael Lizardi",
+      "Lizardi"
+    ],
+    "products": [
+      "TI-84 Plus",
+      "TI-Nspire",
+      "Analog and Embedded Processing",
+      "Kilby",
+      "DLP technology"
+    ],
+    "subsidiaries": [
+      "National Semiconductor"
+    ]
+  },
+  "IBM": {
+    "names": [
+      "International Business Machines",
+      "IBM",
+      "Big Blue"
+    ],
+    "executives": [
+      "Arvind Krishna",
+      "Krishna",
+      "James Kavanaugh",
+      "Kavanaugh"
+    ],
+    "products": [
+      "Watson",
+      "ThinkPad",
+      "Red Hat Enterprise Linux",
+      "Power Systems",
+      "zSystems",
+      "IBM Cloud",
+      "Cognos",
+      "Db2"
+    ],
+    "subsidiaries": [
+      "Red Hat",
+      "Kyndryl",
+      "Weather Company",
+      "Promontory"
+    ]
+  },
+  "NOW": {
+    "names": [
+      "ServiceNow",
+      "ServiceNow Inc",
+      "NOW"
+    ],
+    "executives": [
+      "Bill McDermott",
+      "McDermott",
+      "Gina Mastantuono",
+      "Mastantuono"
+    ],
+    "products": [
+      "Now Platform",
+      "Workflow Data Model",
+      "IT Service Management",
+      "ITSM",
+      "Customer Service Management",
+      "HR Service Delivery",
+      "Strategic Portfolio Management"
+    ],
+    "subsidiaries": [
+      "Loom Systems",
+      "CivilGEO",
+      "Attune",
+      "Swept Automation",
+      "Pathlight",
+      "Tagr.ai"
+    ]
+  },
+  "INTU": {
+    "names": [
+      "Intuit",
+      "Intuit Inc."
+    ],
+    "executives": [
+      "Sasan Goodarzi",
+      "Goodarzi",
+      "Michelle Clatterbuck"
+    ],
+    "products": [
+      "TurboTax",
+      "QuickBooks",
+      "Mint",
+      "Credit Karma",
+      "Mailchimp"
+    ],
+    "subsidiaries": [
+      "Credit Karma",
+      "Mailchimp"
+    ]
+  },
+  "AMAT": {
+    "names": [
+      "Applied Materials",
+      "Applied Materials Inc",
+      "AMAT"
+    ],
+    "executives": [
+      "Gary Dickerson",
+      "Dickerson",
+      "Brice Hill",
+      "Hill"
+    ],
+    "products": [
+      "Centura",
+      "Endura",
+      "Producer",
+      "Vistara",
+      "Centris",
+      "Sym3",
+      "Proima"
+    ],
+    "subsidiaries": [
+      "Applied Ventures"
+    ]
+  },
+  "MU": {
+    "names": [
+      "Micron Technology",
+      "Micron",
+      "Micron Technology Inc."
+    ],
+    "executives": [
+      "Sanjay Mehrotra",
+      "Mehrotra",
+      "Mark Murphy",
+      "Murphy"
+    ],
+    "products": [
+      "Crucial",
+      "Ballistix",
+      "HBM3E",
+      "LPDDR5X",
+      "UFS",
+      "DRAM",
+      "NAND"
+    ],
+    "subsidiaries": [
+      "Elpida",
+      "Inotera"
+    ]
+  },
+  "LRCX": {
+    "names": [
+      "Lam Research",
+      "Lam Research Corporation",
+      "Lam"
+    ],
+    "executives": [
+      "Tim Archer",
+      "Archer",
+      "Douglas Bettinger",
+      "Bettinger"
+    ],
+    "products": [
+      "Kiyo",
+      "Vector",
+      "Striker",
+      "ALTUS",
+      "Syndion",
+      "Coronus",
+      "Sabre",
+      "Dextrosa"
+    ],
+    "subsidiaries": [
+      "Novellus Systems"
+    ]
+  },
+  "ADI": {
+    "names": [
+      "Analog Devices",
+      "Analog Devices Inc.",
+      "ADI"
+    ],
+    "executives": [
+      "Vincent Roche",
+      "Roche",
+      "Prashanth Mahendra-Rajah",
+      "Mahendra-Rajah",
+      "Richard Puccio",
+      "Puccio"
+    ],
+    "products": [
+      "Blackfin",
+      "SHARC",
+      "ADSP",
+      "LTC",
+      "SoundMax",
+      "iCoupler",
+      "DirectRF",
+      "SigmaDSP"
+    ],
+    "subsidiaries": [
+      "Linear Technology",
+      "Maxim Integrated"
+    ]
+  },
+  "KLAC": {
+    "names": [
+      "KLA Corporation",
+      "KLA-Tencor",
+      "KLA"
+    ],
+    "executives": [
+      "Rick Wallace",
+      "Wallace",
+      "Brenoendes",
+      "Brenodet",
+      "Lucy Zheng",
+      "Zheng"
+    ],
+    "products": [
+      "Archer",
+      "Candela",
+      "Surfscan",
+      "e-Beam",
+      "Rapier",
+      "Kronos",
+      "CIRCLS",
+      "SpectraShape"
+    ],
+    "subsidiaries": [
+      "Orbotech",
+      "SPTS Technologies"
+    ]
+  },
+  "PANW": {
+    "names": [
+      "Palo Alto Networks",
+      "Palo Alto",
+      "PANW"
+    ],
+    "executives": [
+      "Nikesh Arora",
+      "Arora",
+      "Dipak Golechha",
+      "Lee Klarich",
+      "Klarich"
+    ],
+    "products": [
+      "Prisma",
+      "Cortex",
+      "Strata",
+      "Prisma Cloud",
+      "Cortex XDR",
+      "WildFire",
+      "PAN-OS"
+    ],
+    "subsidiaries": [
+      "Evident",
+      "Talon Cyber Security",
+      "SpearTip"
+    ]
+  },
+  "SNPS": {
+    "names": [
+      "Synopsys",
+      "Synopsys Inc.",
+      "Synopsys, Inc."
+    ],
+    "executives": [
+      "Sassine Ghazi",
+      "Ghazi",
+      "Aart de Geus",
+      "de Geus",
+      "Shelley Schack"
+    ],
+    "products": [
+      "Design Compiler",
+      "DesignWare",
+      "IC Compiler",
+      "PrimeTime",
+      "Fusion Compiler",
+      "ZeBu",
+      "Proteus",
+      "HSPICE",
+      "VCS"
+    ],
+    "subsidiaries": [
+      "Ansys",
+      "Coverity",
+      "Black Duck",
+      "CiraCloud"
+    ]
+  },
+  "CDNS": {
+    "names": [
+      "Cadence Design Systems",
+      "Cadence",
+      "CDNS"
+    ],
+    "executives": [
+      "Anirudh Devgan",
+      "Devgan",
+      "John Wall",
+      "Wall"
+    ],
+    "products": [
+      "Virtuoso",
+      "Allegro",
+      "Palladium",
+      "Protium",
+      "Tensilica",
+      "Xcelium"
+    ],
+    "subsidiaries": [
+      "Pulsic",
+      "OpenEye Scientific",
+      "Brite Semiconductor"
+    ]
+  },
+  "CRWD": {
+    "names": [
+      "CrowdStrike",
+      "CrowdStrike Holdings",
+      "CRWD"
+    ],
+    "executives": [
+      "George Kurtz",
+      "Kurtz",
+      "Burt Podbere",
+      "Podbere"
+    ],
+    "products": [
+      "Falcon",
+      "Falcon Endpoint",
+      "Falcon Prevent",
+      "Falcon Insight",
+      "Falcon OverWatch",
+      "Falcon Complete",
+      "Charlotte AI"
+    ],
+    "subsidiaries": [
+      "SecureCircle",
+      "Bionic",
+      "Flow Security"
+    ]
+  },
+  "MRVL": {
+    "names": [
+      "Marvell",
+      "Marvell Technology",
+      "Marvell Technology Inc"
+    ],
+    "executives": [
+      "Matt Murphy",
+      "Murphy",
+      "William Sullivan",
+      "Sullivan"
+    ],
+    "products": [
+      "Inphi",
+      "Octeon",
+      "ThunderX",
+      "Alaska",
+      "Prestera",
+      "LiquidSecurity"
+    ],
+    "subsidiaries": [
+      "Inphi Corporation",
+      "Cavium"
+    ]
+  },
+  "FTNT": {
+    "names": [
+      "Fortinet",
+      "Fortinet Inc."
+    ],
+    "executives": [
+      "Ken Xie",
+      "Michael Xie",
+      "Keith Jensen"
+    ],
+    "products": [
+      "FortiGate",
+      "FortiClient",
+      "FortiAnalyzer",
+      "FortiManager",
+      "FortiSwitch",
+      "FortiAP",
+      "FortiEDR",
+      "FortiSIEM"
+    ],
+    "subsidiaries": [
+      "Fortinet Security Fabric"
+    ]
+  },
+  "ANET": {
+    "names": [
+      "Arista Networks",
+      "Arista",
+      "ANET"
+    ],
+    "executives": [
+      "Jayshree Ullat",
+      "Ullal",
+      "Ananda Bhattacharya",
+      "Bhattacharya",
+      "Andy Bechtolsheim",
+      "Bechtolsheim"
+    ],
+    "products": [
+      "EOS",
+      "Extensible Operating System",
+      "7000 Series",
+      "7500R",
+      "7280R",
+      "CloudVision"
+    ],
+    "subsidiaries": []
+  },
+  "DELL": {
+    "names": [
+      "Dell",
+      "Dell Technologies",
+      "Dell Inc."
+    ],
+    "executives": [
+      "Michael Dell",
+      "Dell",
+      "Chuck Whitten",
+      "Yvonne McGill"
+    ],
+    "products": [
+      "Alienware",
+      "Latitude",
+      "OptiPlex",
+      "PowerEdge",
+      "Precision",
+      "PowerStore",
+      "Dell UltraSharp",
+      "XPS"
+    ],
+    "subsidiaries": [
+      "VMware",
+      "SecureWorks",
+      "Boomi"
+    ]
+  },
+  "HPQ": {
+    "names": [
+      "HP Inc.",
+      "Hewlett-Packard"
+    ],
+    "executives": [
+      "Enrique Lores",
+      "Lores",
+      "Marie Myers",
+      "Myers"
+    ],
+    "products": [
+      "LaserJet",
+      "DeskJet",
+      "OfficeJet",
+      "Pavilion",
+      "Envy",
+      "EliteBook",
+      "ProBook",
+      "Omen",
+      "Spectre"
+    ],
+    "subsidiaries": [
+      "HyperX",
+      "Poly",
+      "Samsung Printer Division"
+    ]
+  },
+  "DIS": {
+    "names": [
+      "Walt Disney",
+      "Disney",
+      "The Walt Disney Company"
+    ],
+    "executives": [
+      "Bob Iger",
+      "Iger",
+      "Hugh Johnston",
+      "Johnston"
+    ],
+    "products": [
+      "Disneyland",
+      "Disney+",
+      "ESPN",
+      "Marvel",
+      "Star Wars",
+      "Pixar",
+      "Hulu",
+      "ABC"
+    ],
+    "subsidiaries": [
+      "Marvel Entertainment",
+      "Lucasfilm",
+      "Pixar Animation Studios",
+      "20th Century Studios"
+    ]
+  },
+  "CMCSA": {
+    "names": [
+      "Comcast",
+      "Comcast Corporation",
+      "Comcast NBCUniversal"
+    ],
+    "executives": [
+      "Brian Roberts",
+      "Roberts",
+      "Mike Cavanagh",
+      "Cavanagh",
+      "Jason Armstrong",
+      "Armstrong"
+    ],
+    "products": [
+      "Xfinity",
+      "Peacock",
+      "NBC",
+      "Telemundo",
+      "Sky",
+      "Universal Pictures",
+      "DreamWorks Animation",
+      "USA Network",
+      "Bravo"
+    ],
+    "subsidiaries": [
+      "NBCUniversal",
+      "Sky Group",
+      "Universal Destinations & Experiences",
+      "Focus Features",
+      "Xumo"
+    ]
+  },
+  "TMUS": {
+    "names": [
+      "T-Mobile",
+      "T-Mobile US",
+      "T-Mobile US Inc."
+    ],
+    "executives": [
+      "Mike Sievert",
+      "Sievert",
+      "Peter Osvaldik",
+      "Osvaldik",
+      "Srini Gopalan",
+      "Gopalan"
+    ],
+    "products": [
+      "Magenta",
+      "Un-carrier",
+      "T-Mobile Home Internet",
+      "T-Mobile Tuesdays",
+      "T-Mobile Money"
+    ],
+    "subsidiaries": [
+      "Sprint",
+      "Metro by T-Mobile",
+      "Mint Mobile",
+      "Loomis",
+      "Kaia Health"
+    ]
+  },
+  "VZ": {
+    "names": [
+      "Verizon",
+      "Verizon Communications",
+      "Verizon Communications Inc."
+    ],
+    "executives": [
+      "Hans Vestberg",
+      "Vestberg",
+      "Tony Skiadas",
+      "Skiadas"
+    ],
+    "products": [
+      "Fios",
+      "Verizon 5G Home",
+      "Verizon Business",
+      "Visible",
+      "TracFone"
+    ],
+    "subsidiaries": [
+      "Verizon Wireless",
+      "TracFone Wireless",
+      "Yahoo",
+      "AOL"
+    ]
+  },
+  "T": {
+    "names": [
+      "AT&T",
+      "AT&T Inc.",
+      "American Telephone and Telegraph"
+    ],
+    "executives": [
+      "John Stankey",
+      "Stankey",
+      "Pascal Desroches",
+      "Desroches"
+    ],
+    "products": [
+      "DIRECTV",
+      "HBO Max",
+      "WarnerMedia",
+      "Cricket Wireless",
+      "FirstNet"
+    ],
+    "subsidiaries": [
+      "WarnerMedia",
+      "Xandr",
+      "DIRECTV",
+      "Cricket Wireless"
+    ]
+  },
+  "EA": {
+    "names": [
+      "Electronic Arts",
+      "EA Games",
+      "Electronic Arts Inc."
+    ],
+    "executives": [
+      "Andrew Wilson",
+      "Wilson",
+      "Laura Miele",
+      "Miele",
+      "Chris Suh",
+      "Suh"
+    ],
+    "products": [
+      "EA Sports FC",
+      "Madden NFL",
+      "Apex Legends",
+      "The Sims",
+      "Battlefield",
+      "Need for Speed",
+      "Dragon Age",
+      "Mass Effect",
+      "College Football"
+    ],
+    "subsidiaries": [
+      "BioWare",
+      "Respawn Entertainment",
+      "DICE",
+      "Codemasters",
+      "Criterion Games",
+      "Motive Studio"
+    ]
+  },
+  "WBD": {
+    "names": [
+      "Warner Bros. Discovery",
+      "WBD",
+      "Warner Bros",
+      "Discovery Communications"
+    ],
+    "executives": [
+      "David Zaslav",
+      "Zaslav",
+      "Gunnar Wiedenfels",
+      "Wiedenfels",
+      "JB Perrette",
+      "Perrette"
+    ],
+    "products": [
+      "Max",
+      "HBO",
+      "CNN",
+      "Discovery Channel",
+      "TNT Sports",
+      "DC Studios",
+      "Eurosport",
+      "Food Network",
+      "HGTV",
+      "Looney Tunes"
+    ],
+    "subsidiaries": [
+      "HBO Max",
+      "Turner Broadcasting System",
+      "New Line Cinema",
+      "Castle Rock Entertainment",
+      "Cartoon Network"
+    ]
+  },
+  "HD": {
+    "names": [
+      "Home Depot",
+      "The Home Depot",
+      "Home Depot Inc"
+    ],
+    "executives": [
+      "Ted Decker",
+      "Decker",
+      "Richard McPhail",
+      "McPhail"
+    ],
+    "products": [
+      "Husky",
+      "Ridgid",
+      "Milwaukee",
+      "Behr",
+      "Glidden",
+      "Everbilt",
+      "Home Accents Holiday",
+      "Gorilla Ladders"
+    ],
+    "subsidiaries": [
+      "HD Supply",
+      "Interline Brands",
+      "The Company Store"
+    ]
+  },
+  "MCD": {
+    "names": [
+      "McDonald's",
+      "McDonald's Corporation",
+      "MCD"
+    ],
+    "executives": [
+      "Chris Kempczinski",
+      "Kempczinski",
+      "Ian Borden",
+      "Borden"
+    ],
+    "products": [
+      "Big Mac",
+      "Quarter Pounder",
+      "Happy Meal",
+      "Chicken McNuggets",
+      "Egg McMuffin",
+      "Filet-O-Fish",
+      "World Famous Fries",
+      "McFlurry"
+    ],
+    "subsidiaries": [
+      "Golden Arches Development Corporation",
+      "Boston Market"
+    ]
+  },
+  "NKE": {
+    "names": [
+      "Nike",
+      "Nike, Inc.",
+      "Nike Incorporated",
+      "NIKE"
+    ],
+    "executives": [
+      "John Donahoe",
+      "Donahoe",
+      "Elliott Hill",
+      "Hill",
+      "Matthew Friend",
+      "Friend"
+    ],
+    "products": [
+      "Air Jordan",
+      "Air Max",
+      "Air Force 1",
+      "Blazer",
+      "Pegasus",
+      "Dunk",
+      "Mercurial",
+      "Metcon",
+      "Cortez",
+      "Jordan Brand"
+    ],
+    "subsidiaries": [
+      "Converse",
+      "Jordan",
+      "Hurley"
+    ]
+  },
+  "LOW": {
+    "names": [
+      "Lowe's",
+      "Lowe's Companies",
+      "Lowe's Companies Inc",
+      "Lowes"
+    ],
+    "executives": [
+      "Marvin Ellison",
+      "Ellison",
+      "Brandon Sink",
+      "Sink"
+    ],
+    "products": [
+      "Kobalt",
+      "Craftsman",
+      "Pella",
+      "Jacuzzi",
+      "Harbor Breeze",
+      "Chervon",
+      "Allen + Roth"
+    ],
+    "subsidiaries": [
+      "Rona",
+      "Anatolia"
+    ]
+  },
+  "SBUX": {
+    "names": [
+      "Starbucks",
+      "Starbucks Corporation",
+      "SBUX"
+    ],
+    "executives": [
+      "Laxman Narasimhan",
+      "Narasimhan",
+      "Brian Niccol",
+      "Niccol",
+      "Rachel Ruggeri",
+      "Ruggeri"
+    ],
+    "products": [
+      "Frappuccino",
+      "Pumpkin Spice Latte",
+      "Macchiato",
+      "Cold Brew",
+      "Veranda Blend",
+      "Pike Place",
+      "Nitro Cold Brew",
+      "Espresso Roast"
+    ],
+    "subsidiaries": [
+      "Seattle's Best Coffee",
+      "Teavana",
+      "Evolution Fresh",
+      "Starbucks Reserve"
+    ]
+  },
+  "TJX": {
+    "names": [
+      "TJX Companies",
+      "The TJX Companies",
+      "TJX"
+    ],
+    "executives": [
+      "Ernie Herrman",
+      "Herrman",
+      "John Klinger",
+      "Klinger"
+    ],
+    "products": [
+      "TJ Maxx",
+      "Marshalls",
+      "HomeGoods",
+      "Sierra",
+      "Winners",
+      "HomeSense",
+      "Marshall's"
+    ],
+    "subsidiaries": [
+      "TJX Canada",
+      "TJX International"
+    ]
+  },
+  "BKNG": {
+    "names": [
+      "Booking Holdings",
+      "Booking.com",
+      "Priceline"
+    ],
+    "executives": [
+      "Glenn Fogel",
+      "Fogel",
+      "Ewout Steenbergen",
+      "Steenbergen"
+    ],
+    "products": [
+      "Booking.com",
+      "Priceline",
+      "Agoda",
+      "KAYAK",
+      "OpenTable",
+      "Rentalcars.com"
+    ],
+    "subsidiaries": [
+      "Agoda",
+      "KAYAK",
+      "OpenTable",
+      "Priceline.com",
+      "Rentalcars.com"
+    ]
+  },
+  "ABNB": {
+    "names": [
+      "Airbnb",
+      "Airbnb Inc.",
+      "ABNB"
+    ],
+    "executives": [
+      "Brian Chesky",
+      "Chesky",
+      "Dave Stephenson",
+      "Stephenson"
+    ],
+    "products": [
+      "Airbnb Experiences",
+      "Airbnb Plus",
+      "Airbnb Luxe",
+      "Airbnb Rooms"
+    ],
+    "subsidiaries": [
+      "HotelTonight",
+      "Luxury Retreats",
+      "Tripabets"
+    ]
+  },
+  "GM": {
+    "names": [
+      "General Motors",
+      "General Motors Company"
+    ],
+    "executives": [
+      "Mary Barra",
+      "Barra",
+      "Paul Jacobson",
+      "Jacobson"
+    ],
+    "products": [
+      "Chevrolet",
+      "Cadillac",
+      "GMC",
+      "Buick",
+      "Corvette",
+      "Silverado",
+      "Ultium",
+      "Super Cruise"
+    ],
+    "subsidiaries": [
+      "Cruise",
+      "OnStar",
+      "Acme Packing"
+    ]
+  },
+  "F": {
+    "names": [
+      "Ford",
+      "Ford Motor",
+      "Ford Motor Company"
+    ],
+    "executives": [
+      "Jim Farley",
+      "Farley",
+      "John Lawler",
+      "Lawler"
+    ],
+    "products": [
+      "Mustang",
+      "F-150",
+      "Explorer",
+      "Escape",
+      "Bronco",
+      "Maverick",
+      "Expedition",
+      "Ranger"
+    ],
+    "subsidiaries": [
+      "Lincoln",
+      "Ford Credit"
+    ]
+  },
+  "CMG": {
+    "names": [
+      "Chipotle Mexican Grill",
+      "Chipotle",
+      "CMG"
+    ],
+    "executives": [
+      "Brian Niccol",
+      "Niccol",
+      "Scott Boatwright",
+      "Boatwright",
+      "Jack Hartung",
+      "Hartung"
+    ],
+    "products": [
+      "Burrito",
+      "Bowl",
+      "Guacamole",
+      "Barbacoa",
+      "Carnitas",
+      "Sofritas",
+      "Quesadilla",
+      "Life Is Buoyant"
+    ],
+    "subsidiaries": []
+  },
+  "MAR": {
+    "names": [
+      "Marriott International",
+      "Marriott",
+      "Marriott Hotels"
+    ],
+    "executives": [
+      "Anthony Capuano",
+      "Capuano",
+      "Leeny Oberg",
+      "Oberg"
+    ],
+    "products": [
+      "Marriott Bonvoy",
+      "The Ritz-Carlton",
+      "St. Regis",
+      "W Hotels",
+      "Courtyard by Marriott",
+      "Fairfield by Marriott",
+      "Residence Inn",
+      "JW Marriott",
+      "Autograph Collection"
+    ],
+    "subsidiaries": [
+      "Starwood Hotels and Resorts",
+      "Sheraton",
+      "Westin",
+      "Ritz-Carlton Hotel Company"
+    ]
+  },
+  "ORLY": {
+    "names": [
+      "O'Reilly Automotive",
+      "O'Reilly Automotive Inc",
+      "O'Reilly"
+    ],
+    "executives": [
+      "Greg Johnson",
+      "Johnson",
+      "Brad Beckham",
+      "Beckham",
+      "Brent Houston",
+      "Houston"
+    ],
+    "products": [
+      "O'Reilly Auto Parts",
+      "First Quality",
+      "MasterPro",
+      "Super Start",
+      "BrakeBest",
+      "Precision",
+      "Murray",
+      "Carquest"
+    ],
+    "subsidiaries": [
+      "Orscheln Farm and Home",
+      "Coborn's",
+      "First Call",
+      "Centric Parts"
+    ]
+  },
+  "DHI": {
+    "names": [
+      "DR Horton",
+      "D.R. Horton",
+      "DR Horton Inc"
+    ],
+    "executives": [
+      "Executive Chairman Donald Horton",
+      "Donald Horton",
+      "President Paul Romanowski",
+      "Paul Romanowski",
+      "Chief Financial Officer Bill Wheat",
+      "Bill Wheat"
+    ],
+    "products": [
+      "Emerald Homes",
+      "Freedom Homes",
+      "Express Homes",
+      "DHI Mortgage",
+      "DHI Title",
+      "Forrest Crossing"
+    ],
+    "subsidiaries": [
+      "Emerald Homes",
+      "Express Homes",
+      "Freedom Homes",
+      "Forestar Group"
+    ]
+  },
+  "LEN": {
+    "names": [
+      "Lennar",
+      "Lennar Corporation",
+      "Lennar Corp"
+    ],
+    "executives": [
+      "Stuart Miller",
+      "Miller",
+      "Jon Jaffe",
+      "Jaffe",
+      "Diane Bessette",
+      "Bessette"
+    ],
+    "products": [
+      "Everything's Included",
+      "Next Gen",
+      "Lennar Mortgage",
+      "Lennar Title",
+      "Rialto Capital",
+      "Cornerstone Home Lending"
+    ],
+    "subsidiaries": [
+      "CalAtlantic Homes",
+      "U.S. Home Corporation",
+      "Lennar Multifamily Communities",
+      "LMC"
+    ]
+  },
+  "ROST": {
+    "names": [
+      "Ross Stores",
+      "Ross Stores Inc",
+      "Ross Dress for Less",
+      "ROST"
+    ],
+    "executives": [
+      "Barbara Rentler",
+      "Rentler",
+      "Adam Orvos",
+      "Orvos"
+    ],
+    "products": [
+      "Ross Dress for Less",
+      "dd's DISCOUNTS"
+    ],
+    "subsidiaries": [
+      "Ross Procurement Inc",
+      "dd's DISCOUNTS"
+    ]
+  },
+  "YUM": {
+    "names": [
+      "Yum Brands",
+      "Yum! Brands",
+      "Yum Brands Inc"
+    ],
+    "executives": [
+      "David Gibbs",
+      "Gibbs",
+      "Chris Turner",
+      "Turner",
+      "David Russell"
+    ],
+    "products": [
+      "KFC",
+      "Taco Bell",
+      "Pizza Hut",
+      "Habit Burger Grill",
+      "Kentucky Fried Chicken"
+    ],
+    "subsidiaries": [
+      "The Habit Burger Grill",
+      "KFC Corporation",
+      "Pizza Hut LLC",
+      "Taco Bell Corp"
+    ]
+  },
+  "LVS": {
+    "names": [
+      "Las Vegas Sands",
+      "Sands",
+      "Las Vegas Sands Corp",
+      "LVS"
+    ],
+    "executives": [
+      "Robert Goldstein",
+      "Goldstein",
+      "Patrick Dumont",
+      "Dumont"
+    ],
+    "products": [
+      "Marina Bay Sands",
+      "The Venetian",
+      "The Palazzo",
+      "Sands Expo",
+      "Cotai Strip"
+    ],
+    "subsidiaries": [
+      "Sands China",
+      "Venetian Macao",
+      "Marina Bay Sands Singapore"
+    ]
+  },
+  "WMT": {
+    "names": [
+      "Walmart",
+      "Wal-Mart Stores",
+      "Walmart Inc."
+    ],
+    "executives": [
+      "Doug McMillon",
+      "McMillon",
+      "John David Rainey",
+      "Rainey"
+    ],
+    "products": [
+      "Great Value",
+      "Sam's Club",
+      "Equate",
+      "Mainstays",
+      "Onn",
+      "Better Homes and Gardens",
+      "Parent's Choice"
+    ],
+    "subsidiaries": [
+      "Sam's Club",
+      "Flipkart",
+      "ASDA",
+      "Vizio"
+    ]
+  },
+  "PG": {
+    "names": [
+      "Procter & Gamble",
+      "Procter and Gamble",
+      "P&G"
+    ],
+    "executives": [
+      "Jon Moeller",
+      "Moeller",
+      "Andre Schulten",
+      "Schulten"
+    ],
+    "products": [
+      "Tide",
+      "Pampers",
+      "Gillette",
+      "Crest",
+      "Head & Shoulders",
+      "Dawn",
+      "Bounty",
+      "Charmin",
+      "Febreze",
+      "Olay"
+    ],
+    "subsidiaries": [
+      "Gillette Company",
+      "Artisan",
+      "Old Spice",
+      "Pantene",
+      "Braun"
+    ]
+  },
+  "COST": {
+    "names": [
+      "Costco",
+      "Costco Wholesale",
+      "Costco Wholesale Corporation"
+    ],
+    "executives": [
+      "Ron Vachris",
+      "Craig Jelinek",
+      "Richard Galanti"
+    ],
+    "products": [
+      "Kirkland Signature",
+      "Kirkland",
+      "Rotisserie Chicken",
+      "Food Court Hot Dog",
+      "Kirkland Light"
+    ],
+    "subsidiaries": [
+      "Costco Travel",
+      "Costco Optical",
+      "Inverifying subsidiaries"
+    ]
+  },
+  "KO": {
+    "names": [
+      "Coca-Cola",
+      "The Coca-Cola Company",
+      "Coca Cola",
+      "Coke"
+    ],
+    "executives": [
+      "James Quincey",
+      "Quincey",
+      "John Murphy",
+      "Murphy"
+    ],
+    "products": [
+      "Coca-Cola",
+      "Diet Coke",
+      "Coca-Cola Zero Sugar",
+      "Sprite",
+      "Fanta",
+      "Dasani",
+      "Smartwater",
+      "Minute Maid",
+      "Powerade",
+      "Costa Coffee"
+    ],
+    "subsidiaries": [
+      "Minute Maid",
+      "Costa Limited",
+      "Fairlife"
+    ]
+  },
+  "PEP": {
+    "names": [
+      "PepsiCo",
+      "PepsiCo Inc",
+      "Pepsi"
+    ],
+    "executives": [
+      "Ramon Laguarta",
+      "Laguarta",
+      "Hugh Johnston",
+      "Johnston"
+    ],
+    "products": [
+      "Pepsi",
+      "Mountain Dew",
+      "Gatorade",
+      "Quaker Oats",
+      "Lay's",
+      "Doritos",
+      "Cheetos",
+      "Tostitos",
+      "Mirinda",
+      "7 Up"
+    ],
+    "subsidiaries": [
+      "Frito-Lay",
+      "Quaker Oats Company",
+      "Tropicana",
+      "SodaStream"
+    ]
+  },
+  "PM": {
+    "names": [
+      "Philip Morris International",
+      "Philip Morris",
+      "PMI"
+    ],
+    "executives": [
+      "Jacek Olczak",
+      "Olczak",
+      "Emmanuel Babeau",
+      "Babeau"
+    ],
+    "products": [
+      "Marlboro",
+      "IQOS",
+      "Zyn",
+      "Parliament",
+      "L&M",
+      "Chesterfield",
+      "Heets"
+    ],
+    "subsidiaries": [
+      "Swedish Match",
+      "Vectura Fertin Pharma"
+    ]
+  },
+  "MO": {
+    "names": [
+      "Altria Group",
+      "Altria",
+      "Philip Morris USA"
+    ],
+    "executives": [
+      "Billy Gifford",
+      "Gifford",
+      "Sal Mancuso",
+      "Mancuso"
+    ],
+    "products": [
+      "Marlboro",
+      "Copenhagen",
+      "Skoal",
+      "Black & Mild",
+      "on!",
+      "NJOY"
+    ],
+    "subsidiaries": [
+      "Philip Morris USA",
+      "John Middleton",
+      "U.S. Smokeless Tobacco Company",
+      "Helix Innovations"
+    ]
+  },
+  "MDLZ": {
+    "names": [
+      "Mondelez International",
+      "Mondelez",
+      "Kraft Foods",
+      "Nabisco"
+    ],
+    "executives": [
+      "Dirk Van de Put",
+      "Van de Put",
+      "Luca Zaramella",
+      "Zaramella"
+    ],
+    "products": [
+      "Oreo",
+      "Cadbury",
+      "Milka",
+      "Toblerone",
+      "Ritz",
+      "Triscuit",
+      "Sour Patch Kids",
+      "Chips Ahoy",
+      "Belvita",
+      "Trident"
+    ],
+    "subsidiaries": [
+      "Cadbury PLC",
+      "Nabisco Biscuit Company",
+      "Darling Ingredients",
+      "Freia",
+      "Halls"
+    ]
+  },
+  "CL": {
+    "names": [
+      "Colgate-Palmolive",
+      "Colgate",
+      "Colgate-Palmolive Company"
+    ],
+    "executives": [
+      "Noel Wallace",
+      "Wallace",
+      "John Faucher",
+      "Faucher"
+    ],
+    "products": [
+      "Colgate Total",
+      "Palmolive",
+      "Hill's Science Diet",
+      "Hill's Prescription Diet",
+      "Speed Stick",
+      "Irish Spring",
+      "Softsoap",
+      "Tom's of Maine",
+      "Ajax",
+      "Fabuloso"
+    ],
+    "subsidiaries": [
+      "Hill's Pet Nutrition",
+      "Tom's of Maine",
+      "EltaMD",
+      "PCA Skin"
+    ]
+  },
+  "TGT": {
+    "names": [
+      "Target",
+      "Target Corporation",
+      "Target Stores"
+    ],
+    "executives": [
+      "Brian Cornell",
+      "Cornell",
+      "Michael Fiddelke",
+      "Fiddelke"
+    ],
+    "products": [
+      "Good & Gather",
+      "Up & Up",
+      "Cat & Jack",
+      "Millington",
+      "Threshold",
+      "All in Motion",
+      "Target Circle"
+    ],
+    "subsidiaries": [
+      "Shipt",
+      "Roundel"
+    ]
+  },
+  "KMB": {
+    "names": [
+      "Kimberly-Clark",
+      "Kimberly-Clark Corporation",
+      "Kimberly Clark"
+    ],
+    "executives": [
+      "Mike Hsu",
+      "Hsu",
+      "Maria Henry",
+      "Henry"
+    ],
+    "products": [
+      "Kleenex",
+      "Huggies",
+      "Pull-Ups",
+      "Kotex",
+      "Depend",
+      "Scott",
+      "Cottonelle",
+      "WypAll"
+    ],
+    "subsidiaries": [
+      "Kimberly-Clark de Mexico"
+    ]
+  },
+  "GIS": {
+    "names": [
+      "General Mills",
+      "General Mills Inc",
+      "GIS"
+    ],
+    "executives": [
+      "Jeff Harmening",
+      "Harmening",
+      "Kofi Bruce",
+      "Bruce"
+    ],
+    "products": [
+      "Cheerios",
+      "Lucky Charms",
+      "Häagen-Dazs",
+      "Pillsbury",
+      "Betty Crocker",
+      "Nature Valley",
+      "Old El Paso",
+      "Yoplait",
+      "Blue Buffalo"
+    ],
+    "subsidiaries": [
+      "Blue Buffalo Pet Products",
+      "Pillsbury Company",
+      "Yoplait USA"
+    ]
+  },
+  "KHC": {
+    "names": [
+      "Kraft Heinz",
+      "The Kraft Heinz Company",
+      "Kraft Heinz Co"
+    ],
+    "executives": [
+      "Miguel Patricio",
+      "Patricio",
+      "Carlos Abrams-Rivera",
+      "Abrams-Rivera",
+      "Andre Maciel",
+      "Maciel"
+    ],
+    "products": [
+      "Heinz Tomato Ketchup",
+      "Kraft Macaroni & Cheese",
+      "Philadelphia Cream Cheese",
+      "Oscar Mayer",
+      "Planters",
+      "Jell-O",
+      "Velveeta",
+      "Kool-Aid",
+      "Grey Poupon",
+      "Capri Sun"
+    ],
+    "subsidiaries": [
+      "H. J. Heinz Company",
+      "Kraft Foods Group"
+    ]
+  },
+  "SYY": {
+    "names": [
+      "Sysco",
+      "Sysco Corporation",
+      "Sysco Corp"
+    ],
+    "executives": [
+      "Kevin Hourican",
+      "Hourican",
+      "Kenny Cheung",
+      "Cheung"
+    ],
+    "products": [
+      "Sysco Brand",
+      "Sysco Imperial",
+      "Sysco Supreme",
+      "Sysco Classic",
+      "Portico",
+      "Baker's Source",
+      "Casa Solana",
+      "Firehouse",
+      "Block & Barrel"
+    ],
+    "subsidiaries": [
+      "SYGMA",
+      "Baugh",
+      "Guest Supply",
+      "Greensbury",
+      "Freiremar"
+    ]
+  },
+  "STZ": {
+    "names": [
+      "Constellation Brands",
+      "Constellation",
+      "STZ"
+    ],
+    "executives": [
+      "Bill Newlands",
+      "Newlands",
+      "Suhail Bhatt",
+      "Bhatt"
+    ],
+    "products": [
+      "Corona",
+      "Modelo Especial",
+      "Modelo",
+      "Pacifico",
+      "Victoria",
+      "Svedka",
+      "High West",
+      "Kim Crawford",
+      "Meiomi"
+    ],
+    "subsidiaries": [
+      "Canopy Growth"
+    ]
+  },
+  "LLY": {
+    "names": [
+      "Eli Lilly",
+      "Eli Lilly and Company",
+      "Lilly"
+    ],
+    "executives": [
+      "David Ricks",
+      "Ricks",
+      "Anat Ashkenazi",
+      "Ashkenazi",
+      "Lucas Montarce",
+      "Montarce"
+    ],
+    "products": [
+      "Mounjaro",
+      "Zepbound",
+      "Wegovy-competitor",
+      "Trulicity",
+      "Jardiance",
+      "Humalog",
+      "Cialis",
+      "Prozac",
+      "Verzenio",
+      "Taltz"
+    ],
+    "subsidiaries": [
+      "Lilly Diabetes",
+      "Lilly Oncology",
+      "Prevail Therapeutics",
+      "Lilly Bio-Medicines"
+    ]
+  },
+  "UNH": {
+    "names": [
+      "UnitedHealth Group",
+      "UnitedHealth",
+      "UNH"
+    ],
+    "executives": [
+      "Andrew Witty",
+      "Witty",
+      "John Rex",
+      "Rex"
+    ],
+    "products": [
+      "Optum",
+      "UnitedHealthcare",
+      "OptumRx",
+      "OptumInsight"
+    ],
+    "subsidiaries": [
+      "AARP Medicare Supplement",
+      "CareCentrix",
+      "Change Healthcare",
+      "LHC Group"
+    ]
+  },
+  "JNJ": {
+    "names": [
+      "Johnson & Johnson",
+      "J&J",
+      "Johnson and Johnson"
+    ],
+    "executives": [
+      "Joaquin Duato",
+      "Duato",
+      "Wolff",
+      "Tim Schmid",
+      "Schmid"
+    ],
+    "products": [
+      "Tylenol",
+      "Band-Aid",
+      "Listerine",
+      "Neutrogena",
+      "Motrin",
+      "Benadryl",
+      "Zyrtec",
+      "Imodium"
+    ],
+    "subsidiaries": [
+      "Janssen",
+      "Kenvue",
+      "Ethicon",
+      "DePuy Synthes",
+      "Abiomed"
+    ]
+  },
+  "ABBV": {
+    "names": [
+      "AbbVie",
+      "AbbVie Inc.",
+      "AbbVie Pharmaceuticals"
+    ],
+    "executives": [
+      "Richard Gonzalez",
+      "Gonzalez",
+      "Robert Michael",
+      "Michael",
+      "Carrie Strom",
+      "Strom"
+    ],
+    "products": [
+      "Humira",
+      "Skyrizi",
+      "Rinvoq",
+      "Imbruvica",
+      "Venclexta",
+      "Botox",
+      "Juvéderm",
+      "Vraylar"
+    ],
+    "subsidiaries": [
+      "Allergan",
+      "Pharmacyclics",
+      "Abbott Laboratories"
+    ]
+  },
+  "MRK": {
+    "names": [
+      "Merck",
+      "Merck & Co.",
+      "Merck and Co"
+    ],
+    "executives": [
+      "Rob Davis",
+      "Davis",
+      "Caroline Litchfield",
+      "Litchfield",
+      "Dean Li",
+      "Robert Davis"
+    ],
+    "products": [
+      "Keytruda",
+      "Gardasil",
+      "ProQuad",
+      "M-M-R II",
+      "Varivax",
+      "Lagevrio",
+      "Bridion",
+      "Welireg"
+    ],
+    "subsidiaries": [
+      "Merck Sharp & Dohme",
+      "MSD",
+      "Prometheus Biosciences",
+      "ImmuPharma"
+    ]
+  },
+  "TMO": {
+    "names": [
+      "Thermo Fisher Scientific",
+      "Thermo Fisher",
+      "TMO"
+    ],
+    "executives": [
+      "Marc Casper",
+      "Casper",
+      "Stephen Williamson",
+      "Williamson"
+    ],
+    "products": [
+      "Orbitrap",
+      "TaqMan",
+      "Invitrogen",
+      "Applied Biosystems",
+      "Nalgene",
+      "Fisher Scientific",
+      "Gibco"
+    ],
+    "subsidiaries": [
+      "PPD",
+      "Patheon",
+      "Binding Site"
+    ]
+  },
+  "ABT": {
+    "names": [
+      "Abbott Laboratories",
+      "Abbott",
+      "Abbott Labs"
+    ],
+    "executives": [
+      "Robert Ford",
+      "Ford",
+      "Robert B. Ford",
+      "Michelle Freyre",
+      "Robert Funari"
+    ],
+    "products": [
+      "FreeStyle Libre",
+      "Ensure",
+      "Glucerna",
+      "Pedialyte",
+      "Similac",
+      "BinaxNOW",
+      "MitraClip",
+      "Alinity"
+    ],
+    "subsidiaries": [
+      "St. Jude Medical",
+      "Alere",
+      "Vascular Solutions"
+    ]
+  },
+  "PFE": {
+    "names": [
+      "Pfizer",
+      "Pfizer Inc.",
+      "Pfizer Corporation"
+    ],
+    "executives": [
+      "Albert Bourla",
+      "Bourla",
+      "David Denton",
+      "Denton"
+    ],
+    "products": [
+      "Comirnaty",
+      "Paxlovid",
+      "Viagra",
+      "Ibrance",
+      "Eliquis",
+      "Prevnar",
+      "Xeljanz",
+      "Vyndaqel"
+    ],
+    "subsidiaries": [
+      "Wyeth",
+      "Upjohn",
+      "BioNTech",
+      "Seagen",
+      "Hospira"
+    ]
+  },
+  "DHR": {
+    "names": [
+      "Danaher Corporation",
+      "Danaher",
+      "Danaher Corp"
+    ],
+    "executives": [
+      "Rainer Blair",
+      "Blair",
+      "Matt McGrew",
+      "McGrew",
+      "Daniel Raskas",
+      "Raskas"
+    ],
+    "products": [
+      "Beckman Coulter",
+      "Cepheid",
+      "Sciex",
+      "Leica Microsystems",
+      "Radiometer",
+      "Pall Corporation",
+      "VWR",
+      "Epredia"
+    ],
+    "subsidiaries": [
+      "Cepheid Inc",
+      "Pall Corporation",
+      "Leica Microsystems",
+      "Beckman Coulter",
+      "Radiometer Medical",
+      "Phenomenex"
+    ]
+  },
+  "AMGN": {
+    "names": [
+      "Amgen",
+      "Amgen Inc.",
+      "Applied Molecular Genetics"
+    ],
+    "executives": [
+      "Robert Bradway",
+      "Bradway",
+      "Peter Griffith",
+      "Griffith"
+    ],
+    "products": [
+      "Enbrel",
+      "Neulasta",
+      "Prolia",
+      "Xgeva",
+      "Repatha",
+      "Otezla",
+      "Aimovig",
+      "Blincyto",
+      "Kyprolis"
+    ],
+    "subsidiaries": [
+      "Onyx Pharmaceuticals",
+      "ChemoCentryx",
+      "Horizon Therapeutics"
+    ]
+  },
+  "BMY": {
+    "names": [
+      "Bristol Myers Squibb",
+      "Bristol-Myers Squibb",
+      "BMY"
+    ],
+    "executives": [
+      "Chris Boerner",
+      "Boerner",
+      "David Elkins",
+      "Elkins"
+    ],
+    "products": [
+      "Revlimid",
+      "Eliquis",
+      "Opdivo",
+      "Pomalyst",
+      "Orencia",
+      "Yervoy",
+      "Reblozyl",
+      "Zeposia"
+    ],
+    "subsidiaries": [
+      "Celgene",
+      "MyoKardia",
+      "Mirati Therapeutics"
+    ]
+  },
+  "GILD": {
+    "names": [
+      "Gilead Sciences",
+      "Gilead",
+      "Gilead Sciences Inc"
+    ],
+    "executives": [
+      "Daniel O'Day",
+      "O'Day",
+      "Andrew Dickinson",
+      "Dickinson",
+      "Merdad Parsey",
+      "Parsey"
+    ],
+    "products": [
+      "Biktarvy",
+      "Veklury",
+      "Descovy",
+      "Truvada",
+      "Yescarta",
+      "Trodelvy",
+      "Genvoya",
+      "Epclusa"
+    ],
+    "subsidiaries": [
+      "Kite Pharma",
+      "Immunomedics",
+      "Forty Seven"
+    ]
+  },
+  "ISRG": {
+    "names": [
+      "Intuitive Surgical",
+      "Intuitive Surgical Inc."
+    ],
+    "executives": [
+      "Gary Guthart",
+      "Guthart",
+      "Dave Rosa",
+      "Rosa",
+      "Marshall Mohr",
+      "Mohr"
+    ],
+    "products": [
+      "da Vinci",
+      "da Vinci Surgical System",
+      "Ion",
+      "Ion Endoluminal System",
+      "da Vinci SP",
+      "da Vinci Xi",
+      "da Vinci X"
+    ],
+    "subsidiaries": [
+      "Orpheus Medical"
+    ]
+  },
+  "CVS": {
+    "names": [
+      "CVS Health",
+      "CVS Health Corporation",
+      "CVS Pharmacy",
+      "CVS"
+    ],
+    "executives": [
+      "Karen Lynch",
+      "Lynch",
+      "David Joyner",
+      "Joyner",
+      "Tom Cowhey",
+      "Cowhey"
+    ],
+    "products": [
+      "MinuteClinic",
+      "HealthHUB",
+      "Caremark",
+      "CVS Caremark",
+      "ExtraCare",
+      "Plumrose",
+      "Gold Emblem"
+    ],
+    "subsidiaries": [
+      "Aetna",
+      "Signify Health",
+      "Oak Street Health",
+      "Caremark"
+    ]
+  },
+  "MDT": {
+    "names": [
+      "Medtronic",
+      "Medtronic plc",
+      "Medtronic Inc."
+    ],
+    "executives": [
+      "Geoff Martha",
+      "Martha",
+      "Karen Parkhill",
+      "Parkhill",
+      "Gary Ellis",
+      "Ellis"
+    ],
+    "products": [
+      "Minimed",
+      "Micra",
+      "Symplicity Spyral",
+      "CoreValve",
+      "Perclose",
+      "Guardian",
+      "Evolut"
+    ],
+    "subsidiaries": [
+      "Covidien",
+      "Mazor Robotics",
+      "Intersect ENT",
+      "Affera"
+    ]
+  },
+  "VRTX": {
+    "names": [
+      "Vertex Pharmaceuticals",
+      "Vertex",
+      "Vertex Pharma"
+    ],
+    "executives": [
+      "Reshma Kewalramani",
+      "Kewalramani",
+      "Charles Wagner",
+      "Stuart Arbuckle"
+    ],
+    "products": [
+      "Trikafta",
+      "Kaftrio",
+      "Symdeko",
+      "Orkambi",
+      "Kalydeco",
+      "Casgevy",
+      "Journavista"
+    ],
+    "subsidiaries": [
+      "Semma Therapeutics",
+      "ViaCyte",
+      "Alpine Immune Sciences"
+    ]
+  },
+  "REGN": {
+    "names": [
+      "Regeneron",
+      "Regeneron Pharmaceuticals",
+      "REGN"
+    ],
+    "executives": [
+      "Leonard Schleifer",
+      "Schleifer",
+      "George Yancopoulos",
+      "Yancopoulos",
+      "Robert Landry",
+      "Landry"
+    ],
+    "products": [
+      "Eylea",
+      "Dupixent",
+      "Praluent",
+      "Libtayo",
+      "Arcalyst",
+      "Zaltrap",
+      "Evkeeza",
+      "Inmazeb"
+    ],
+    "subsidiaries": [
+      "Regeneron Genetics Center"
+    ]
+  },
+  "CI": {
+    "names": [
+      "Cigna",
+      "Cigna Corporation",
+      "Cigna Group",
+      "The Cigna Group"
+    ],
+    "executives": [
+      "David Cordani",
+      "Cordani",
+      "Brian Evanko",
+      "Evanko"
+    ],
+    "products": [
+      "Evernorth",
+      "Cigna Healthcare",
+      "Express Scripts",
+      "Accredo",
+      "MDLIVE"
+    ],
+    "subsidiaries": [
+      "Express Scripts",
+      "Evernorth Health Services",
+      "Cigna Healthcare"
+    ]
+  },
+  "ELV": {
+    "names": [
+      "Elevance Health",
+      "Elevance",
+      "Anthem Inc",
+      "Anthem"
+    ],
+    "executives": [
+      "Gail Boudreaux",
+      "Boudreaux",
+      "Mark Kaye",
+      "Kaye"
+    ],
+    "products": [
+      "Carelon",
+      "IngenioRx",
+      "Anthem Blue Cross",
+      "Blue Cross Blue Shield",
+      "Simply Healthcare"
+    ],
+    "subsidiaries": [
+      "CarelonRx",
+      "AmeriGroup",
+      "Freedom Health",
+      "Resolution Health"
+    ]
+  },
+  "HCA": {
+    "names": [
+      "HCA Healthcare",
+      "HCA Healthcare Inc",
+      "Hospital Corporation of America"
+    ],
+    "executives": [
+      "Sam Hazen",
+      "Hazen",
+      "Bill Rutherford",
+      "Rutherford"
+    ],
+    "products": [
+      "CareHere",
+      "HealthTrust",
+      "Parallon",
+      "Sarah Cannon"
+    ],
+    "subsidiaries": [
+      "Sarah Cannon Research Institute",
+      "HealthTrust Purchasing Group",
+      "Parallon Workforce Solutions"
+    ]
+  },
+  "BRK.B": {
+    "names": [
+      "Berkshire Hathaway",
+      "Berkshire",
+      "Berkshire Hathaway Inc"
+    ],
+    "executives": [
+      "Warren Buffett",
+      "Buffett",
+      "Greg Abel",
+      "Abel",
+      "Ajit Jain",
+      "Jain"
+    ],
+    "products": [
+      "Geico",
+      "BNSF Railway",
+      "Duracell",
+      "Dairy Queen",
+      "Fruit of the Loom",
+      "NetJets",
+      "Benjamin Moore",
+      "See's Candies"
+    ],
+    "subsidiaries": [
+      "Geico",
+      "BNSF Railway",
+      "Duracell",
+      "Dairy Queen",
+      "NetJets",
+      "Precision Castparts"
+    ]
+  },
+  "JPM": {
+    "names": [
+      "JPMorgan Chase",
+      "JPMorgan",
+      "Chase",
+      "JPM"
+    ],
+    "executives": [
+      "Jamie Dimon",
+      "Dimon",
+      "Jeremy Barnum",
+      "Barnum",
+      "Daniel Pinto",
+      "Pinto"
+    ],
+    "products": [
+      "Chase Sapphire",
+      "Chase Freedom",
+      "J.P. Morgan Wealth Management",
+      "Chase Mobile",
+      "Ink Business",
+      "First Scholars",
+      "J.P. Morgan Asset Management"
+    ],
+    "subsidiaries": [
+      "First Republic Bank",
+      "Chase Bank",
+      "J.P. Morgan Securities",
+      "Highbridge Capital Management"
+    ]
+  },
+  "V": {
+    "names": [
+      "Visa",
+      "Visa Inc.",
+      "Visa International"
+    ],
+    "executives": [
+      "Ryan McInerney",
+      "McInerney",
+      "Vasant Prabhu",
+      "Prabhu",
+      "Chris Suh",
+      "Suh"
+    ],
+    "products": [
+      "VisaNet",
+      "Visa Infinite",
+      "Visa Signature",
+      "Visa Platinum",
+      "Visa Checkout",
+      "Visa Direct",
+      "Interlink",
+      "PLUS"
+    ],
+    "subsidiaries": [
+      "CyberSource",
+      "Authorize.Net",
+      "Plaid",
+      "Visa Europe"
+    ]
+  },
+  "MA": {
+    "names": [
+      "Mastercard",
+      "Mastercard Incorporated",
+      "Mastercard Inc"
+    ],
+    "executives": [
+      "Michael Miebach",
+      "Miebach",
+      "Chief Executive Officer",
+      "Chief Financial Officer"
+    ],
+    "products": [
+      "Mastercard",
+      "Maestro",
+      "Cirrus",
+      "Mastercard Gold",
+      "Mastercard Black",
+      "World Elite"
+    ],
+    "subsidiaries": [
+      "Datatrans",
+      "Vocalink",
+      "Netcetera",
+      "Dynamic Yield"
+    ]
+  },
+  "BAC": {
+    "names": [
+      "Bank of America",
+      "BofA",
+      "Bank of America Corporation"
+    ],
+    "executives": [
+      "Brian Moynihan",
+      "Moynihan",
+      "Alastair Borthwick",
+      "Borthwick"
+    ],
+    "products": [
+      "Merrill Lynch",
+      "BofA Securities",
+      "Bank of America Private Bank",
+      "BofA Global Research",
+      "CashPro"
+    ],
+    "subsidiaries": [
+      "Merrill",
+      "BofA Securities Inc.",
+      "Bank of America National Association",
+      "U.S. Trust"
+    ]
+  },
+  "WFC": {
+    "names": [
+      "Wells Fargo",
+      "Wells Fargo & Company",
+      "Wells Fargo Bank"
+    ],
+    "executives": [
+      "Charlie Scharf",
+      "Scharf",
+      "Mike Santomassimo",
+      "Santomassimo"
+    ],
+    "products": [
+      "Wells Fargo Advisors",
+      "Wells Fargo Fargo",
+      "Wells Fargo Home Mortgage",
+      "Active Cash",
+      "Autograph",
+      "Propel"
+    ],
+    "subsidiaries": [
+      "Wells Fargo Securities",
+      "Wells Fargo Clearing Services",
+      "Wells Fargo Bank, N.A."
+    ]
+  },
+  "GS": {
+    "names": [
+      "Goldman Sachs",
+      "Goldman",
+      "The Goldman Sachs Group"
+    ],
+    "executives": [
+      "David Solomon",
+      "Solomon",
+      "Denis Coleman",
+      "Coleman",
+      "John Waldron",
+      "Waldron"
+    ],
+    "products": [
+      "Marcus by Goldman Sachs",
+      "Marquee",
+      "GS Accelerate",
+      "Goldman Sachs Asset Management",
+      "Transaction Banking",
+      "Ayco"
+    ],
+    "subsidiaries": [
+      "Goldman Sachs Bank USA",
+      "Spear Leeds & Kellogg",
+      "J.BWere",
+      "GreenSky"
+    ]
+  },
+  "MS": {
+    "names": [
+      "Morgan Stanley"
+    ],
+    "executives": [
+      "Ted Pick",
+      "James Gorman"
+    ],
+    "products": [
+      "Wealth Management",
+      "Prime Brokerage",
+      "MS AlphaWise"
+    ],
+    "subsidiaries": [
+      "E-TRADE",
+      "Eaton Vance_Brown Brothers Harriman Capital Partners",
+      "Solium",
+      "Solium Capital"
+    ]
+  },
+  "AXP": {
+    "names": [
+      "American Express",
+      "Amex",
+      "American Express Company"
+    ],
+    "executives": [
+      "Stephen Squeri",
+      "Squeri",
+      "Jeffrey Campbell",
+      "Campbell"
+    ],
+    "products": [
+      "Centurion Card",
+      "Platinum Card",
+      "Blue Cash",
+      "Membership Rewards",
+      "Amex Offers",
+      "Optima"
+    ],
+    "subsidiaries": [
+      "Amex Global Business Travel",
+      "American Express National Bank"
+    ]
+  },
+  "SPGI": {
+    "names": [
+      "S&P Global",
+      "S&P Global Inc.",
+      "Standard & Poor's"
+    ],
+    "executives": [
+      "Douglas Peterson",
+      "Peterson",
+      "Ewout Steenbergen",
+      "Steenbergen"
+    ],
+    "products": [
+      "S&P 500",
+      "S&P Ratings",
+      "CapIQ",
+      "Capital IQ",
+      "Platts",
+      "S&P Dow Jones Indices",
+      "Global Credit Portal"
+    ],
+    "subsidiaries": [
+      "CRISIL",
+      "Kroll Bond Rating Agency",
+      "IHS Markit"
+    ]
+  },
+  "BLK": {
+    "names": [
+      "BlackRock",
+      "BlackRock Inc.",
+      "Black Rock"
+    ],
+    "executives": [
+      "Larry Fink",
+      "Fink",
+      "Rob Kapito",
+      "Kapito"
+    ],
+    "products": [
+      "iShares",
+      "Aladdin",
+      "BlackRock Solutions",
+      "LifePath",
+      "iShares Core"
+    ],
+    "subsidiaries": [
+      "Barclays Global Investors",
+      "Global Infrastructure Partners",
+      "Kreos Capital",
+      "Preqin"
+    ]
+  },
+  "C": {
+    "names": [
+      "Citigroup",
+      "Citi",
+      "Citigroup Inc."
+    ],
+    "executives": [
+      "Jane Fraser",
+      "Fraser",
+      "Mark Mason",
+      "Mason"
+    ],
+    "products": [
+      "Citibanamex",
+      "Citi ThankYou",
+      "Citi Double Cash",
+      "Citi Custom Cash",
+      "Citi Priority"
+    ],
+    "subsidiaries": [
+      "Citibank",
+      "Citigroup Global Markets",
+      "Banamex"
+    ]
+  },
+  "SCHW": {
+    "names": [
+      "Charles Schwab",
+      "Charles Schwab Corporation",
+      "Schwab"
+    ],
+    "executives": [
+      "Walt Bettinger",
+      "Bettinger",
+      "Rick Wurster",
+      "Wurster",
+      "Peter Crawford",
+      "Crawford"
+    ],
+    "products": [
+      "Schwab Intelligent Portfolios",
+      "Schwab Trading Services",
+      "Thinkorswim",
+      "Schwab Wealth Advisory",
+      "Schwab One",
+      "StreetSmart Edge"
+    ],
+    "subsidiaries": [
+      "TD Ameritrade",
+      "Charles Schwab Bank",
+      "Charles Schwab & Co."
+    ]
+  },
+  "PGR": {
+    "names": [
+      "Progressive Corporation",
+      "Progressive",
+      "Progressive Casualty Insurance Company"
+    ],
+    "executives": [
+      "Tricia Griffith",
+      "Griffith",
+      "John Sauerland",
+      "Sauerland"
+    ],
+    "products": [
+      "Flo",
+      "Name Your Price",
+      "Snapshot",
+      "Autosurf",
+      "Pathway",
+      "HomeQuote Explorer"
+    ],
+    "subsidiaries": [
+      "Progressive American Insurance Company",
+      "ASI",
+      "Progressive Direct",
+      "National Continental Insurance",
+      "Armour Insurance"
+    ]
+  },
+  "CB": {
+    "names": [
+      "Chubb",
+      "Chubb Limited",
+      "Chubb Corporation"
+    ],
+    "executives": [
+      "Evan Greenberg",
+      "Greenberg",
+      "Peter Enns",
+      "Enns"
+    ],
+    "products": [
+      "Chubb Personal Insurance",
+      "Chubb Commercial Insurance",
+      "ACE Group",
+      "WhiteOak",
+      "Chubb Tempest Re"
+    ],
+    "subsidiaries": [
+      "ACE Limited",
+      "Combined Insurance",
+      "Chubb European Group"
+    ]
+  },
+  "MMC": {
+    "names": [
+      "Marsh & McLennan",
+      "Marsh McLennan",
+      "MMC"
+    ],
+    "executives": [
+      "John Doyle",
+      "Doyle",
+      "Mark McGivney",
+      "McGivney"
+    ],
+    "products": [
+      "Marsh",
+      "Guy Carpenter",
+      "Mercer",
+      "Oliver Wyman",
+      "Marsh McLennan Agency"
+    ],
+    "subsidiaries": [
+      "Marsh & McLennan Agency",
+      "Oliver Wyman",
+      "Guy Carpenter",
+      "Mercer"
+    ]
+  },
+  "PYPL": {
+    "names": [
+      "PayPal",
+      "PayPal Holdings",
+      "PayPal Holdings Inc"
+    ],
+    "executives": [
+      "Alex Chriss",
+      "Chriss",
+      "Jamie Miller",
+      "Miller"
+    ],
+    "products": [
+      "Venmo",
+      "Braintree",
+      "PayPal Credit",
+      "Xoom",
+      "Zettle",
+      "PayPal Checkout"
+    ],
+    "subsidiaries": [
+      "Venmo",
+      "Braintree",
+      "Xoom",
+      "iZettle"
+    ]
+  },
+  "COF": {
+    "names": [
+      "Capital One",
+      "Capital One Financial",
+      "Capital One Financial Corporation"
+    ],
+    "executives": [
+      "Richard Fairbank",
+      "Fairbank",
+      "Andrew Young",
+      "Peter Hayes"
+    ],
+    "products": [
+      "Venture",
+      "Quicksilver",
+      "Savor",
+      "Spark",
+      "Platinum",
+      "Capital One Shopping"
+    ],
+    "subsidiaries": [
+      "Discover Financial Services",
+      "Chevy Chase Bank",
+      "Hibernia National Bank",
+      "North Fork Bank"
+    ]
+  },
+  "ICE": {
+    "names": [
+      "Intercontinental Exchange",
+      "ICE",
+      "Intercontinental Exchange Inc."
+    ],
+    "executives": [
+      "Jeffrey Sprecher",
+      "Sprecher",
+      "Ben Jackson",
+      "Warren Gardiner"
+    ],
+    "products": [
+      "NYSE",
+      "New York Stock Exchange",
+      "ICE Futures",
+      "CDS Clearing",
+      "ICE Clear",
+      "EnCompass"
+    ],
+    "subsidiaries": [
+      "Interactive Data",
+      "NYSE Group",
+      "Black Knight",
+      "Singapore Exchange Energy",
+      "ICE Mortgage Technology"
+    ]
+  },
+  "CME": {
+    "names": [
+      "CME Group",
+      "Chicago Mercantile Exchange",
+      "CME"
+    ],
+    "executives": [
+      "Terry Duffy",
+      "Duffy",
+      "Craig Donohue"
+    ],
+    "products": [
+      "Globex",
+      "S&P 500 futures",
+      "Eurodollar futures",
+      "Treasury futures",
+      "Bitcoin futures"
+    ],
+    "subsidiaries": [
+      "CBOT",
+      "New York Mercantile Exchange",
+      "COMEX",
+      "NYMEX"
+    ]
+  },
+  "GE": {
+    "names": [
+      "General Electric",
+      "General Electric Company"
+    ],
+    "executives": [
+      "Larry Culp",
+      "Culp",
+      "H. Lawrence Culp Jr."
+    ],
+    "products": [
+      "GE Aerospace GE90",
+      "GE Aerospace GE9X",
+      "GE90",
+      "GE9X",
+      "GEnx",
+      "LEAP engine",
+      "GE Vernova"
+    ],
+    "subsidiaries": [
+      "GE Aerospace",
+      "GE Vernova",
+      "GE HealthCare"
+    ]
+  },
+  "CAT": {
+    "names": [
+      "Caterpillar",
+      "Caterpillar Inc.",
+      "CAT"
+    ],
+    "executives": [
+      "Jim Umpleby",
+      "Umpleby",
+      "Andrew Bonfield",
+      "Bonfield"
+    ],
+    "products": [
+      "Cat",
+      "Cat 797F",
+      "D11",
+      "M300",
+      "Excavator",
+      "Wheel Loader"
+    ],
+    "subsidiaries": [
+      "Progress Rail",
+      "Perkins Engines",
+      "Solar Turbines"
+    ]
+  },
+  "RTX": {
+    "names": [
+      "Raytheon Technologies",
+      "RTX Corporation",
+      "Raytheon"
+    ],
+    "executives": [
+      "Greg Hayes",
+      "Hayes",
+      "Chris Calio",
+      "Calio"
+    ],
+    "products": [
+      "Patriot",
+      "Tomahawk",
+      "Stinger",
+      "Pratt & Whitney",
+      "Geared Turbofan",
+      "Collins Aerospace",
+      "AMRAAM"
+    ],
+    "subsidiaries": [
+      "Pratt & Whitney",
+      "Collins Aerospace",
+      "Raytheon Missiles & Defense",
+      "Raytheon Intelligence & Space"
+    ]
+  },
+  "HON": {
+    "names": [
+      "Honeywell",
+      "Honeywell International",
+      "Honeywell International Inc."
+    ],
+    "executives": [
+      "Vimal Kapur",
+      "Kapur",
+      "Greg Zehner",
+      "Zehner",
+      "Tom Szlosek",
+      "Szlosek"
+    ],
+    "products": [
+      "Aerospace",
+      "HCE",
+      "Forge",
+      "Spectra",
+      "TPE331",
+      "HTF7000",
+      "UOP"
+    ],
+    "subsidiaries": [
+      "Honeywell Aerospace",
+      "Honeywell Building Technologies",
+      "Honeywell Performance Materials and Technologies",
+      "Honeywell Safety and Productivity Solutions"
+    ]
+  },
+  "UNP": {
+    "names": [
+      "Union Pacific Corporation",
+      "Union Pacific",
+      "Union Pacific Railroad"
+    ],
+    "executives": [
+      "Jim Vena",
+      "Vena",
+      "Jennifer Hamann",
+      "Hamann"
+    ],
+    "products": [
+      "Union Pacific Intermodal",
+      "Falcon Premium",
+      "Chicago Express",
+      "MexEx Logistics"
+    ],
+    "subsidiaries": [
+      "Union Pacific Railroad Company",
+      "Southern Pacific",
+      "C&NW",
+      "Missouri Pacific"
+    ]
+  },
+  "BA": {
+    "names": [
+      "Boeing",
+      "Boeing Company",
+      "The Boeing Company"
+    ],
+    "executives": [
+      "Dave Calhoun",
+      "Calhoun",
+      "Kelly Ortberg",
+      "Ortberg",
+      "Brian West",
+      "Stephanie Pope"
+    ],
+    "products": [
+      "737 MAX",
+      "777X",
+      "787 Dreamliner",
+      "Starliner",
+      "F-15EX",
+      "KC-46 Pegasus",
+      "Apache",
+      "Chinook",
+      "P-8 Poseidon"
+    ],
+    "subsidiaries": [
+      "Spirit AeroSystems",
+      "Aurora Flight Sciences",
+      "Jeppesen"
+    ]
+  },
+  "DE": {
+    "names": [
+      "Deere & Company",
+      "John Deere",
+      "Deere"
+    ],
+    "executives": [
+      "John May",
+      "May",
+      "Joshua Jepsen",
+      "Jepsen"
+    ],
+    "products": [
+      "Green & Yellow",
+      "Gator",
+      "ExactEmerge",
+      "See & Spray",
+      "AutoTrac",
+      "Combine Harvester",
+      "Tractor"
+    ],
+    "subsidiaries": [
+      "Wirtgen Group",
+      "Monosem",
+      "Hagie Manufacturing",
+      "Kreps"
+    ]
+  },
+  "LMT": {
+    "names": [
+      "Lockheed Martin",
+      "Lockheed",
+      "Lockheed Martin Corporation"
+    ],
+    "executives": [
+      "Jim Taiclet",
+      "Taiclet",
+      "Jesus Malave",
+      "Malave"
+    ],
+    "products": [
+      "F-35 Lightning II",
+      "F-22 Raptor",
+      "C-130 Hercules",
+      "Black Hawk",
+      "THAAD",
+      "Orion",
+      "Javelin",
+      "HIMARS"
+    ],
+    "subsidiaries": [
+      "Sikorsky Aircraft",
+      "Martin Marietta"
+    ]
+  },
+  "UPS": {
+    "names": [
+      "United Parcel Service",
+      "UPS",
+      "Big Brown"
+    ],
+    "executives": [
+      "Carol Tomé",
+      "Tomé",
+      "Brian Newman",
+      "Newman"
+    ],
+    "products": [
+      "Ground",
+      "Air",
+      "Worldwide Express",
+      "Freight",
+      "Store",
+      "Access Point"
+    ],
+    "subsidiaries": [
+      "Coyote Logistics",
+      "Marken",
+      "FST Logistics"
+    ]
+  },
+  "ADP": {
+    "names": [
+      "Automatic Data Processing",
+      "ADP",
+      "ADP Inc."
+    ],
+    "executives": [
+      "Maria Black",
+      "Black",
+      "Don McGuire",
+      "McGuire"
+    ],
+    "products": [
+      "ADPScheduler",
+      "WorkForce Now",
+      "Vantage",
+      "Run Powered by ADP",
+      "TotalPay",
+      "Wisely",
+      "Celergo"
+    ],
+    "subsidiaries": [
+      "The Marcus Buckingham Company",
+      "Celergo",
+      "ADP AdvancedMD"
+    ]
+  },
+  "ETN": {
+    "names": [
+      "Eaton",
+      "Eaton Corporation",
+      "Eaton Corp"
+    ],
+    "executives": [
+      "Craig Arnold",
+      "Arnold",
+      "Olivier Leonetti",
+      "Leonetti"
+    ],
+    "products": [
+      "PowerXL",
+      "Cooper Power",
+      "Bussmann",
+      "Tripp Lite",
+      "Pow-R-Line",
+      "ArcSafe",
+      "xStorage"
+    ],
+    "subsidiaries": [
+      "Tripp Lite",
+      "Crouse-Hinds",
+      "Bussmann",
+      "Power Distribution Inc"
+    ]
+  },
+  "NOC": {
+    "names": [
+      "Northrop Grumman",
+      "Northrop Grumman Corporation",
+      "Northrop"
+    ],
+    "executives": [
+      "Kathy Warden",
+      "Warden",
+      "David Keffer",
+      "Keffer"
+    ],
+    "products": [
+      "B-21 Raider",
+      "Global Hawk",
+      "Triton",
+      "James Webb Space Telescope",
+      "Sentinel",
+      "E-2D Advanced Hawkeye",
+      "RAM",
+      "AARGM-ER"
+    ],
+    "subsidiaries": [
+      "Orbital ATK",
+      "Scaled Composites"
+    ]
+  },
+  "GD": {
+    "names": [
+      "General Dynamics",
+      "General Dynamics Corporation"
+    ],
+    "executives": [
+      "Phebe Novakovic",
+      "Novakovic",
+      "Jason Aiken",
+      "Aiken"
+    ],
+    "products": [
+      "Gulfstream",
+      "Abrams",
+      "Stryker",
+      "Virginia-class",
+      "Columbia-class",
+      "M1 Abrams",
+      "Electric Boat"
+    ],
+    "subsidiaries": [
+      "Gulfstream Aerospace",
+      "Electric Boat",
+      "NASSCO",
+      "Bath Iron Works",
+      "General Dynamics Information Technology",
+      "GDIT"
+    ]
+  },
+  "CSX": {
+    "names": [
+      "CSX Corporation",
+      "CSX",
+      "CSX Transportation"
+    ],
+    "executives": [
+      "Joe Hinrichs",
+      "Hinrichs",
+      "Sean Pelkey",
+      "Pelkey"
+    ],
+    "products": [
+      "Intermodal",
+      "CSX Intermodal",
+      "Unit Train",
+      "PRR",
+      "Juice Train"
+    ],
+    "subsidiaries": [
+      "CSX Transportation",
+      "Sea-Land Service",
+      "Chessie System",
+      "Seaboard System"
+    ]
+  },
+  "EMR": {
+    "names": [
+      "Emerson Electric Co.",
+      "Emerson Electric",
+      "Emerson"
+    ],
+    "executives": [
+      "Caran Tomasi",
+      "Tomasi",
+      "Surendralal Kothari",
+      "Kothari"
+    ],
+    "products": [
+      "Plantweb",
+      "Ovation",
+      "DeltaV",
+      "Fisher",
+      "Rosemount",
+      "Tescom",
+      "ASCO"
+    ],
+    "subsidiaries": [
+      "National Instruments"
+    ]
+  },
+  "ITW": {
+    "names": [
+      "Illinois Tool Works",
+      "ITW"
+    ],
+    "executives": [
+      "Eileen Drake",
+      "Christopher O'Herlihy",
+      "O'Herlihy",
+      "Michael Larsen",
+      "Larsen"
+    ],
+    "products": [
+      "Sikaflex",
+      "Devcon",
+      "Buildex",
+      "Paslode",
+      "Ramset",
+      "Nordson",
+      "Miller Electric"
+    ],
+    "subsidiaries": []
+  },
+  "FDX": {
+    "names": [
+      "FedEx",
+      "FedEx Corporation",
+      "Federal Express"
+    ],
+    "executives": [
+      "Raj Subramaniam",
+      "Subramaniam",
+      "John Dietrich",
+      "Dietrich"
+    ],
+    "products": [
+      "FedEx Express",
+      "FedEx Ground",
+      "FedEx Freight",
+      "FedEx Office",
+      "Priority Overnight",
+      "FedEx Delivery Manager"
+    ],
+    "subsidiaries": [
+      "TNT Express",
+      "Genco"
+    ]
+  },
+  "WM": {
+    "names": [
+      "Waste Management",
+      "Waste Management Inc"
+    ],
+    "executives": [
+      "Jim Fish",
+      "Fish",
+      "Devin McGregor",
+      "McGregor"
+    ],
+    "products": [
+      "Green Mountain",
+      "Garbage In",
+      "WM Sustainability Services"
+    ],
+    "subsidiaries": [
+      "Waste Management National Services",
+      "WM Intellectual Property"
+    ]
+  },
+  "PH": {
+    "names": [
+      "Parker-Hannifin",
+      "Parker Hannifin Corporation",
+      "Parker Hannifin"
+    ],
+    "executives": [
+      "Jenny Parrott",
+      "Todd Leombruno",
+      "Parrott",
+      "Leombruno"
+    ],
+    "products": [
+      "Parflex",
+      "Pneumadyne",
+      "ParkerStore",
+      "Hannifin",
+      "Polyflex",
+      "Eaton Aerospace filtration assets"
+    ],
+    "subsidiaries": [
+      "Parker Hannifin Manufacturing"
+    ]
+  },
+  "NSC": {
+    "names": [
+      "Norfolk Southern",
+      "Norfolk Southern Corporation",
+      "NSC",
+      "Norfolk & Western"
+    ],
+    "executives": [
+      "Alan Shaw",
+      "Shaw",
+      "Mark George",
+      "George",
+      "John Orr",
+      "Orr"
+    ],
+    "products": [
+      "Thoroughbred",
+      "Intermodal",
+      "Triple Crown Services",
+      "NS Railway",
+      "Thoroughbred Direct"
+    ],
+    "subsidiaries": [
+      "Norfolk Southern Railway",
+      "Pocahontas Land Corporation",
+      "Lambert's Point"
+    ]
+  },
+  "XOM": {
+    "names": [
+      "Exxon Mobil",
+      "ExxonMobil",
+      "Exxon",
+      "Standard Oil of New Jersey"
+    ],
+    "executives": [
+      "Darren Woods",
+      "Woods",
+      "Kathryn Mikells",
+      "Mikells"
+    ],
+    "products": [
+      "Mobil",
+      "Mobil 1",
+      "Esso",
+      "Exxon",
+      "Pegasus",
+      "Mobilgas",
+      "Synthetic Fleet"
+    ],
+    "subsidiaries": [
+      "XTO Energy",
+      "SeaRiver Maritime",
+      "Imperial Oil"
+    ]
+  },
+  "CVX": {
+    "names": [
+      "Chevron",
+      "Chevron Corporation",
+      "ChevronTexaco"
+    ],
+    "executives": [
+      "Mike Wirth",
+      "Wirth",
+      "Pierre Breber",
+      "Breber",
+      "Eileen Moore"
+    ],
+    "products": [
+      "Chevron",
+      "Texaco",
+      "Delo",
+      "Havoline",
+      "Caltex",
+      "Techron",
+      "Regal"
+    ],
+    "subsidiaries": [
+      "Noble Energy",
+      "PDC Energy",
+      "Chevron Phillips Chemical",
+      "Petrozuata"
+    ]
+  },
+  "COP": {
+    "names": [
+      "ConocoPhillips",
+      "Conoco",
+      "COP"
+    ],
+    "executives": [
+      "Ryan Lance",
+      "Lance",
+      "Bill Bullock",
+      "Bullock",
+      "Dominic Macklon",
+      "Macklon"
+    ],
+    "products": [
+      "Alaska LNG",
+      "Willow project",
+      "APLNG",
+      "Surmont",
+      "Foster Creek",
+      "Jemez",
+      "Kuparuk"
+    ],
+    "subsidiaries": [
+      "Burlington Resources",
+      "ConocoPhillips Alaska"
+    ]
+  },
+  "SLB": {
+    "names": [
+      "Schlumberger",
+      "SLB",
+      "Schlumberger Limited"
+    ],
+    "executives": [
+      "Olivier Le Peuch",
+      "Le Peuch",
+      "Stephane Biguet",
+      "Biguet"
+    ],
+    "products": [
+      "Petrel",
+      "Eclipse",
+      "OFM",
+      "Intersect",
+      "DELFI",
+      "M-I SWACO",
+      "Cameron"
+    ],
+    "subsidiaries": [
+      "Cameron International",
+      "OneSubsea"
+    ]
+  },
+  "EOG": {
+    "names": [
+      "EOG Resources",
+      "EOG Resources Inc",
+      "Enron Oil and Gas"
+    ],
+    "executives": [
+      "Ezra Y. Chang",
+      "Ezra Chang",
+      "Timothy K. Driggers",
+      "Timothy Driggers",
+      "William R. Thomas",
+      "William Thomas"
+    ],
+    "products": [
+      "Permian Basin",
+      "Eagle Ford",
+      "Bakken",
+      "Utica",
+      "Anadarko",
+      "Powder River Basin",
+      "DJ Basin"
+    ],
+    "subsidiaries": [
+      "EOG Resources Land",
+      "EOG Resources Marketing"
+    ]
+  },
+  "MPC": {
+    "names": [
+      "Marathon Petroleum",
+      "Marathon Petroleum Corporation",
+      "Marathon"
+    ],
+    "executives": [
+      "Michael Hennigan",
+      "Hennigan",
+      "Maryann Mannen",
+      "Mannen"
+    ],
+    "products": [
+      "Speedway",
+      "ARCO",
+      "Wrangler",
+      "Transcontinental Gas Pipe Line",
+      "MPC"
+    ],
+    "subsidiaries": [
+      "MPLX",
+      "Andeavor",
+      "Greenwood Energy"
+    ]
+  },
+  "PSX": {
+    "names": [
+      "Phillips 66",
+      "PSX",
+      "Phillips Sixty-Six"
+    ],
+    "executives": [
+      "Mark Lashier",
+      "Mark",
+      "Kevin Mitchell",
+      "Mitchell"
+    ],
+    "products": [
+      "Conoco",
+      "Phillips 66 Aviation",
+      "Kendall Motor Oil",
+      "Red Line Oil"
+    ],
+    "subsidiaries": [
+      "CPChem",
+      "DCP Midstream"
+    ]
+  },
+  "WMB": {
+    "names": [
+      "Williams Companies",
+      "The Williams Companies Inc",
+      "Williams"
+    ],
+    "executives": [
+      "Alan Armstrong",
+      "Armstrong",
+      "John Chandler",
+      "Chandler"
+    ],
+    "products": [
+      "Transco",
+      "Northwest Pipeline",
+      "MountainWest",
+      "Gulfstream",
+      "Constitution Pipeline"
+    ],
+    "subsidiaries": [
+      "Williams Partners",
+      "Access Midstream",
+      "Transcontinental Gas Pipe Line Company"
+    ]
+  },
+  "OXY": {
+    "names": [
+      "Occidental Petroleum",
+      "Occidental",
+      "OXY"
+    ],
+    "executives": [
+      "Vicki Hollub",
+      "Hollub",
+      "Rob Peterson",
+      "Peterson"
+    ],
+    "products": [
+      "Permian Basin",
+      "Al Hosn",
+      "Low Carbon Ventures",
+      "Dolphin Energy",
+      "Elk Hills"
+    ],
+    "subsidiaries": [
+      "Anadarko",
+      "OxyChem",
+      "Western Midstream"
+    ]
+  },
+  "VLO": {
+    "names": [
+      "Valero Energy",
+      "Valero Energy Corporation",
+      "Valero"
+    ],
+    "executives": [
+      "Lane Riggs",
+      "Riggs",
+      "Jason Fraser",
+      "Fraser"
+    ],
+    "products": [
+      "Diamond Green Diesel",
+      "Valero",
+      "Beacon",
+      "Ultramar",
+      "Diamond Shamrock"
+    ],
+    "subsidiaries": [
+      "Valero Energy Partners",
+      "Port Arthur Refinery",
+      "Texas City Refinery"
+    ]
+  },
+  "NEE": {
+    "names": [
+      "NextEra Energy",
+      "NextEra Energy, Inc.",
+      "NextEra"
+    ],
+    "executives": [
+      "John Ketchum",
+      "Ketchum",
+      "Brian Bolster",
+      "Bolster",
+      "Kirk Crews",
+      "Crews"
+    ],
+    "products": [
+      "Energy Resources",
+      "Florida Power & Light",
+      "FPL",
+      "Seabrook Station",
+      "Turkey Point Nuclear",
+      "Palo Verde"
+    ],
+    "subsidiaries": [
+      "Florida Power & Light Company",
+      "NextEra Energy Resources",
+      "NextEra Energy Partners",
+      "Gulf Power"
+    ]
+  },
+  "SO": {
+    "names": [
+      "Southern Company",
+      "The Southern Company",
+      "Southern Co"
+    ],
+    "executives": [
+      "Christopher Womatt",
+      "Womack",
+      "Andrew Evans",
+      "Evans"
+    ],
+    "products": [
+      "Georgia Power",
+      "Alabama Power",
+      "Mississippi Power",
+      "Southern Nuclear",
+      "Southern Company Gas",
+      "Plant Vogtle",
+      "Plant Scherer"
+    ],
+    "subsidiaries": [
+      "Georgia Power Company",
+      "Alabama Power Company",
+      "Mississippi Power Company",
+      "Southern Company Gas",
+      "Southern Nuclear Operating Company"
+    ]
+  },
+  "DUK": {
+    "names": [
+      "Duke Energy",
+      "Duke Energy Corporation",
+      "Duke"
+    ],
+    "executives": [
+      "Lynn Good",
+      "Good",
+      "Brian Savoy",
+      "Savoy"
+    ],
+    "products": [
+      "Duke Energy Progress",
+      "Duke Energy Carolinas",
+      "Duke Energy Florida",
+      "Duke Energy Indiana",
+      "Duke Energy Ohio"
+    ],
+    "subsidiaries": [
+      "Progress Energy",
+      "Piedmont Natural Gas",
+      "Duke Energy Renewables"
+    ]
+  },
+  "CEG": {
+    "names": [
+      "Constellation Energy",
+      "Constellation Energy Corporation",
+      "Constellation"
+    ],
+    "executives": [
+      "Joseph Dominguez",
+      "Dominguez",
+      "Daniel Eggers",
+      "Eggers"
+    ],
+    "products": [
+      "Calvert Cliffs",
+      "Braidwood",
+      "Byron",
+      "Clinton",
+      "Dresden",
+      "Limerick",
+      "Nine Mile Point",
+      "Peach Bottom",
+      "Quad Cities",
+      "R.E. Ginna"
+    ],
+    "subsidiaries": [
+      "Constellation Energy Generation",
+      "Constellation NewEnergy"
+    ]
+  },
+  "AEP": {
+    "names": [
+      "American Electric Power",
+      "AEP",
+      "American Electric Power Company"
+    ],
+    "executives": [
+      "Nicholas Akins",
+      "Akins",
+      "Julie Sloat",
+      "Sloat"
+    ],
+    "products": [
+      "AEP Ohio",
+      "AEP Texas",
+      "Appalachian Power",
+      "Public Service Company of Oklahoma",
+      "Southwestern Electric Power Company",
+      "Indiana Michigan Power"
+    ],
+    "subsidiaries": [
+      "Transource Energy",
+      "AEP Transmission Holding"
+    ]
+  }
+}
