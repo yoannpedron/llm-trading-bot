@@ -85,7 +85,16 @@ async function bootstrap() {
 
   // Un rejet non géré ne doit jamais tuer un bot censé tourner 24/7.
   process.on('unhandledRejection', (reason) => log.error(`Rejet non géré : ${reason}`));
-  process.on('uncaughtException', (err) => log.error(`Exception non capturée : ${err.stack || err.message}`));
+
+  // Une exception EPIPE vient de la sortie standard elle-même : la journaliser
+  // reviendrait à réécrire sur le tuyau cassé, ce qui relance l'exception. Le
+  // cas s'est produit et a bloqué un cycle entier à 100 % de CPU. Le logger
+  // avale désormais ces erreurs, mais on court-circuite aussi ici : une panne
+  // d'affichage ne mérite ni trace ni traitement.
+  process.on('uncaughtException', (err) => {
+    if (err?.code === 'EPIPE' || err?.code === 'ERR_STREAM_DESTROYED') return;
+    log.error(`Exception non capturée : ${err.stack || err.message}`);
+  });
 
   return { app, engine, broker };
 }

@@ -1,5 +1,6 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -613,5 +614,44 @@ describe('mode dégradé — actualités indisponibles', () => {
     const degrade = normalizeDecision(base, null, { degraded: true });
     assert.deepEqual(normal.forecast, degrade.forecast);
     assert.equal(degrade.forecast.pDown, 0.55);
+  });
+});
+
+describe('journalisation — une sortie cassée ne doit pas tuer le bot', () => {
+  test('des milliers de lignes sur un tuyau fermé ne bouclent pas', () => {
+    // Panne réelle : le serveur lancé avec sa sortie dirigée vers un `head` a vu
+    // le tuyau se fermer au bout de 60 lignes. Chaque écriture suivante a levé
+    // EPIPE ; le gestionnaire d'exception non capturée a voulu journaliser
+    // l'erreur — par la même sortie — qui a relevé EPIPE. Récursion infinie,
+    // 100 % d'un cœur pendant six minutes, cycle de trading bloqué, aucune
+    // décision enregistrée. Le processus répondait toujours à /api/health, ce
+    // qui rendait la panne invisible.
+    //
+    // En production la sortie casse quand journald redémarre ou qu'un
+    // `docker logs` est interrompu : le bot doit continuer à trader.
+    const enfant = spawnSync(
+      process.execPath,
+      ['-e', `
+        const { createLogger } = await import('./src/logger.js');
+        const log = createLogger('t');
+        for (let i = 0; i < 20000; i += 1) log.info('ligne ' + i);
+        process.exit(0);
+      `.replace(/await import/, 'require')],
+      { input: '', timeout: 20000, encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'] },
+    );
+    // stdio 'ignore' ferme la sortie : c'est la même condition que le `head`.
+    assert.notEqual(enfant.signal, 'SIGTERM', 'aucun dépassement de délai — donc aucune boucle');
+  });
+
+  test('le tampon circulaire survit à la perte de la console', async () => {
+    // C'est ce qui rend la panne supportable : /api/logs et le dashboard
+    // restent complets même quand plus rien ne sort sur la console. On perd
+    // l'affichage, jamais la trace.
+    const { createLogger, getRecentLogs } = await import('../src/logger.js');
+    const log = createLogger('tampon');
+    for (let i = 0; i < 500; i += 1) log.info(`entrée ${i}`);
+    const recent = getRecentLogs(300);
+    assert.equal(recent.length, 300, 'le tampon garde ses 300 dernières entrées');
+    assert.equal(recent[recent.length - 1].message, 'entrée 499', 'et la plus récente est bien la dernière');
   });
 });

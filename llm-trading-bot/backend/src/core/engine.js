@@ -408,10 +408,20 @@ export class TradingEngine {
       // valorisation cohérente entre deux décisions du même cycle.
       // Le palier gratuit de Gemini limite les requêtes par minute : sans cette
       // pause, un univers de 3+ actifs déclenche des 429 dès le second symbole.
+      //
+      // La pause ne suit QUE les symboles ayant réellement consommé un appel.
+      // Elle existe pour respecter la limite par minute de l'API : quand un
+      // symbole est écarté sans consulter le modèle — marché fermé, actif non
+      // négociable — il n'y a aucun débit à ménager. Attendre quand même
+      // faisait durer 12 minutes un cycle de week-end qui ne décide de rien, à
+      // raison de 5 secondes par actif ignoré sur 150.
       const evaluations = [];
-      for (const [index, symbol] of config.universe.symbols.entries()) {
-        if (index > 0 && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
-        evaluations.push(await this.#evaluateSymbol(symbol, { quotes, circuitBreaker }));
+      let appelPrecedent = false;
+      for (const symbol of config.universe.symbols) {
+        if (appelPrecedent && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
+        const evaluation = await this.#evaluateSymbol(symbol, { quotes, circuitBreaker });
+        appelPrecedent = Boolean(evaluation.evaluated);
+        evaluations.push(evaluation);
       }
 
       // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
