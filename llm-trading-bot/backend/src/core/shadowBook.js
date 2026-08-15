@@ -84,8 +84,23 @@ const BENCHMARK = 'SPY';
  * Le compteur repart de zéro. C'est le coût réel du changement de stratégie ;
  * le masquer coûterait la validité du verdict. La série v1 reste en base et
  * consultable — rien n'est effacé.
+ *
+ * ── v3 : la sortie devient relative, comme l'entrée ───────────────────────
+ * La v2 avait rendu l'ENTRÉE relative — être dans les trois meilleurs — en
+ * laissant la SORTIE absolue : ne vendre qu'un actif devenu franchement
+ * mauvais, ce qui correspond à une chute sous la médiane, soit le rang 76 sur
+ * 150. Les deux moitiés du bot suivaient donc deux philosophies opposées.
+ *
+ * La conséquence n'était pas théorique : trois positions simplement devenues
+ * médiocres n'étaient jamais vendues, les trois emplacements restaient
+ * occupés, et le classement transversal devenait inerte dès le premier jour.
+ * Le mécanisme central de la v2 s'éteignait tout seul.
+ *
+ * La sortie suit désormais le rang, avec une bande dérivée de la loi en
+ * racine cubique du coût de transaction : 13 rangs à 6,25 bps sur 150 actifs,
+ * contre 73 auparavant. La condition absolue est conservée en plus.
  */
-const RULE_VERSION = 'classement-transversal-v2';
+const RULE_VERSION = 'classement-transversal-v3';
 
 /** Étiquette des décisions antérieures à l'introduction du champ. */
 const LEGACY_RULE = 'action-choisie-par-le-modele';

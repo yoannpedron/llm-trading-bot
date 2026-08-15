@@ -17,7 +17,7 @@ const { RiskManager } = await import('../src/core/riskManager.js');
 const { executionQuality } = await import('../src/data/executionQuality.js');
 const { calibration } = await import('../src/core/calibration.js');
 const { SqliteStore } = await import('../src/storage/SqliteStore.js');
-const { rankAndSelect, MIN_DISPERSION } = await import('../src/core/ranking.js');
+const { rankAndSelect, MIN_DISPERSION, exitRank } = await import('../src/core/ranking.js');
 const { rankIC, rankCalibrationError } = await import('../src/core/rankMetrics.js');
 
 after(async () => {
@@ -971,5 +971,84 @@ describe('mesures de rang — Rank IC et RCE', () => {
     assert.equal(t[0].apresProjection, t[0].resultatMoyen, 'la première tranche ne violait rien');
     assert.equal(t[4].apresProjection, t[4].resultatMoyen, 'la dernière non plus');
     assert.equal(t[1].apresProjection, t[2].apresProjection, 'les deux tranches en conflit sont mises en commun');
+  });
+});
+
+describe('sortie par classement — la moitié qui manquait', () => {
+  const ev = (symbol, edge) => ({ symbol, decision: { forecast: { edge } } });
+  const univers = (n) => Array.from({ length: n }, (_, i) => ev(`S${i}`, 0.5 - i * 0.006));
+
+  test('la bande suit la racine cubique du coût, pas le coût', () => {
+    // C'est tout l'enjeu du calibrage. Un raisonnement linéaire donnerait une
+    // bande de 0,06 % de la distribution — moins d'un rang sur 150, autrement
+    // dit vendre au premier décrochage. La racine cubique en donne 8,55 %.
+    const lineaire = 150 * 0.000625;
+    const cubique = 150 * Math.cbrt(0.000625);
+    assert.ok(lineaire < 0.1, `le linéaire donnerait ${lineaire.toFixed(2)} rang`);
+    assert.ok(cubique > 12 && cubique < 14, `la racine cubique donne ${cubique.toFixed(1)} rangs`);
+    assert.equal(exitRank({ universe: 150 }), 16);
+  });
+
+  test('le seuil s\'adapte à la taille de l\'univers', () => {
+    // La bande s'indexe sur la largeur de l'UNIVERS, pas sur le nombre de
+    // positions détenues : le bruit du classement dépend du nombre d'actifs
+    // classés, pas de la contrainte de concentration qu'on s'impose.
+    assert.ok(exitRank({ universe: 10 }) < exitRank({ universe: 150 }));
+    assert.equal(exitRank({ universe: 10 }), 4);
+    assert.equal(exitRank({ universe: 80 }), 10);
+  });
+
+  test('le seuil reste au-dessus du nombre de positions visées', () => {
+    // Un seuil inférieur ou égal à K vendrait un actif encore retenu à
+    // l'achat : le bot achèterait et revendrait le même titre dans le cycle.
+    const petit = exitRank({ universe: 4, maxSelected: 3 });
+    assert.ok(petit > 3, `seuil ${petit} doit dépasser les 3 positions visées`);
+  });
+
+  test('une position tombée hors de la bande est signalée à la vente', () => {
+    const rows = univers(150);
+    // S100 est très loin dans le classement — bien au-delà du rang 16.
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S100']) });
+    assert.ok(r.sorties.has('S100'), 'la position mal classée doit sortir');
+    assert.equal(r.sorties.size, 1);
+  });
+
+  test('une position encore dans la bande est conservée', () => {
+    // C'est la raison d'être de la bande : entre le rang 4 et le rang 16, on
+    // ne fait rien. Vendre là engendrerait des allers-retours dont chacun
+    // coûte 6,25 bps pour un gain de classement marginal.
+    const rows = univers(150);
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S9']) });
+    assert.equal(r.sorties.has('S9'), false, 'le rang 10 est dans la bande de tolérance');
+    assert.equal(r.sorties.size, 0);
+  });
+
+  test('un actif non classé n\'est PAS vendu', () => {
+    // Absence d'évaluation ≠ mauvaise évaluation. Un actif dont la cotation a
+    // manqué ce cycle n'a rien fait de mal ; vendre sur une absence de donnée
+    // serait la pire des raisons d'agir.
+    const rows = univers(150);
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['INCONNU']) });
+    assert.equal(r.sorties.size, 0);
+  });
+
+  test('sans dispersion, on ne peut plus acheter mais on peut encore vendre', () => {
+    // Distinction essentielle : un classement sans information n'autorise pas
+    // à choisir un gagnant, mais il n'oblige pas non plus à tout conserver.
+    // Les confondre ferait du bot un acheteur qui ne vend jamais — exactement
+    // le défaut que cette version corrige.
+    const plats = Array.from({ length: 150 }, (_, i) => ev(`S${i}`, 0.25 + (i % 3) * 0.0001));
+    const r = rankAndSelect(plats, { maxSelected: 3, held: new Set(['S140']) });
+    assert.equal(r.selected.size, 0, 'aucun achat sous le seuil de dispersion');
+    assert.ok(r.sorties.size >= 0, 'les sorties restent calculées');
+    assert.ok(r.ranks.size > 0, 'les rangs existent même sans dispersion');
+  });
+
+  test('la bande est cinq fois plus étroite que la règle précédente', () => {
+    // La règle absolue vendait sur un écart de −20 points, soit une chute sous
+    // la médiane : le rang 76 sur 150. Bande de 73 rangs contre 13.
+    const ancienne = 76 - 3;
+    const nouvelle = exitRank({ universe: 150 }) - 3;
+    assert.ok(ancienne / nouvelle > 5, `${ancienne} rangs contre ${nouvelle} — facteur ${(ancienne / nouvelle).toFixed(1)}`);
   });
 });

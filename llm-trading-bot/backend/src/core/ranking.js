@@ -47,6 +47,61 @@ const log = createLogger('rank');
 const MIN_DISPERSION = 0.03;
 
 /**
+ * Coût d'un aller-retour, en fraction du notionnel.
+ *
+ * Mesuré sur les ordres réels du bot : 6,25 points de base, spread uniquement
+ * (Alpaca ne prend aucune commission). C'est la seule friction qui compte à
+ * cette taille de compte — aucun impact de marché sur 35 $ de grande cap.
+ */
+const COUT_ALLER_RETOUR = 0.000625;
+
+/**
+ * Facteur de conversion entre la largeur de bande continue et l'espace des
+ * rangs.
+ *
+ * ── Pourquoi il vaut 1, et pourquoi c'est provisoire ──────────────────────
+ * La théorie donne la largeur de bande dans l'espace des SCORES ; il faut la
+ * transposer dans celui des RANGS. Le facteur de passage dépend de
+ * l'autocorrélation du classement — sa stabilité d'un jour à l'autre — qu'on
+ * ne peut mesurer qu'après plusieurs semaines de production.
+ *
+ * À 1, la bande vaut 13 rangs sur 150 actifs. La sensibilité est réelle et
+ * assumée : à 0,5 on sortirait au rang 9, à 2 au rang 29. L'ordre de grandeur
+ * — la dizaine, pas 4 et pas 76 — est en revanche solide.
+ *
+ * À recalibrer sur la FRA mesurée dès que le carnet aura deux semaines.
+ */
+const KAPPA = 1;
+
+/**
+ * Rang au-delà duquel une position détenue est liquidée.
+ *
+ * ── Le résultat qui fonde cette fonction ──────────────────────────────────
+ * Sous coûts proportionnels, la largeur optimale de la zone sans transaction
+ * croît comme la RACINE CUBIQUE du coût, non linéairement (Janecek & Shreve
+ * 2004 ; Rogers 2004). La démonstration oppose deux termes : la perte
+ * d'opportunité d'une position dérivée, quadratique en largeur de bande, et le
+ * coût de transaction, inversement proportionnel à cette largeur. Le minimum
+ * de leur somme tombe en c^(1/3).
+ *
+ * L'effet est massif et c'est tout l'intérêt : à 6,25 bps, un raisonnement
+ * linéaire donnerait une bande de 0,06 % de la distribution, la racine cubique
+ * en donne 8,55 % — cent trente-sept fois plus large.
+ *
+ * ── Pourquoi ce n'est pas un détail ───────────────────────────────────────
+ * La règle précédente ne vendait que sur signal franchement négatif, ce qui
+ * correspond à une chute sous la médiane — le rang 76 sur 150. La bande faisait
+ * donc 73 rangs, cinq fois trop large. Conséquence : trois positions achetées
+ * puis devenues médiocres n'étaient jamais vendues, les trois emplacements
+ * restaient occupés, et le classement transversal — la raison d'être de toute
+ * la refonte — devenait inerte dès le premier jour.
+ */
+export function exitRank({ universe, maxSelected = 3, cost = COUT_ALLER_RETOUR, kappa = KAPPA }) {
+  const largeur = kappa * universe * Math.cbrt(cost);
+  return Math.max(maxSelected + 1, Math.round(maxSelected + largeur));
+}
+
+/**
  * Classe les évaluations et désigne celles à exécuter.
  *
  * @param {Array} evaluations  objets contenant au moins { symbol, decision }
@@ -62,6 +117,7 @@ export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() }
   if (scored.length < 2) {
     return {
       selected: new Set(),
+      sorties: new Set(),
       ranks: new Map(),
       dispersion: 0,
       reason: 'classement impossible : moins de deux prévisions exploitables',
@@ -94,8 +150,12 @@ export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() }
       `Dispersion transversale ${(dispersion * 100).toFixed(1)} pts < ${MIN_DISPERSION * 100} : `
       + 'le modèle ne différencie pas les actifs, aucune sélection.',
     );
+    // Aucune SÉLECTION, mais les sorties restent calculées : un classement
+    // sans dispersion n'autorise pas à acheter, il n'oblige pas à conserver.
+    // Confondre les deux ferait du bot un acheteur qui ne vend jamais.
     return {
       selected: new Set(),
+      sorties: sortiesParRang(ranks, held, scored.length, maxSelected),
       ranks,
       dispersion,
       reason: `dispersion transversale trop faible (${(dispersion * 100).toFixed(1)} pts) — le classement ne porte aucune information`,
@@ -126,7 +186,15 @@ export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() }
     + (opening.length ? ` (${opening.length} ouverture(s))` : ''),
   );
 
-  return { selected, ranks, dispersion, median, reason: null };
+  return {
+    selected,
+    sorties: sortiesParRang(ranks, held, scored.length, maxSelected),
+    ranks,
+    dispersion,
+    median,
+    seuilSortie: exitRank({ universe: scored.length, maxSelected }),
+    reason: null,
+  };
 }
 
 /**
@@ -143,3 +211,37 @@ export function equalWeight() {
 }
 
 export { MIN_DISPERSION };
+
+
+/**
+ * Positions détenues tombées hors de la bande de tolérance.
+ *
+ * La règle d'entrée est RELATIVE — être dans les meilleurs — et la règle de
+ * sortie doit l'être aussi. Une sortie absolue (« vendre quand l'actif devient
+ * franchement mauvais ») appartient à une stratégie de seuil, pas à une
+ * stratégie de classement : les deux moitiés du bot suivraient deux
+ * philosophies opposées, et c'est exactement ce qui figeait le portefeuille.
+ *
+ * Un actif absent du classement du jour n'est PAS vendu : il n'a pas été
+ * évalué (marché fermé sur ce titre, cotation manquante), ce qui n'est pas une
+ * information sur sa qualité. Vendre sur une absence de données serait la pire
+ * des raisons d'agir.
+ */
+function sortiesParRang(ranks, held, universe, maxSelected) {
+  const seuil = exitRank({ universe, maxSelected });
+  const sorties = new Set();
+
+  for (const symbol of held) {
+    const info = ranks.get(symbol);
+    if (!info) continue;
+    if (info.rank > seuil) sorties.add(symbol);
+  }
+
+  if (sorties.size) {
+    log.info(
+      `Sortie par classement (seuil : rang ${seuil} sur ${universe}) — `
+      + [...sorties].map((s) => `${s} au rang ${ranks.get(s).rank}`).join(', '),
+    );
+  }
+  return sorties;
+}

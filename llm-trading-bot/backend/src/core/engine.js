@@ -227,7 +227,7 @@ export class TradingEngine {
   }
 
   /** Exécute une décision déjà évaluée, puis la consigne. */
-  async #executeEvaluation(evaluation, { selected, rankInfo, rankingReason }) {
+  async #executeEvaluation(evaluation, { selected, sorties, rankInfo, rankingReason }) {
     const { symbol, decision, snapshot, news, phase, price, fxRate, position, account, budget } = evaluation;
     const outcome = { symbol, action: decision.action, executed: false, reason: null };
 
@@ -239,6 +239,26 @@ export class TradingEngine {
         effective.action = 'HOLD';
         effective.sizePct = 0;
       }
+
+      // ── Sortie par classement ──────────────────────────────────────────
+      // Symétrique de la règle d'entrée, et c'est tout l'objet du correctif.
+      // L'entrée était RELATIVE — être dans les trois meilleurs — quand la
+      // sortie restait ABSOLUE : ne vendre qu'un actif devenu franchement
+      // mauvais, ce qui correspond à une chute sous la médiane. Trois positions
+      // simplement devenues médiocres n'étaient donc jamais vendues, les trois
+      // emplacements restaient occupés, et le classement transversal — la
+      // raison d'être de toute la refonte — devenait inerte après le premier
+      // jour de trading.
+      //
+      // La condition absolue est CONSERVÉE en plus : un actif qui s'effondre se
+      // vend même s'il reste bien classé, parce qu'un bon rang dans un univers
+      // qui baisse ne protège de rien.
+      if (position?.quantity > 0 && sorties?.has(symbol) && effective.action !== 'SELL') {
+        effective.action = 'SELL';
+        effective.sizePct = 1;
+        outcome.reason = `sortie par classement : rang ${rankInfo?.rank ?? '?'} au-delà du seuil de tolérance`;
+      }
+
       outcome.action = effective.action;
 
       // La validation, elle, s'appuie sur le budget RÉEL, verrous compris.
@@ -472,6 +492,8 @@ export class TradingEngine {
         // et un cycle bloqué se ressemblent à l'écran.
         raisonAbstention: ranking.reason ?? null,
         maxRetenus: config.risk.maxPositions,
+        seuilSortie: ranking.seuilSortie ?? null,
+        sorties: [...(ranking.sorties ?? [])],
         classement: [...ranking.ranks.entries()]
           .map(([symbol, r]) => ({
             symbol,
@@ -494,6 +516,7 @@ export class TradingEngine {
         }
         results.push(await this.#executeEvaluation(evaluation, {
           selected: ranking.selected,
+          sorties: ranking.sorties,
           rankInfo: ranking.ranks.get(evaluation.symbol) ?? null,
           rankingReason: ranking.reason,
         }));
