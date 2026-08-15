@@ -14,6 +14,7 @@ const state = {
   adminToken: '',
   refreshInterval: 30000,
   journalFilter: 'all',
+  journalSearch: '',
   logFilter: 'all',
   data: null,
   timer: null,
@@ -230,6 +231,10 @@ function render(data) {
   renderChart(data.equityCurve, data.account, data.serverTime);
   renderPositions(data.positions, data.account.currency);
   renderStatus(data.status, data.calendar);
+  renderProgress(data.status);
+  renderRanking(data.status?.lastRanking);
+  renderRankMetrics(m.shadow?.rangs);
+  renderVerdictEta(m.sprt, m.shadow);
   renderShadow(m.shadow);
   renderCalibration(m.shadow?.calibration);
   renderAdvisory(m.shadow?.advisory);
@@ -735,20 +740,34 @@ async function runCycleNow() {
   setKeysFeedback(null);
 
   try {
-    // Un cycle interroge le LLM sur chaque actif : ça peut prendre 30-60 s
-    // (news + Gemini + cooldown entre actifs). Le bouton reste désactivé
-    // jusqu'à la fin plutôt que de faire croire à une réponse immédiate.
-    const summary = await adminFetch('/api/cycle', { method: 'POST' });
-    await refresh();
-    if (summary.skipped) {
-      showAlert(`Cycle non lancé : ${esc(summary.reason)}.`);
-    } else if (summary.error) {
-      showAlert(`Le cycle a échoué : ${esc(summary.error)}.`);
+    // ── Le lancement est ASYNCHRONE ─────────────────────────────────────
+    // Le serveur répond 202 immédiatement et le cycle continue derrière. Une
+    // version précédente attendait la fin : avec dix actifs la requête durait
+    // une minute et personne ne le remarquait, mais à 150 actifs en séance
+    // elle dure une vingtaine de minutes. Le navigateur — ou tout proxy sur le
+    // trajet — coupait bien avant, et le dashboard annonçait « le cycle a
+    // échoué » alors qu'il se déroulait normalement. C'est le pire message
+    // possible, puisqu'il pousse à relancer par-dessus.
+    //
+    // La progression se lit désormais dans l'état du moteur, rafraîchi comme
+    // le reste de la page.
+    const started = await adminFetch('/api/cycle', { method: 'POST' });
+    if (started.started === false) {
+      showAlert(`Cycle non lancé : ${esc(started.reason)}.`);
     } else {
       showAlert(null);
+      // Cadence resserrée pendant le cycle : la barre de progression n'a
+      // d'intérêt que si elle bouge.
+      startProgressWatch();
     }
+    await refresh();
   } catch (err) {
-    showAlert(`Impossible de lancer le cycle : ${esc(err.message)}.`);
+    // Message explicite sur le cas le plus fréquent : le jeton admin n'a pas
+    // été saisi dans Réglages, et « 401 » seul n'aide personne.
+    const message = /401|jeton|token/i.test(err.message)
+      ? 'Jeton administrateur manquant ou invalide — ouvre Réglages et saisis-le.'
+      : err.message;
+    showAlert(`Impossible de lancer le cycle : ${esc(message)}.`);
   } finally {
     button.disabled = false;
     button.textContent = 'Lancer un cycle maintenant';
@@ -1200,13 +1219,28 @@ async function writeToClipboard(text) {
 
 const SENTIMENT_CLASS = { POSITIF: 'pill-pos', NEGATIF: 'pill-neg', NEUTRE: 'pill-neu', INDISPONIBLE: 'pill-skip' };
 
+let lastJournal = null;
+
 function renderJournal(entries) {
+  if (entries) lastJournal = entries;
   const host = $('journal');
+  // ── Recherche par symbole ──────────────────────────────────────────────
+  // À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour : suivre
+  // une action précise à l'œil était devenu impossible.
+  const q = (state.journalSearch || '').trim().toUpperCase();
+
   const filtered = (entries || []).filter((e) => {
+    if (q && !String(e.symbol || '').toUpperCase().includes(q)) return false;
     if (state.journalFilter === 'all') return true;
     if (state.journalFilter === 'executed') return e.executed;
+    // « Retenus » : ceux que le classement transversal a désignés, qu'ils aient
+    // été exécutés ou non. C'est la distinction utile depuis le passage au rang
+    // — un actif peut être retenu puis bloqué par le budget.
+    if (state.journalFilter === 'selected') return Boolean(e.selected);
     return e.action === state.journalFilter;
   });
+
+  $('journal-count').textContent = `${filtered.length} / ${(entries || []).length} entrées`;
 
   if (!filtered.length) {
     host.innerHTML = '<p class="empty-block">Aucune décision ne correspond à ce filtre.</p>';
@@ -1402,3 +1436,344 @@ loadSettings();
 applyAdminMode();
 scheduleRefresh();
 refresh();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LE CLASSEMENT DU JOUR
+
+   Depuis le passage au rang, le bot ne compare plus chaque action à un seuil :
+   il les classe entre elles et prend les meilleures. Cette décision n'était
+   visible nulle part, si bien qu'un HOLD ne disait pas si l'action avait été
+   mal notée ou simplement battue par une autre.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+let rankingView = 'top';
+let rankingFilter = '';
+let lastRanking = null;
+
+function renderRanking(ranking) {
+  lastRanking = ranking;
+  const body = $('ranking-body');
+
+  if (!ranking || !ranking.classement?.length) {
+    $('ranking-meta').textContent = 'aucun classement';
+    $('ranking-abstention').hidden = true;
+    $('disp-value').textContent = '—';
+    $('disp-fill').style.width = '0%';
+    body.innerHTML = '<p class="empty-block">Aucun classement — le bot n’a pas encore analysé l’univers en séance.</p>';
+    return;
+  }
+
+  const rows = ranking.classement;
+  const retenus = rows.filter((r) => r.retenu).length;
+  $('ranking-meta').textContent = `${rows.length} actifs classés · ${retenus} retenu(s) · ${fmtDate(ranking.at)}`;
+
+  // ── Dispersion ────────────────────────────────────────────────────────
+  // L'échelle va jusqu'à 4× le seuil : au-delà, la valeur exacte n'importe
+  // plus, seul compte le fait d'être largement au-dessus.
+  const seuil = ranking.seuilDispersion ?? 0.03;
+  const disp = ranking.dispersion ?? 0;
+  const echelle = seuil * 4;
+  $('disp-value').textContent = `${(disp * 100).toFixed(1)} pts`;
+  const fill = $('disp-fill');
+  fill.style.width = `${Math.min(100, (disp / echelle) * 100)}%`;
+  fill.classList.toggle('below', disp < seuil);
+  $('disp-threshold').style.left = `${(seuil / echelle) * 100}%`;
+  $('disp-note').textContent = disp < seuil
+    ? `Sous le seuil de ${(seuil * 100).toFixed(0)} points : le modèle note tout le monde pareil, le classement ne porte aucune information.`
+    : `Au-dessus du seuil de ${(seuil * 100).toFixed(0)} points : le modèle différencie les actifs, le classement est exploitable.`;
+
+  // ── Abstention expliquée ──────────────────────────────────────────────
+  // Un cycle sans achat et un cycle bloqué se ressemblaient à l'écran.
+  const abst = $('ranking-abstention');
+  if (ranking.raisonAbstention) {
+    abst.hidden = false;
+    abst.innerHTML = `<strong>Aucun achat ce cycle.</strong> ${esc(ranking.raisonAbstention)}.`;
+  } else if (retenus === 0) {
+    abst.hidden = false;
+    abst.innerHTML = '<strong>Aucun achat ce cycle.</strong> Le classement a fonctionné, mais aucun actif ne dépasse la médiane transversale.';
+  } else {
+    abst.hidden = true;
+  }
+
+  renderRankingBody(rows, ranking);
+}
+
+function renderRankingBody(rows, ranking) {
+  const body = $('ranking-body');
+  const q = rankingFilter.trim().toUpperCase();
+  const filtered = q
+    ? rows.filter((r) => r.symbol.includes(q) || (r.secteur || '').toUpperCase().includes(q))
+    : rows;
+
+  $('ranking-search-wrap').hidden = rankingView === 'top';
+
+  if (!filtered.length) {
+    body.innerHTML = '<p class="empty-block">Aucun actif ne correspond.</p>';
+    return;
+  }
+
+  if (rankingView === 'heat') { body.innerHTML = heatmapHtml(filtered); return; }
+  if (rankingView === 'sector') { body.innerHTML = sectorHtml(filtered); return; }
+
+  // « Podium » : les retenus, plus quelques suivants. Voir QUI a été battu et
+  // de combien est aussi informatif que voir les gagnants.
+  const visible = rankingView === 'top'
+    ? filtered.slice(0, Math.max(10, (ranking?.maxRetenus ?? 3) + 7))
+    : filtered;
+
+  body.innerHTML = rowsHtml(visible, ranking)
+    + (rankingView === 'top' && filtered.length > visible.length
+      ? `<p class="dispersion-note">… et ${filtered.length - visible.length} autres. Bascule sur « Tout » pour les voir.</p>`
+      : '');
+}
+
+// `sansSecteur` : dans la vue par secteur, le nom est déjà en titre de groupe.
+// Le répéter sur chaque ligne ajoute 150 mentions inutiles.
+function rowsHtml(rows, ranking, sansSecteur = false) {
+  const mediane = ranking?.mediane;
+  let medianePlacee = false;
+  const out = [];
+
+  for (const r of rows) {
+    // Une seule ligne de séparation, au moment du passage sous la médiane :
+    // au-dessus l'achat est possible, en dessous il ne l'est jamais.
+    if (!medianePlacee && mediane != null && r.ecart <= mediane) {
+      out.push('<div class="rank-median">médiane transversale — en dessous, aucun achat possible</div>');
+      medianePlacee = true;
+    }
+    const cls = r.retenu ? ' picked' : (r.detenu ? ' held' : '');
+    const tag = r.retenu
+      ? '<span class="rank-tag picked">retenu</span>'
+      : (r.detenu ? '<span class="rank-tag held">détenu</span>' : '<span class="rank-tag">écarté</span>');
+    out.push(`<div class="rank-row${cls}">`
+      + `<span class="rank-pos">${r.rang}</span>`
+      + `<span class="rank-sym">${esc(r.symbol)}${sansSecteur ? '' : `<span class="rank-sector">${esc(r.secteur || '')}</span>`}</span>`
+      + `<span class="rank-edge">${r.ecart >= 0 ? '+' : ''}${(r.ecart * 100).toFixed(0)} pts</span>`
+      + `${tag}</div>`);
+  }
+  return out.join('');
+}
+
+function sectorHtml(rows) {
+  const groups = new Map();
+  for (const r of rows) {
+    const s = r.secteur || 'Hors référentiel';
+    if (!groups.has(s)) groups.set(s, []);
+    groups.get(s).push(r);
+  }
+  // Les secteurs dont le meilleur actif est le mieux classé passent devant :
+  // on veut voir tout de suite d'où viennent les candidats du jour.
+  const ordered = [...groups.entries()].sort((a, b) => a[1][0].rang - b[1][0].rang);
+
+  return ordered.map(([secteur, items]) => {
+    const retenus = items.filter((i) => i.retenu).length;
+    const moyen = items.reduce((a, i) => a + i.ecart, 0) / items.length;
+    return `<div class="sector-group">`
+      + `<div class="sector-head">`
+      + `<span><strong>${esc(secteur)}</strong> · ${items.length} actifs${retenus ? ` · ${retenus} retenu(s)` : ''}</span>`
+      + `<span>écart moyen ${moyen >= 0 ? '+' : ''}${(moyen * 100).toFixed(0)} pts</span>`
+      + `</div>${rowsHtml(items.slice(0, 6), null, true)}`
+      + (items.length > 6 ? `<p class="dispersion-note">… ${items.length - 6} autres dans ce secteur</p>` : '')
+      + `</div>`;
+  }).join('');
+}
+
+function heatmapHtml(rows) {
+  // Couleur par rang fractionnaire, PAS par écart brut : c'est l'ordre qui
+  // décide, et une échelle de couleur sur l'écart ferait croire que le niveau
+  // des probabilités compte. Vert = haut de classement, rouge = bas.
+  return `<div class="heatmap">${rows.map((r) => {
+    const f = r.rangFractionnaire ?? 0;
+    const couleur = f >= 0.5
+      ? `rgba(47, 191, 113, ${(0.15 + (f - 0.5) * 1.4).toFixed(2)})`
+      : `rgba(242, 85, 90, ${(0.15 + (0.5 - f) * 1.4).toFixed(2)})`;
+    const titre = `${r.symbol} — rang ${r.rang}/${r.total}, écart ${(r.ecart * 100).toFixed(0)} pts${r.retenu ? ' — RETENU' : ''}`;
+    return `<div class="heat-cell${r.retenu ? ' picked' : ''}" style="background:${couleur}" title="${esc(titre)}">${esc(r.symbol)}</div>`;
+  }).join('')}</div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RANG → RÉSULTAT
+
+   Le graphique décisif : si cette courbe monte, la sélection par classement
+   repose sur quelque chose de réel. Si elle est plate, tout le mécanisme du
+   classement ne sert à rien — et il vaut mieux le savoir tôt.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function renderRankMetrics(rangs) {
+  const meta = $('rankic-meta');
+  const chart = $('rankic-chart');
+  const stats = $('rankic-stats');
+  const verdict = $('rankic-verdict');
+
+  const ic = rangs?.rankIC;
+  const rce = rangs?.rce;
+
+  if (!rce || rce.note || !rce.tranches?.length) {
+    meta.textContent = rce?.note ? 'pas assez de données' : '—';
+    // Masqué plutôt que vidé : une zone graphique vide de 190 px laisse croire
+    // à un rendu raté, alors qu'il n'y a simplement rien à tracer.
+    chart.hidden = true;
+    chart.innerHTML = '';
+    stats.innerHTML = '';
+    verdict.textContent = rce?.note
+      || 'Il faut une vingtaine de décisions échues pour tracer cette courbe.';
+    return;
+  }
+
+  meta.textContent = `${rce.n} décisions · ${ic?.jours ?? 0} jours`;
+  chart.hidden = false;
+
+  // Échelle symétrique autour de zéro : sinon une barre négative minuscule
+  // paraîtrait aussi grande qu'une positive énorme.
+  // Échelle symétrique autour de zéro : sinon une barre négative minuscule
+  // paraîtrait aussi grande qu'une positive énorme.
+  const max = Math.max(...rce.tranches.map((t) => Math.abs(t.resultatMoyen))) || 1;
+  chart.innerHTML = rce.tranches.map((t) => {
+    const h = Math.max(2, (Math.abs(t.resultatMoyen) / max) * 100);
+    const neg = t.resultatMoyen < 0;
+    const valeur = (t.resultatMoyen >= 0 ? '+' : '') + (t.resultatMoyen * 100).toFixed(2) + '%';
+    // La valeur est placée du côté de la barre : au-dessus si positive,
+    // en dessous si négative, pour que l'œil suive la progression.
+    return `<div class="bucket" title="${esc(t.tranche)} — ${t.n} décisions">`
+      + `<div class="bucket-pos">${neg ? '' : `<div style="width:100%"><div class="bucket-value above">${valeur}</div><div class="bucket-bar" style="height:${h.toFixed(0)}px"></div></div>`}</div>`
+      + '<div class="bucket-zero"></div>'
+      + `<div class="bucket-neg">${neg ? `<div style="width:100%"><div class="bucket-bar neg" style="height:${h.toFixed(0)}px"></div><div class="bucket-value">${valeur}</div></div>` : ''}</div>`
+      + `<span class="bucket-label">${esc(t.tranche)}</span></div>`;
+  }).join('');
+
+  const cases = [];
+  if (ic?.icMoyen != null) {
+    cases.push(`<div class="rank-stat">Corrélation de rang<strong>${(ic.icMoyen * 100).toFixed(1)} %</strong></div>`);
+    cases.push(`<div class="rank-stat">Significativité (t)<strong>${ic.tStat ?? '—'}</strong></div>`);
+  }
+  cases.push(`<div class="rank-stat">Écart haut–bas<strong>${rce.ecartHautBas >= 0 ? '+' : ''}${(rce.ecartHautBas * 100).toFixed(2)} %</strong></div>`);
+  if (ic?.ampleur) {
+    // Le chiffre qui corrige l'illusion : 150 actifs corrélés ne sont pas
+    // 150 paris indépendants.
+    cases.push(`<div class="rank-stat">Paris indépendants<strong>${ic.ampleur.actifsEffectifs ?? '—'}</strong></div>`);
+  }
+  stats.innerHTML = cases.join('');
+
+  verdict.textContent = [ic?.verdict, rce.verdict].filter(Boolean).join(' ');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PROGRESSION — du cycle en cours, et vers le verdict
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function renderProgress(status) {
+  const row = $('st-progress-row');
+  const p = status?.progress;
+  if (!p) { row.hidden = true; return; }
+
+  row.hidden = false;
+  const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  $('st-progress-fill').style.width = `${pct}%`;
+  $('st-progress-label').textContent = p.symbol
+    ? `${p.done}/${p.total} — ${p.symbol}`
+    : `${p.phase} (${p.done}/${p.total})`;
+}
+
+/**
+ * Combien de temps avant de savoir ?
+ *
+ * Le SPRT donne un nombre d'observations requises mais pas de date. Or c'est la
+ * date que l'on veut : sans elle, « 41 observations » ne dit pas si l'attente
+ * est de trois jours ou de trois mois, et le dashboard paraît figé.
+ *
+ * Le rythme est ESTIMÉ sur les données réelles — observations accumulées
+ * divisées par jours écoulés — plutôt que déduit du nombre d'actifs. Les deux
+ * diffèrent beaucoup : le dégroupage sériel ne retient qu'une observation par
+ * actif tous les 3 jours, et les jours fériés ne comptent pas.
+ */
+function renderVerdictEta(sprt, shadow) {
+  const box = $('verdict-eta');
+  const n = sprt?.samples ?? sprt?.n ?? 0;
+  const cible = sprt?.maxSamples ?? null;
+
+  if (!cible || !n || n >= cible) { box.hidden = true; return; }
+
+  const premier = shadow?.premiereDecisionAt ?? null;
+  const joursEcoules = premier
+    ? Math.max(1, (Date.now() - new Date(premier).getTime()) / 86400000)
+    : null;
+
+  const pct = Math.round((n / cible) * 100);
+  let phrase = `<strong>${n} observations sur ${cible}</strong> — ${pct} % du chemin vers un verdict.`;
+
+  if (joursEcoules && n >= 5) {
+    const parJour = n / joursEcoules;
+    const joursRestants = Math.ceil((cible - n) / parJour);
+    const date = new Date(Date.now() + joursRestants * 86400000);
+    phrase += ` Au rythme observé (${parJour.toFixed(1)}/jour), verdict attendu vers le `
+      + `<strong>${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</strong>.`;
+  } else {
+    phrase += ' Le rythme sera estimé après quelques jours de collecte.';
+  }
+
+  box.hidden = false;
+  box.innerHTML = phrase;
+}
+
+/* ── Contrôles ────────────────────────────────────────────────────────── */
+
+$('ranking-views').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-view]');
+  if (!button) return;
+  rankingView = button.dataset.view;
+  for (const chip of $('ranking-views').querySelectorAll('.chip')) {
+    chip.classList.toggle('chip-active', chip === button);
+  }
+  if (lastRanking) renderRankingBody(lastRanking.classement, lastRanking);
+});
+
+$('ranking-search').addEventListener('input', (event) => {
+  rankingFilter = event.target.value;
+  if (lastRanking) renderRankingBody(lastRanking.classement, lastRanking);
+});
+
+
+/**
+ * Rafraîchissement resserré pendant un cycle.
+ *
+ * Le dashboard interroge le serveur toutes les 30 s par défaut, ce qui suffit
+ * quand rien ne bouge. Pendant un cycle de vingt minutes, une barre qui avance
+ * par sauts d'une demi-minute n'informe pas : on repasse à 3 s tant que le
+ * moteur tourne, puis on rend la main au rythme normal.
+ *
+ * Le minuteur s'arrête aussi sur erreur réseau — sans quoi un serveur devenu
+ * injoignable serait interrogé toutes les trois secondes indéfiniment.
+ */
+let progressTimer = null;
+
+function startProgressWatch() {
+  if (progressTimer) return;
+  progressTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${state.apiUrl}/api/status`);
+      if (!res.ok) throw new Error(String(res.status));
+      const status = await res.json();
+      renderProgress(status);
+      renderRanking(status.lastRanking);
+      if (!status.isRunning) {
+        stopProgressWatch();
+        refresh();
+      }
+    } catch {
+      stopProgressWatch();
+    }
+  }, 3000);
+}
+
+function stopProgressWatch() {
+  if (!progressTimer) return;
+  clearInterval(progressTimer);
+  progressTimer = null;
+}
+
+// Recherche dans le journal : le rendu est purement local, aucun appel réseau.
+$('journal-search').addEventListener('input', (event) => {
+  state.journalSearch = event.target.value;
+  if (lastJournal) renderJournal(lastJournal);
+});

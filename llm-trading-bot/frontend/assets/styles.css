@@ -575,3 +575,225 @@ details.raw pre {
 /* Le pré-mortem occupe toute la largeur : c'est du texte, pas une donnée. */
 .entry-premortem { grid-column: 1 / -1; }
 .premortem-weak { margin-top: 6px; color: var(--text-faint); font-size: 12.5px; }
+
+/* ═══ Progression vers le verdict ═══════════════════════════════════════ */
+.verdict-eta {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.verdict-eta strong { color: var(--text); }
+
+/* ═══ Progression du cycle en cours ═════════════════════════════════════ */
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-elev-2);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.progress-label { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+
+/* ═══ Dispersion transversale ═══════════════════════════════════════════ */
+.dispersion { margin-bottom: 16px; }
+.dispersion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.dispersion-head strong { font-family: var(--mono); font-size: 15px; color: var(--text); }
+.dispersion-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg-elev-2);
+  overflow: visible;
+}
+.dispersion-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--up);
+  transition: width 0.4s ease, background 0.4s ease;
+}
+.dispersion-fill.below { background: var(--warn); }
+/* Le seuil est matérialisé sur la piste : on veut voir d'un coup d'œil si le
+   bot en était loin ou à un cheveu. */
+.dispersion-threshold {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--text-faint);
+}
+.dispersion-threshold::after {
+  content: "seuil";
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.dispersion-note { font-size: 12px; color: var(--text-faint); margin: 8px 0 0; }
+
+/* ═══ Abstention expliquée ══════════════════════════════════════════════ */
+.abstention {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--warn-soft);
+  border: 1px solid rgba(240, 169, 44, 0.3);
+  color: var(--warn);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+/* ═══ Classement ════════════════════════════════════════════════════════ */
+.ranking-search { margin: 10px 0; }
+.ranking-search input,
+.journal-search input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 13px;
+}
+.journal-search {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.journal-search input { flex: 1; }
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.rank-row + .rank-row { margin-top: 2px; }
+.rank-row.picked { background: var(--up-soft); }
+.rank-row.held { background: var(--accent-soft); }
+.rank-pos { font-family: var(--mono); color: var(--text-faint); text-align: right; }
+.rank-sym { font-weight: 600; }
+.rank-sector { color: var(--text-faint); font-size: 11px; margin-left: 6px; font-weight: 400; }
+.rank-edge { font-family: var(--mono); color: var(--text-dim); }
+.rank-tag {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  color: var(--text-faint);
+}
+.rank-tag.picked { background: var(--up); color: #04150c; font-weight: 600; }
+.rank-tag.held { background: var(--accent); color: #061024; font-weight: 600; }
+
+/* Séparateur de médiane : au-dessus on peut acheter, en dessous jamais. */
+.rank-median {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.rank-median::before,
+.rank-median::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.sector-group { margin-bottom: 14px; }
+.sector-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ═══ Carte de chaleur ══════════════════════════════════════════════════ */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 3px;
+}
+.heat-cell {
+  aspect-ratio: 1.6;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text);
+  cursor: default;
+  border: 1px solid transparent;
+}
+.heat-cell.picked { border-color: var(--up); box-shadow: 0 0 0 1px var(--up); }
+
+/* ═══ Rang → résultat ═══════════════════════════════════════════════════ */
+.rank-buckets {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 190px;
+  padding: 6px 0;
+}
+/*
+ * Axe zéro RÉEL, et non un simple code couleur.
+ *
+ * Une première version empilait toutes les barres depuis le bas et ne
+ * distinguait le signe que par la couleur : une tranche à -0,41 % dessinait une
+ * grande barre rouge montante, visuellement identique à une bonne performance.
+ * Or ce graphique existe pour montrer que le résultat CROÎT avec le rang — une
+ * lecture qui devient impossible si les barres négatives montent aussi.
+ *
+ * Chaque colonne est donc coupée en deux : le haut reçoit les barres positives
+ * (ancrées en bas, elles poussent vers le haut), le bas reçoit les négatives
+ * (ancrées en haut, elles descendent). La ligne de séparation est le zéro.
+ */
+.bucket {
+  flex: 1;
+  display: grid;
+  grid-template-rows: 1fr 1px 1fr auto;
+  align-items: stretch;
+}
+.bucket-pos { display: flex; align-items: flex-end; }
+.bucket-neg { display: flex; align-items: flex-start; }
+.bucket-zero { background: var(--border); }
+.bucket-bar { width: 100%; min-height: 2px; background: var(--up); border-radius: 4px 4px 0 0; }
+.bucket-bar.neg { background: var(--down); border-radius: 0 0 4px 4px; }
+.bucket-label { font-size: 10px; color: var(--text-faint); margin-top: 6px; text-align: center; }
+.bucket-value { font-size: 11px; font-family: var(--mono); color: var(--text-dim); text-align: center; }
+.bucket-value.above { align-self: end; }
+.rank-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.rank-stat { font-size: 12px; color: var(--text-dim); }
+.rank-stat strong { display: block; font-size: 16px; font-family: var(--mono); color: var(--text); margin-top: 2px; }
+.rank-verdict { font-size: 13px; color: var(--text-dim); line-height: 1.55; margin: 0; }

@@ -349,8 +349,12 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     );
   }));
 
+  // Réponse immédiate : un cycle sur 150 actifs dure une vingtaine de minutes
+  // en séance, bien au-delà de ce que tolère un navigateur ou un proxy. Le
+  // client suit ensuite `status.progress`. 202 = « accepté, pas terminé ».
   router.post('/cycle', requireAdmin, asyncRoute(async (_req, res) => {
-    res.json(await engine.runCycle({ trigger: 'manual' }));
+    const started = engine.startCycle({ trigger: 'manual' });
+    res.status(started.started ? 202 : 409).json(started);
   }));
 
   // ── Pool de clés LLM ─────────────────────────────────────────────────────

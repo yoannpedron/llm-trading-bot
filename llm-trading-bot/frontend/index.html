@@ -72,6 +72,70 @@
         <span id="verdict-progress-label" class="verdict-progress-label">—</span>
       </div>
       <p id="verdict-caveat" class="verdict-caveat" hidden></p>
+      <!-- Progression vers le verdict : sans elle, on ne sait pas si l'attente
+           est de trois jours ou de trois mois. -->
+      <div id="verdict-eta" class="verdict-eta" hidden></div>
+    </section>
+
+    <!-- ═══ Le classement du jour ═════════════════════════════════════ -->
+    <!-- C'est la décision réelle du bot depuis le passage au rang : il ne
+         compare plus chaque action à un seuil, il les classe entre elles.
+         Ça n'apparaissait nulle part, si bien qu'un HOLD ne disait pas si
+         l'action avait été mal notée ou simplement battue par une autre. -->
+    <section class="card" id="ranking-card">
+      <div class="card-head">
+        <h2>Classement du jour</h2>
+        <span id="ranking-meta" class="card-meta">—</span>
+      </div>
+
+      <!-- Dispersion : la mesure qui décide si le bot a le droit d'agir. -->
+      <div class="dispersion">
+        <div class="dispersion-head">
+          <span>Dispersion transversale</span>
+          <strong id="disp-value">—</strong>
+        </div>
+        <div class="dispersion-track">
+          <div id="disp-fill" class="dispersion-fill"></div>
+          <div id="disp-threshold" class="dispersion-threshold" title="Seuil d'abstention"></div>
+        </div>
+        <p class="dispersion-note" id="disp-note">
+          En dessous du seuil, le modèle note tout le monde pareil : le classement
+          ne porte aucune information et le bot s'abstient.
+        </p>
+      </div>
+
+      <div id="ranking-abstention" class="abstention" hidden></div>
+
+      <div class="filters" id="ranking-views">
+        <button class="chip chip-active" data-view="top">Podium</button>
+        <button class="chip" data-view="all">Tout (150)</button>
+        <button class="chip" data-view="sector">Par secteur</button>
+        <button class="chip" data-view="heat">Carte</button>
+      </div>
+
+      <div class="ranking-search" id="ranking-search-wrap">
+        <input id="ranking-search" type="search" placeholder="Filtrer par symbole ou secteur…" autocomplete="off">
+      </div>
+
+      <div id="ranking-body"></div>
+    </section>
+
+    <!-- ═══ Rang → résultat ═══════════════════════════════════════════ -->
+    <!-- Le graphique le plus important du projet : si cette courbe monte, la
+         sélection par classement repose sur quelque chose de réel. Si elle est
+         plate, tout le mécanisme ci-dessus ne sert à rien. -->
+    <section class="card" id="rankic-card">
+      <div class="card-head">
+        <h2>Le classement prédit-il vraiment ?</h2>
+        <span id="rankic-meta" class="card-meta">—</span>
+      </div>
+      <p class="card-note">
+        On regroupe les décisions par tranche de rang et on regarde le rendement moyen
+        de chacune. Une courbe croissante = mieux classé veut dire mieux performant.
+      </p>
+      <div id="rankic-chart" class="rank-buckets"></div>
+      <div id="rankic-stats" class="rank-stats"></div>
+      <p id="rankic-verdict" class="rank-verdict">—</p>
     </section>
 
     <!-- ═══ Indicateurs clés ══════════════════════════════════════════ -->
@@ -130,6 +194,15 @@
         <div class="card-head"><h2>État du moteur</h2></div>
         <dl id="status-list" class="status-list">
           <div><dt>Statut</dt><dd id="st-state">—</dd></div>
+          <!-- Un cycle dure une vingtaine de minutes sur 150 actifs : sans
+               compteur, rien ne distingue « ça travaille » de « c'est planté ». -->
+          <div id="st-progress-row" hidden>
+            <dt>Progression</dt>
+            <dd>
+              <div class="progress-track"><div id="st-progress-fill" class="progress-fill"></div></div>
+              <span id="st-progress-label" class="progress-label">—</span>
+            </dd>
+          </div>
           <div class="status-actions" hidden id="engine-actions">
             <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
             <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
@@ -270,10 +343,17 @@
         <h2>Journal de l'IA</h2>
         <div class="filters" id="journal-filters" role="group" aria-label="Filtrer le journal">
           <button class="chip chip-active" data-filter="all" type="button">Tout</button>
+          <button class="chip" data-filter="selected" type="button">Retenus</button>
           <button class="chip" data-filter="executed" type="button">Exécutés</button>
           <button class="chip" data-filter="BUY" type="button">Achats</button>
           <button class="chip" data-filter="SELL" type="button">Ventes</button>
         </div>
+      </div>
+      <!-- À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour :
+           suivre une action précise devenait impossible sans recherche. -->
+      <div class="journal-search">
+        <input id="journal-search" type="search" placeholder="Chercher un symbole…" autocomplete="off">
+        <span id="journal-count" class="card-meta">—</span>
       </div>
       <div id="journal" class="journal">
         <p class="empty-block">Aucune décision enregistrée.</p>

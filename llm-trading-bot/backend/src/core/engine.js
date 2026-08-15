@@ -4,7 +4,8 @@ import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js'
 import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
-import { rankAndSelect } from './ranking.js';
+import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
+import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
 import { decide } from '../llm/agent.js';
 
@@ -34,15 +35,27 @@ export class TradingEngine {
     this.paused = false;
     this.lastCycle = null;
     this.cycleCount = 0;
+    this.progress = null;
+    this.lastRanking = null;
   }
 
   get status() {
     return {
       isRunning: this.isRunning,
       paused: this.paused,
+      // ── Progression du cycle en cours ──────────────────────────────────
+      // À 150 actifs un cycle dure une vingtaine de minutes. Sans ce compteur,
+      // rien ne distingue « ça travaille » de « c'est planté » : le dashboard
+      // affichait « Cycle en cours… » pendant vingt minutes sans autre signe
+      // de vie. C'est aussi ce qui rend possible le lancement asynchrone —
+      // l'appel rend la main tout de suite, la progression se lit ici.
+      progress: this.progress,
       cycleCount: this.cycleCount,
       lastCycleAt: this.journal.lastCycleAt,
       lastCycle: this.lastCycle,
+      // Dernier classement transversal : c'est la décision réelle du bot
+      // depuis le passage au rang, et elle n'était visible nulle part.
+      lastRanking: this.lastRanking,
       broker: this.broker.name,
       isLive: this.broker.isLive,
       llmProvider: config.llm.provider,
@@ -375,6 +388,14 @@ export class TradingEngine {
 
     this.isRunning = true;
     const started = Date.now();
+    this.progress = {
+      phase: 'résolution du carnet fantôme',
+      done: 0,
+      total: config.universe.symbols.length,
+      symbol: null,
+      startedAt: new Date().toISOString(),
+      trigger,
+    };
     log.info(`── Cycle #${this.cycleCount + 1} (${trigger}) ──`);
 
     try {
@@ -419,10 +440,12 @@ export class TradingEngine {
       let appelPrecedent = false;
       for (const symbol of config.universe.symbols) {
         if (appelPrecedent && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
+        this.progress = { ...this.progress, phase: 'analyse', symbol, done: evaluations.length };
         const evaluation = await this.#evaluateSymbol(symbol, { quotes, circuitBreaker });
         appelPrecedent = Boolean(evaluation.evaluated);
         evaluations.push(evaluation);
       }
+      this.progress = { ...this.progress, phase: 'classement', symbol: null, done: evaluations.length };
 
       // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
       // On ne peut pas choisir les meilleurs sans les avoir tous vus. C'est
@@ -432,6 +455,36 @@ export class TradingEngine {
         maxSelected: config.risk.maxPositions,
         held,
       });
+
+      // ── Le classement, conservé pour affichage ────────────────────────────
+      // C'est la décision réelle du bot depuis le passage au rang, et elle
+      // n'apparaissait nulle part : le dashboard montrait des HOLD sans dire
+      // que l'actif avait été correctement noté puis écarté par le classement.
+      // On garde l'ordre complet — pas seulement les retenus — parce que
+      // l'intérêt est justement de voir QUI a été battu par QUI.
+      this.lastRanking = {
+        at: new Date().toISOString(),
+        dispersion: ranking.dispersion ?? null,
+        seuilDispersion: MIN_DISPERSION,
+        mediane: ranking.median ?? null,
+        // Renseigné quand aucune sélection n'a eu lieu : dispersion trop faible,
+        // ou moins de deux prévisions exploitables. Sans ça, un cycle sans achat
+        // et un cycle bloqué se ressemblent à l'écran.
+        raisonAbstention: ranking.reason ?? null,
+        maxRetenus: config.risk.maxPositions,
+        classement: [...ranking.ranks.entries()]
+          .map(([symbol, r]) => ({
+            symbol,
+            rang: r.rank,
+            total: r.total,
+            rangFractionnaire: r.fractional,
+            ecart: r.edge,
+            retenu: ranking.selected.has(symbol),
+            detenu: held.has(symbol),
+            secteur: sectorOf(symbol),
+          }))
+          .sort((a, b) => a.rang - b.rang),
+      };
 
       const results = [];
       for (const evaluation of evaluations) {
@@ -477,7 +530,42 @@ export class TradingEngine {
       return { error: err.message };
     } finally {
       this.isRunning = false;
+      this.progress = null;
     }
+  }
+
+  /**
+   * Lance un cycle sans attendre sa fin.
+   *
+   * ── Pourquoi ce n'est pas un confort ──────────────────────────────────────
+   * `POST /api/cycle` attendait la fin du cycle pour répondre. Avec dix actifs
+   * la requête durait une minute et personne ne s'en apercevait. À 150 actifs
+   * en séance elle dure une vingtaine de minutes : le navigateur, ou tout
+   * intermédiaire entre lui et le serveur, coupe bien avant. Le dashboard
+   * affichait « le cycle a échoué » pendant que le cycle se déroulait
+   * normalement — le pire des messages, puisqu'il pousse à relancer.
+   *
+   * L'appel rend donc la main immédiatement et la progression se lit dans
+   * `status.progress`. L'erreur éventuelle n'est pas perdue pour autant : elle
+   * est journalisée et se retrouve dans `lastCycle`.
+   */
+  startCycle({ trigger = 'manual' } = {}) {
+    if (this.isRunning) return { started: false, reason: 'cycle déjà en cours' };
+    if (this.paused && trigger === 'cron') return { started: false, reason: 'bot en pause' };
+
+    // Volontairement sans `await` : on veut la réponse HTTP tout de suite.
+    // Le `catch` est indispensable — sans lui, une erreur deviendrait un rejet
+    // non géré, et le processus n'a plus personne pour la rattraper.
+    this.runCycle({ trigger }).catch((err) => {
+      log.error(`Cycle ${trigger} en échec : ${err.message}`);
+    });
+
+    return {
+      started: true,
+      trigger,
+      total: config.universe.symbols.length,
+      startedAt: new Date().toISOString(),
+    };
   }
 
   setPaused(paused) {
