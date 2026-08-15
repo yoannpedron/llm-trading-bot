@@ -1258,3 +1258,370 @@ details.rank-item + details.rank-item { margin-top: 3px; }
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0 32px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHIE ET RESPIRATION — reprise complète
+
+   Deux défauts se cumulaient et se renforçaient :
+
+   1. Une seule famille pour tout, à des tailles très proches (12,5 / 13 / 13,5
+      / 14 / 14,5 px). Sans écart net, aucune hiérarchie ne se lit : l'œil doit
+      décider à chaque bloc ce qui est titre, valeur ou commentaire. C'est ça,
+      la sensation que « tout s'entrechoque » — ce n'est pas l'espacement, c'est
+      l'absence de contraste typographique.
+
+   2. Un interlignage à 1,4-1,5 partout, y compris sur des paragraphes
+      explicatifs de quatre lignes. En dessous de 1,65, un texte long fatigue.
+
+   Correction : deux familles nettement distinctes, une échelle de tailles à
+   pas franc, et un interlignage qui dépend de la fonction du texte.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Le texte courant. « ui-sans-serif » et « system-ui » d'abord : sur chaque
+     système, c'est la face la mieux hintée à petite taille. Inter et Segoe UI
+     Variable suivent — plus ouvertes que Segoe UI classique, dont les chiffres
+     sont étroits et se lisent mal en colonne. */
+  --police: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
+            Inter, Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Les CHIFFRES ont leur propre famille. C'est le choix qui change le plus
+     l'aspect de ce tableau de bord : il n'affiche presque que des nombres, et
+     une chasse fixe les aligne colonne par colonne, décimale sous décimale. */
+  --police-chiffres: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono",
+                     Menlo, Consolas, monospace;
+
+  /* Échelle de tailles à pas franc — chaque niveau se distingue du suivant
+     sans avoir à comparer. */
+  --t-micro: 11px;    /* étiquettes de colonne, mentions */
+  --t-petit: 12.5px;  /* méta, notes secondaires */
+  --t-base: 14px;     /* texte courant */
+  --t-lu: 15px;       /* paragraphes qu'on lit vraiment */
+  --t-titre: 16px;    /* titres de carte */
+  --t-chiffre: 19px;  /* valeurs mises en avant */
+  --t-hero: 34px;     /* capital total */
+
+  --interligne-lu: 1.7;
+  --interligne-dense: 1.45;
+}
+
+body {
+  font-family: var(--police);
+  font-size: var(--t-base);
+  line-height: var(--interligne-dense);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Titres ──────────────────────────────────────────────────────────── */
+h1, h2, h3 { letter-spacing: -0.015em; }
+.card-head h2 { font-size: var(--t-titre); font-weight: 600; }
+.brand h1 { font-size: 18px; }
+
+/* ── Textes explicatifs : c'est ce qu'on LIT ─────────────────────────── */
+.card-note,
+.verdict-reason,
+.rank-verdict,
+.entry-quote,
+.dispersion-note,
+.abstention,
+.verdict-caveat,
+.verdict-eta {
+  font-size: var(--t-lu);
+  line-height: var(--interligne-lu);
+  max-width: 78ch; /* au-delà, l'œil perd la ligne en revenant à la gauche */
+}
+.dispersion-note, .verdict-caveat { font-size: var(--t-petit); }
+
+/* ── Chiffres ────────────────────────────────────────────────────────── */
+/*
+ * Toute valeur numérique passe en chasse fixe. Sur une page qui n'affiche que
+ * des nombres, c'est ce qui produit l'alignement vertical des décimales et
+ * distingue instantanément une donnée d'un commentaire.
+ */
+.num, .mono, .kpi-value, .kpi-sub, .kpi-delta,
+.rank-edge, .rank-pos, .bucket-value, .progress-label,
+.dispersion-head strong, .rank-stat strong, .card-meta,
+.status-list dd, .entry-edge, .entry-time, .verdict-meta {
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+}
+
+/* ── Étiquettes ──────────────────────────────────────────────────────── */
+table thead th,
+.settings-block-head h3,
+.status-config > summary,
+.kpi h2 {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.status-list dt { font-size: var(--t-base); color: var(--text-dim); }
+.status-list dd { font-size: var(--t-base); }
+.card-meta { font-size: var(--t-petit); }
+
+/* ── Indicateurs clés ────────────────────────────────────────────────── */
+.kpi-value { font-size: var(--t-chiffre); font-weight: 600; }
+.kpi-hero .kpi-value { font-size: var(--t-hero); letter-spacing: -0.02em; }
+.kpi-sub, .kpi-delta { font-size: var(--t-petit); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESPIRATION
+
+   L'espacement précédent suivait une échelle correcte mais trop serrée : les
+   valeurs étaient bonnes les unes par rapport aux autres, simplement toutes
+   trop petites d'un cran.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.wrap { padding: 40px 28px 72px; gap: 32px; max-width: 1240px; }
+.tab-panel { gap: 32px; }
+
+.card { border-radius: 16px; }
+.card-head { padding: 22px 26px; }
+.card-note { padding: 18px 26px; }
+
+table th, table td { padding: 15px 16px; }
+table thead th { padding-top: 16px; padding-bottom: 16px; }
+
+.status-list { padding: 10px 26px 22px; gap: 0 40px; }
+.status-list > div { padding: 15px 0; }
+
+.kpis { gap: 20px; }
+.kpi { padding: 24px 26px; }
+.kpi h2 { margin-bottom: 14px; }
+.kpi-sub, .kpi-delta { margin-top: 10px; }
+
+.verdict { padding: 28px 30px; }
+.verdict-reason { margin: 18px 0; }
+.verdict-progress { margin-top: 22px; }
+
+#ranking-card .dispersion { padding: 22px 26px 0; }
+#ranking-card > .filters { margin-top: 22px; padding: 0 26px; }
+#ranking-card .ranking-search { margin: 16px 0 0; padding: 0 26px; }
+#ranking-body { padding: 18px 14px 22px; }
+#ranking-abstention { margin: 20px 26px 0; }
+
+.rank-row { padding: 13px 12px; gap: 14px; }
+details.rank-item + details.rank-item { margin-top: 4px; }
+.rank-median { margin: 20px 8px; }
+
+.rank-buckets { padding: 22px 26px 12px; height: 215px; gap: 14px; }
+.rank-stats { padding: 22px 26px; gap: 20px; }
+.rank-verdict { padding: 0 26px 24px; }
+
+.rank-detail { padding: 12px 20px 22px; margin: 6px 0 12px 16px; }
+.entry-grid { gap: 22px; margin: 20px 0; }
+.entry-meta { margin-top: 20px; padding-top: 16px; }
+.headlines { margin: 20px 0 0; line-height: 1.75; }
+
+.tabs { margin-bottom: 28px; }
+.tab { padding: 12px 20px; font-size: var(--t-lu); }
+
+.chip { padding: 7px 15px; font-size: var(--t-petit); }
+.filters { gap: 9px; }
+
+/* ═══ Graphique : survol, ordres, référence ═════════════════════════════ */
+.chart { position: relative; }
+.chart-svg { display: block; width: 100%; }
+
+/* Croix de visée accrochée au point de donnée le plus proche. */
+.chart-crosshair {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+.chart-cursor-dot {
+  fill: var(--bg-elev);
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Étiquette de survol. `pointer-events: none` est indispensable : sans lui,
+   l'étiquette passe sous le curseur, déclenche un mouseleave sur le SVG, et le
+   repère clignote sans fin. */
+.chart-tip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-family: var(--police-chiffres);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.chart-tip b { display: block; font-size: 14px; color: var(--text); }
+.chart-tip span { color: var(--text-faint); }
+
+/* Ligne de référence : capital initial sur l'équity, prix de revient sur un
+   cours. C'est elle qui rend le « je gagne / je perds » lisible sans calcul. */
+.chart-ref {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 6 5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.75;
+}
+.chart-ref-label {
+  fill: var(--text-faint);
+  font-size: 10px;
+  font-family: var(--police-chiffres);
+  letter-spacing: 0.04em;
+}
+
+/* Marqueurs d'ordres. Le halo donne une cible de survol confortable — un point
+   de 3,5 px de rayon est presque impossible à viser à la souris. */
+.chart-order { cursor: pointer; }
+.chart-order-halo { fill: transparent; }
+.chart-order.buy .chart-order-dot { fill: var(--up); stroke: var(--bg-elev); stroke-width: 1.5; }
+.chart-order.sell .chart-order-dot { fill: var(--down); stroke: var(--bg-elev); stroke-width: 1.5; }
+.chart-order:hover .chart-order-halo { fill: currentColor; opacity: 0.16; }
+.chart-order.buy:hover .chart-order-halo { color: var(--up); }
+.chart-order.sell:hover .chart-order-halo { color: var(--down); }
+
+.chart { min-height: 300px; }
+
+/* ═══ Où la chasse fixe a sa place, et où elle nuit ═════════════════════
+   Elle sert à UNE chose : aligner des décimales les unes sous les autres. Dans
+   un tableau ou une liste libellé/valeur, c'est décisif. Sur un chiffre isolé
+   et grand, elle ne fait qu'écarter les caractères — « 99 , 43 $US », la
+   virgule occupant une pleine chasse. On la retire partout où rien n'est à
+   aligner, en gardant `tabular-nums` : les chiffres restent de largeur égale,
+   donc la valeur ne tressaute pas d'un rafraîchissement à l'autre. */
+.kpi-value,
+.kpi-sub,
+.kpi-delta,
+.verdict-meta,
+.card-meta,
+.dispersion-head strong,
+.rank-stat strong {
+  font-family: var(--police);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
+.kpi-hero .kpi-value { letter-spacing: -0.03em; }
+
+/* Les tableaux et listes gardent la chasse fixe : c'est là que l'alignement
+   vertical des décimales se voit et sert. */
+.num, .mono, .status-list dd, .rank-edge, .rank-pos, .bucket-value {
+  font-family: var(--police-chiffres);
+}
+
+/* ═══ Tiroir des réglages ═══════════════════════════════════════════════
+   Le panneau dépliant en tête de page poussait tout le contenu vers le bas à
+   chaque ouverture — et il a doublé de hauteur en accueillant l'état du
+   moteur. Le tableau de bord sautait de 500 px sous les yeux, ce qui fait
+   perdre l'endroit qu'on était en train de lire. Un tiroir se superpose. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(8, 12, 20, 0.5);
+  backdrop-filter: blur(2px);
+  animation: fondu 0.18s ease;
+}
+@keyframes fondu { from { opacity: 0; } }
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  width: min(520px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.22);
+  animation: glisse 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes glisse { from { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .drawer-backdrop { animation: none; }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 26px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-head h2 { font-size: var(--t-titre); }
+
+/* Le corps défile, l'en-tête reste : sur un écran court, le bouton de
+   fermeture ne doit jamais sortir de vue. */
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 26px 40px;
+}
+
+.drawer-section { padding: 24px 0; }
+.drawer-section + .drawer-section { border-top: 1px solid var(--border); }
+.drawer-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.drawer-section-head h3 {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Dans le tiroir, les listes repassent sur une seule colonne : 520 px de large
+   ne laissent pas la place à deux, et un libellé serré contre sa valeur se lit
+   plus mal qu'une simple pile. */
+/* `#status-list` porte une règle à deux colonnes héritée de son ancien
+   emplacement en pleine largeur ; un sélecteur d'identifiant l'emporte sur une
+   classe, d'où le doublement de la spécificité ici. */
+.drawer .status-list,
+.drawer #status-list {
+  padding: 0;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.drawer .status-list > div { padding: 13px 0; }
+
+.drawer .field { margin-bottom: 18px; }
+.drawer .field:last-of-type { margin-bottom: 0; }
+
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.drawer .add-key {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border);
+}
+.drawer .table-scroll { margin-top: 16px; }
+.drawer table th, .drawer table td { padding: 11px 10px; font-size: var(--t-petit); }
+
+/* Le bouton Réglages est un déclencheur de dialogue : il n'a plus d'état
+   « déplié » à annoncer, mais garde son focus visible. */
+#btn-close-settings { font-size: 16px; line-height: 1; padding: 6px 10px; }

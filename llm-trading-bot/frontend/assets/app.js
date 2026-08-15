@@ -190,13 +190,40 @@ async function adminFetch(path, options = {}) {
   return payload;
 }
 
+/**
+ * Ouvre ou ferme le tiroir des réglages.
+ *
+ * Trois moyens de sortir — le bouton, la touche Échap, un clic sur le fond —
+ * parce qu'un panneau superposé sans échappatoire évidente donne l'impression
+ * d'être bloqué. Le focus revient au bouton d'origine à la fermeture : sans
+ * ça, la navigation au clavier repart du début du document.
+ */
 function toggleSettings(force) {
   const panel = $('settings');
+  const fond = $('settings-backdrop');
   const open = force ?? panel.hidden;
+
   panel.hidden = !open;
+  fond.hidden = !open;
   $('btn-settings').setAttribute('aria-expanded', String(open));
+  // On empêche la page de défiler derrière le tiroir : sinon la molette agit
+  // sur le tableau de bord et on perd sa position de lecture.
+  document.body.style.overflow = open ? 'hidden' : '';
+
+  if (open) {
+    const premier = panel.querySelector('input, select, button');
+    if (premier) premier.focus();
+  } else {
+    $('btn-settings').focus();
+  }
   return open;
 }
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('settings').hidden) toggleSettings(false);
+});
+$('settings-backdrop').addEventListener('click', () => toggleSettings(false));
+$('btn-close-settings').addEventListener('click', () => toggleSettings(false));
 
 function scheduleRefresh() {
   clearInterval(state.timer);
@@ -313,6 +340,9 @@ function render(data) {
   // Le journal n'a plus de section propre : ses décisions alimentent les
   // lignes du classement, dépliables une par une.
   indexerJournal(data.journal);
+  // Les ordres passés servent à poser les marqueurs d'achat et de vente sur le
+  // graphique : c'est ce qui relie une décision au mouvement de cours.
+  ordresConnus = data.trades || [];
   renderTrades(data.trades, data.account.currency);
   renderCapacityPanel(data.status.capacity);
   $('last-update').textContent = fmtDate(data.serverTime);
@@ -628,94 +658,32 @@ function renderKpis(account, shadow) {
 }
 
 /** Courbe d'équity en SVG pur : pas de librairie, pas de CDN. */
+/**
+ * Courbe d'équity — adaptateur vers le traceur commun.
+ *
+ * Le dernier point doit être l'équity EN DIRECT : la courbe est un historique
+ * échantillonné, `account.equity` la valeur courante. Les deux divergeaient et
+ * produisaient une lecture contradictoire — le KPI en vert pendant que la
+ * courbe plongeait, parce que le dernier point enregistré datait de quelques
+ * minutes. Deux chiffres justes, une conclusion fausse.
+ */
 function renderChart(curve, account, serverTime) {
-  const host = $('chart');
-  const recorded = (curve || []).filter((p) => Number.isFinite(p.equity));
+  const points = (curve || [])
+    .filter((p) => Number.isFinite(p.equity))
+    .map((p) => ({ t: p.t, v: p.equity }));
 
-  // ── Le dernier point doit être l'équity EN DIRECT ──────────────────────
-  // La courbe est un historique échantillonné ; `account.equity` est la valeur
-  // courante. Les deux divergeaient, et le résultat était contradictoire à
-  // l'écran : le KPI annonçait « 100,05 $ (+0,05 %) » en vert pendant que la
-  // courbe plongeait en rouge vers son plus bas, parce que le dernier point
-  // enregistré datait de quelques minutes (99,89 $). Deux chiffres justes, une
-  // lecture fausse.
-  const points = [...recorded];
-  const last = points[points.length - 1];
-  if (Number.isFinite(account?.equity) && last && Math.abs(account.equity - last.equity) > 1e-9) {
-    points.push({ t: serverTime ?? new Date().toISOString(), equity: account.equity });
+  const dernier = points[points.length - 1];
+  if (Number.isFinite(account?.equity) && dernier && Math.abs(account.equity - dernier.equity) > 1e-9) {
+    points.push({ t: serverTime ?? new Date().toISOString(), v: account.equity });
   }
 
-  if (points.length < 2) {
-    host.innerHTML = '<p class="chart-empty">Pas encore assez d\'historique pour tracer la courbe.</p>';
-    $('chart-range').textContent = '—';
-    return;
-  }
-
-  const W = 1000;
-  const H = 260;
-  const PAD = { top: 16, right: 56, bottom: 24, left: 12 };
-
-  const values = points.map((p) => p.equity);
-  const baseline = account.initialCapital;
-  const min = Math.min(...values, baseline);
-  const max = Math.max(...values, baseline);
-
-  // ── Amplitude plancher : ne pas dramatiser le bruit ────────────────────
-  // Sans plancher, l'échelle se resserre sur l'amplitude réelle — 16 centimes
-  // observés — et transforme du bruit en falaise. La courbe donnait l'image
-  // d'un krach pour une variation de 0,05 %.
-  //
-  // Ce n'est pas cosmétique : le projet repose sur le fait qu'un P&L de
-  // quelques dollars sur 100 $ est indiscernable du hasard. Un graphique qui le
-  // met en scène raconte exactement le contraire de ce que dit le verdict
-  // statistique juste au-dessus. On impose donc une fenêtre d'au moins 2 % du
-  // capital initial : une variation insignifiante s'affiche alors comme plate,
-  // ce qu'elle est.
-  const observed = max - min;
-  const floor = baseline * 0.02;
-  const span = Math.max(observed, floor);
-  const center = (max + min) / 2;
-  const lo = center - span * 0.62;
-  const hi = center + span * 0.62;
-
-  const x = (i) => PAD.left + (i / (points.length - 1)) * (W - PAD.left - PAD.right);
-  const y = (v) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
-
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.equity).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${y(lo).toFixed(1)} L${x(0).toFixed(1)},${y(lo).toFixed(1)} Z`;
-
-  const isUp = values[values.length - 1] >= baseline;
-  const stroke = isUp ? 'var(--up)' : 'var(--down)';
-  const fill = isUp ? 'var(--up-soft)' : 'var(--down-soft)';
-
-  const ticks = 4;
-  const step = (hi - lo) / ticks;
-  // Précision des libellés déduite de l'écart entre deux graduations. Elle était
-  // figée à 0 décimale, si bien que les cinq libellés affichaient « 100 » sur
-  // une fenêtre de 16 centimes : un axe qui ne graduait rien.
-  const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
-  const gridLines = Array.from({ length: ticks + 1 }, (_, i) => {
-    const value = lo + step * i;
-    const yy = y(value).toFixed(1);
-    return `<line class="grid-line" x1="${PAD.left}" y1="${yy}" x2="${W - PAD.right}" y2="${yy}" />
-            <text class="axis-label" x="${W - PAD.right + 8}" y="${Number(yy) + 3}">${fmtNum(value, decimals)}</text>`;
-  }).join('');
-
-  const baselineY = y(baseline).toFixed(1);
-
-  host.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      ${gridLines}
-      <line class="grid-line" x1="${PAD.left}" y1="${baselineY}" x2="${W - PAD.right}" y2="${baselineY}"
-            stroke="var(--text-faint)" stroke-dasharray="4 4" />
-      <path d="${area}" fill="${fill}" />
-      <path d="${line}" fill="none" stroke="${stroke}" stroke-width="2"
-            stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-      <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(values[values.length - 1]).toFixed(1)}"
-              r="3.5" fill="${stroke}" />
-    </svg>`;
-
-  $('chart-range').textContent = `${points.length} points · du ${fmtDate(points[0].t)} au ${fmtDate(points[points.length - 1].t)}`;
+  tracerSerie({
+    points,
+    devise: account?.currency || 'USD',
+    symbole: null,
+    reference: account?.initialCapital ?? null,
+    refLabel: 'capital initial',
+  });
 }
 
 function renderPositions(positions, currency) {
@@ -749,7 +717,24 @@ function renderPositions(positions, currency) {
     .join('');
 }
 
+/**
+ * Résumé d'une ligne en tête de la section Moteur.
+ *
+ * L'état du moteur a quitté la page principale pour le tiroir : il faut donc
+ * qu'un coup d'œil suffise, sans lire les six lignes en dessous. On y met ce
+ * qui décide si le bot travaille : en marche ou en veille, et le marché.
+ */
+function renderEngineLive(status) {
+  const el = $('engine-live');
+  if (!el) return;
+  const p = status?.progress;
+  el.textContent = status?.isRunning
+    ? (p ? `cycle en cours — ${p.done}/${p.total}` : 'cycle en cours')
+    : (status?.paused ? 'en pause' : 'en veille');
+}
+
 function renderStatus(status, calendar) {
+  renderEngineLive(status);
   const running = status.isRunning ? 'Cycle en cours' : status.paused ? 'En pause' : 'En veille';
   $('st-state').innerHTML = `<span class="pill ${status.paused ? 'pill-skip' : 'pill-exec'}">${esc(running)}</span>`;
 
@@ -948,7 +933,7 @@ function renderKeysTable(keys, perKeyLimit) {
   const tbody = $('keys-table').querySelector('tbody');
 
   if (!keys.length) {
-    tbody.innerHTML = '<tr class="empty"><td colspan="7">Aucune clé dans le pool. Ajoute-en une ci-dessous.</td></tr>';
+    tbody.innerHTML = '<tr class="empty"><td colspan="6">Aucune clé dans le pool. Ajoute-en une ci-dessous.</td></tr>';
     return;
   }
 
@@ -974,11 +959,13 @@ function renderKeysTable(keys, perKeyLimit) {
         ? `<button class="btn-icon" data-remove-key="${esc(k.id)}" type="button" title="Retirer cette clé">Retirer</button>`
         : '<span class="muted" title="Définie dans le fichier .env du back-end">—</span>';
 
+      // La jauge remplace le compteur brut au lieu de s'y ajouter : elle
+      // contient déjà « appels / plafond », et dans un tiroir de 520 px de
+      // large chaque colonne se paie.
       return `<tr>
         <td class="sym">${esc(k.label)}</td>
         <td class="mono muted">${esc(k.masked)}</td>
         <td class="muted">${k.source === 'env' ? '.env' : 'ajoutée'}</td>
-        <td class="num">${k.calls}</td>
         <td>${gauge}</td>
         <td>${status}</td>
         <td>${action}</td>
@@ -1002,7 +989,7 @@ function applyAdminMode() {
 
   if (!admin) {
     $('keys-table').querySelector('tbody').innerHTML =
-      '<tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages pour gérer tes clés.</td></tr>';
+      '<tr class="empty"><td colspan="6">Renseigne ton jeton administrateur dans Réglages pour gérer tes clés.</td></tr>';
     setKeysFeedback(null);
   }
 }
@@ -1561,9 +1548,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 loadSettings();
-applyAdminMode();
-scheduleRefresh();
-refresh();
 
 /* ═══════════════════════════════════════════════════════════════════════
    LE CLASSEMENT DU JOUR
@@ -2021,59 +2005,22 @@ function showEquityChart() {
  * réelle est l'information — et lui appliquer le même plancher écraserait un
  * mouvement de 1 % qui, lui, compte.
  */
+/**
+ * Cours d'une action — adaptateur vers le traceur commun.
+ *
+ * La ligne de référence est le prix de revient quand la position est ouverte :
+ * au-dessus on gagne, en dessous on perd, et la lecture devient immédiate sans
+ * avoir à comparer avec le tableau des positions.
+ */
 function drawSeries(data) {
-  const host = $('chart');
-  const points = (data.candles || []).filter((c) => Number.isFinite(c.c));
-
-  if (points.length < 2) {
-    host.innerHTML = '<p class="chart-empty">Pas de cotation sur cette période.</p>';
-    $('chart-range').textContent = '—';
-    return;
-  }
-
-  const W = 1000;
-  const H = 260;
-  const PAD = { top: 16, right: 56, bottom: 24, left: 12 };
-
-  const values = points.map((p) => p.c);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  // Marge de 4 % de l'amplitude en haut et en bas, pour que la courbe ne colle
-  // jamais aux bords. Sur une série parfaitement plate on retombe sur ±1 %.
-  const marge = (max - min) * 0.04 || max * 0.01;
-  const lo = min - marge;
-  const hi = max + marge;
-
-  const x = (i) => PAD.left + (i / (points.length - 1)) * (W - PAD.left - PAD.right);
-  const y = (v) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
-
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join(' ');
-  const premier = points[0].c;
-  const dernier = points[points.length - 1].c;
-  const hausse = dernier >= premier;
-  const couleur = hausse ? 'var(--up)' : 'var(--down)';
-
-  // Nombre de décimales adapté au prix : deux suffisent au-dessus de 10 $,
-  // mais un titre à 3,20 $ mérite trois décimales pour que les graduations ne
-  // soient pas toutes identiques.
-  const dec = max >= 10 ? 2 : 3;
-  const graduations = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const v = lo + f * (hi - lo);
-    return `<line x1="${PAD.left}" y1="${y(v).toFixed(1)}" x2="${W - PAD.right}" y2="${y(v).toFixed(1)}" class="grid-line"/>`
-      + `<text x="${W - PAD.right + 6}" y="${(y(v) + 3.5).toFixed(1)}" class="axis-label">${fmtNum(v, dec)}</text>`;
-  }).join('');
-
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    ${graduations}
-    <path d="${d} L${x(points.length - 1).toFixed(1)},${H - PAD.bottom} L${PAD.left},${H - PAD.bottom} Z"
-          fill="${couleur}" opacity="0.10"/>
-    <path d="${d}" fill="none" stroke="${couleur}" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(dernier).toFixed(1)}" r="3.5" fill="${couleur}"/>
-  </svg>`;
-
-  const variation = ((dernier - premier) / premier) * 100;
-  $('chart-range').textContent = `${points.length} points · ${fmtPrice(dernier, data.currency || 'USD')} · `
-    + `${fmtPct(variation)} sur la période`;
+  const position = (lastData?.positions || []).find((p) => p.symbol === data.symbol);
+  tracerSerie({
+    points: (data.candles || []).filter((c) => Number.isFinite(c.c)).map((c) => ({ t: c.t, v: c.c })),
+    devise: data.currency || 'USD',
+    symbole: data.symbol,
+    reference: position?.avgPrice ?? null,
+    refLabel: position ? 'prix de revient' : '',
+  });
 }
 
 $('chart-ranges').addEventListener('click', (event) => {
@@ -2175,3 +2122,230 @@ $('portfolio-tabs').addEventListener('click', (event) => {
   $('pf-past').hidden = ongletPortefeuille !== 'past';
   majCompteurPortefeuille();
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRAPHIQUE
+
+   La version précédente traçait une polyligne et s'arrêtait là : aucun repère
+   au survol, aucun lien avec les ordres passés, aucune indication du prix de
+   revient. On voyait une forme, pas une histoire — impossible de répondre à
+   « j'ai acheté à quel moment de ce mouvement ? », qui est pourtant LA question
+   qu'on se pose devant le cours d'une action qu'on détient.
+
+   Trois ajouts, dans l'ordre de ce qu'ils apportent :
+
+     • SURVOL — croix de visée, point sur la courbe, étiquette date + prix. Le
+       repère suit le point de donnée le plus proche plutôt que la position
+       exacte du curseur : sur 250 bougies, viser au pixel est impossible.
+
+     • ORDRES — un marqueur par achat et par vente, posé sur la courbe à sa
+       date. C'est ce qui relie la décision au mouvement.
+
+     • PRIX DE REVIENT — une ligne horizontale quand la position est ouverte.
+       Au-dessus on gagne, en dessous on perd : la lecture devient immédiate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const CHART_GEO = { W: 1000, H: 300, haut: 20, droite: 62, bas: 34, gauche: 14 };
+
+/** Ordres du portefeuille, pour poser les marqueurs. Rempli par render(). */
+let ordresConnus = [];
+
+/**
+ * Trace une série et installe l'interaction.
+ *
+ * @param {object} o
+ * @param {Array} o.points   [{ t: ISO, v: number }]
+ * @param {string} o.devise
+ * @param {string} [o.symbole]     null = courbe d'équity
+ * @param {number} [o.reference]   ligne horizontale (capital initial ou PRU)
+ * @param {string} [o.refLabel]
+ */
+function tracerSerie({ points, devise, symbole = null, reference = null, refLabel = '' }) {
+  const host = $('chart');
+  if (!points || points.length < 2) {
+    host.innerHTML = '<p class="chart-empty">Pas encore assez d’historique pour tracer la courbe.</p>';
+    $('chart-range').textContent = '—';
+    return;
+  }
+
+  const { W, H, haut, droite, bas, gauche } = CHART_GEO;
+  const valeurs = points.map((p) => p.v);
+  let min = Math.min(...valeurs);
+  let max = Math.max(...valeurs);
+  if (reference != null) { min = Math.min(min, reference); max = Math.max(max, reference); }
+
+  // ── Fenêtre minimale ────────────────────────────────────────────────────
+  // Sur la courbe d'équity, l'amplitude réelle peut être de quelques centimes
+  // sur 100 $ : sans plancher, l'échelle transforme du bruit en falaise et
+  // raconte l'inverse du verdict statistique affiché ailleurs. Un cours
+  // d'action n'a pas ce problème — sa variation EST l'information.
+  const plancher = symbole ? 0 : (reference || 100) * 0.02;
+  const amplitude = Math.max(max - min, plancher);
+  const centre = (max + min) / 2;
+  const lo = centre - amplitude / 2 - amplitude * 0.08;
+  const hi = centre + amplitude / 2 + amplitude * 0.08;
+
+  const x = (i) => gauche + (i / (points.length - 1)) * (W - gauche - droite);
+  const y = (v) => haut + (1 - (v - lo) / (hi - lo)) * (H - haut - bas);
+
+  const dec = max >= 100 ? 2 : max >= 1 ? 3 : 4;
+  const trace = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const hausse = points[points.length - 1].v >= points[0].v;
+  const couleur = hausse ? 'var(--up)' : 'var(--down)';
+
+  const graduations = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const v = lo + f * (hi - lo);
+    const yy = y(v).toFixed(1);
+    return `<line class="grid-line" x1="${gauche}" y1="${yy}" x2="${W - droite}" y2="${yy}"/>`
+      + `<text class="axis-label" x="${W - droite + 8}" y="${(Number(yy) + 3.5).toFixed(1)}">${fmtNum(v, dec)}</text>`;
+  }).join('');
+
+  // ── Repères de dates ────────────────────────────────────────────────────
+  const dates = [0, Math.floor((points.length - 1) / 2), points.length - 1].map((i) => {
+    const d = new Date(points[i].t);
+    const label = symbole && points.length < 120
+      ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    const ancre = i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle';
+    return `<text class="axis-label" x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="${ancre}">${esc(label)}</text>`;
+  }).join('');
+
+  // ── Ligne de référence ──────────────────────────────────────────────────
+  const ligneRef = reference != null && reference >= lo && reference <= hi
+    ? `<line class="chart-ref" x1="${gauche}" y1="${y(reference).toFixed(1)}" x2="${W - droite}" y2="${y(reference).toFixed(1)}"/>`
+      + `<text class="chart-ref-label" x="${gauche + 6}" y="${(y(reference) - 7).toFixed(1)}">${esc(refLabel)}</text>`
+    : '';
+
+  // ── Marqueurs d'ordres ──────────────────────────────────────────────────
+  // Chaque ordre est placé au point de la série le plus proche de sa date.
+  // Une position exacte serait fausse : la série est échantillonnée, l'ordre
+  // ne tombe presque jamais pile sur une bougie.
+  const pertinents = ordresConnus.filter((o) => !symbole || o.symbol === symbole);
+  const marqueurs = pertinents.map((o) => {
+    const t = new Date(o.timestamp).getTime();
+    if (t < new Date(points[0].t).getTime() - 864e5 || t > new Date(points[points.length - 1].t).getTime() + 864e5) return '';
+    let iProche = 0;
+    let ecart = Infinity;
+    points.forEach((p, i) => {
+      const d = Math.abs(new Date(p.t).getTime() - t);
+      if (d < ecart) { ecart = d; iProche = i; }
+    });
+    const achat = o.side === 'BUY';
+    return `<g class="chart-order ${achat ? 'buy' : 'sell'}"
+              data-info="${esc(`${achat ? 'Achat' : 'Vente'} ${fmtNum(o.quantity, 4)} ${o.symbol} à ${fmtNum(o.price, 2)} — ${fmtDate(o.timestamp)}`)}">
+      <circle cx="${x(iProche).toFixed(1)}" cy="${y(points[iProche].v).toFixed(1)}" r="6" class="chart-order-halo"/>
+      <circle cx="${x(iProche).toFixed(1)}" cy="${y(points[iProche].v).toFixed(1)}" r="3.5" class="chart-order-dot"/>
+    </g>`;
+  }).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="chart-svg">
+    ${graduations}${dates}
+    <path d="${trace} L${x(points.length - 1).toFixed(1)},${H - bas} L${gauche},${H - bas} Z" fill="${couleur}" opacity="0.09"/>
+    <path d="${trace}" fill="none" stroke="${couleur}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    ${ligneRef}
+    <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(points[points.length - 1].v).toFixed(1)}" r="3.5" fill="${couleur}"/>
+    ${marqueurs}
+    <g class="chart-cursor" hidden>
+      <line class="chart-crosshair" y1="${haut}" y2="${H - bas}"/>
+      <circle r="5" class="chart-cursor-dot"/>
+    </g>
+  </svg>
+  <div class="chart-tip" hidden></div>`;
+
+  installerSurvol(host, { points, x, y, dec, devise });
+
+  const premier = points[0].v;
+  const dernier = points[points.length - 1].v;
+  const variation = ((dernier - premier) / premier) * 100;
+  const nOrdres = pertinents.length;
+  $('chart-range').textContent = `${points.length} points · ${fmtMoney(dernier, devise)} · ${fmtPct(variation)}`
+    + (nOrdres ? ` · ${nOrdres} ordre${nOrdres > 1 ? 's' : ''}` : '');
+}
+
+/**
+ * Survol : croix de visée et étiquette.
+ *
+ * Le repère s'accroche au point de donnée le plus proche, jamais à la position
+ * brute du curseur — sur 250 bougies larges de 4 pixels, viser au pixel est
+ * impossible et l'étiquette sauterait d'une valeur à l'autre.
+ */
+function installerSurvol(host, { points, x, y, dec, devise }) {
+  const svg = host.querySelector('svg');
+  const tip = host.querySelector('.chart-tip');
+  const curseur = svg.querySelector('.chart-cursor');
+  const trait = curseur.querySelector('line');
+  const point = curseur.querySelector('circle');
+  const { W } = CHART_GEO;
+
+  const bouger = (event) => {
+    const boite = svg.getBoundingClientRect();
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    // Le SVG est étiré : on repasse en coordonnées internes avant de chercher.
+    const xInterne = ((clientX - boite.left) / boite.width) * W;
+
+    let iProche = 0;
+    let ecart = Infinity;
+    for (let i = 0; i < points.length; i += 1) {
+      const d = Math.abs(x(i) - xInterne);
+      if (d < ecart) { ecart = d; iProche = i; }
+    }
+
+    const p = points[iProche];
+    const px = x(iProche);
+    const py = y(p.v);
+
+    curseur.removeAttribute('hidden');
+    trait.setAttribute('x1', px.toFixed(1));
+    trait.setAttribute('x2', px.toFixed(1));
+    point.setAttribute('cx', px.toFixed(1));
+    point.setAttribute('cy', py.toFixed(1));
+
+    const d = new Date(p.t);
+    tip.innerHTML = `<b>${fmtNum(p.v, dec)}</b> ${esc(devise === 'USD' ? '$US' : devise)}`
+      + `<span>${esc(d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}</span>`;
+    tip.removeAttribute('hidden');
+
+    // L'étiquette bascule à gauche près du bord droit, sinon elle sortirait
+    // de la carte et se ferait rogner.
+    const ratio = px / W;
+    const gauchePx = boite.width * ratio;
+    tip.style.left = `${gauchePx}px`;
+    tip.style.transform = ratio > 0.72 ? 'translate(-108%, -50%)' : 'translate(8%, -50%)';
+    tip.style.top = `${(py / CHART_GEO.H) * boite.height}px`;
+  };
+
+  const partir = () => {
+    curseur.setAttribute('hidden', '');
+    tip.setAttribute('hidden', '');
+  };
+
+  svg.addEventListener('mousemove', bouger);
+  svg.addEventListener('mouseleave', partir);
+  svg.addEventListener('touchmove', bouger, { passive: true });
+  svg.addEventListener('touchend', partir);
+
+  // Les marqueurs d'ordre ont leur propre étiquette, plus détaillée.
+  for (const g of svg.querySelectorAll('.chart-order')) {
+    g.addEventListener('mouseenter', (event) => {
+      const boite = svg.getBoundingClientRect();
+      const c = g.querySelector('.chart-order-dot');
+      tip.innerHTML = `<b>${esc(g.dataset.info)}</b>`;
+      tip.removeAttribute('hidden');
+      const ratio = Number(c.getAttribute('cx')) / W;
+      tip.style.left = `${boite.width * ratio}px`;
+      tip.style.top = `${(Number(c.getAttribute('cy')) / CHART_GEO.H) * boite.height}px`;
+      tip.style.transform = ratio > 0.6 ? 'translate(-104%, -130%)' : 'translate(4%, -130%)';
+      event.stopPropagation();
+    });
+  }
+}
+
+
+/* ── Démarrage ───────────────────────────────────────────────────────────
+   En toute fin de fichier, délibérément : le premier rendu touche presque
+   toutes les fonctions et tous les états du module. Placé plus haut, il
+   s'exécutait avant les déclarations qui le suivaient et échouait sur une
+   ReferenceError de zone morte temporelle. */
+applyAdminMode();
+scheduleRefresh();
+refresh();

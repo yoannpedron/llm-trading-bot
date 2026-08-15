@@ -30,71 +30,140 @@
     </div>
   </header>
 
-  <section id="settings" class="settings" hidden>
-    <!-- Les trois réglages de connexion tiennent sur une rangée ; le bloc des
-         clés, plus volumineux, occupe toute la largeur en dessous. -->
-    <div class="settings-row">
-    <label class="field">
-      <span>URL du back-end</span>
-      <input id="api-url" type="url" placeholder="http://localhost:8099" autocomplete="off" spellcheck="false">
-      <small>Stockée dans ce navigateur uniquement.</small>
-    </label>
-    <label class="field">
-      <span>Jeton administrateur <em>(optionnel)</em></span>
-      <input id="admin-token" type="password" placeholder="ADMIN_TOKEN de ton back-end" autocomplete="off" spellcheck="false">
-      <small>Débloque la gestion des clés et le pilotage du moteur.</small>
-    </label>
-    <label class="field field-sm">
-      <span>Rafraîchissement</span>
-      <select id="refresh-interval">
-        <option value="0">Manuel</option>
-        <option value="15000">15 s</option>
-        <option value="30000" selected>30 s</option>
-        <option value="60000">1 min</option>
-        <option value="300000">5 min</option>
-      </select>
-    </label>
-    </div>
+  <!-- ═══ RÉGLAGES ══════════════════════════════════════════════════════
+       Tiroir latéral plutôt que panneau dépliant en haut de page. Le panneau
+       poussait tout le contenu vers le bas à chaque ouverture, et il a grossi
+       en accueillant l'état du moteur : le dashboard sautait de 500 px sous
+       les yeux. Un tiroir se superpose, garde sa propre hauteur défilante, et
+       laisse la page en place.
 
-    <!-- ═══ Clés API ══════════════════════════════════════════════════
-         Bloc du panneau Réglages, pas une carte : imbriquer une carte dans un
-         panneau qui a déjà son fond produisait un double encadrement. -->
-    <section class="settings-block">
-      <div class="settings-block-head">
-        <h3>Clés API Gemini</h3>
-        <div class="head-actions">
-          <span id="keys-summary" class="card-meta">—</span>
-          <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
+       Quatre sections, du plus vivant au plus figé : ce qui bouge en
+       permanence (le moteur), ce qui se règle une fois (la connexion), ce qui
+       se surveille (le quota), ce qui ne change jamais (la configuration).  -->
+  <div id="settings-backdrop" class="drawer-backdrop" hidden></div>
+
+  <aside id="settings" class="drawer" hidden aria-label="Réglages" role="dialog" aria-modal="true">
+    <header class="drawer-head">
+      <h2>Réglages</h2>
+      <button id="btn-close-settings" class="btn btn-ghost btn-sm" type="button" aria-label="Fermer les réglages">✕</button>
+    </header>
+
+    <div class="drawer-body">
+
+      <!-- ── Moteur ─────────────────────────────────────────────────── -->
+      <section class="drawer-section">
+        <div class="drawer-section-head">
+          <h3>Moteur</h3>
+          <span id="engine-live" class="card-meta">—</span>
         </div>
-      </div>
-      <div class="capacity-bar-wrap">
-        <div class="capacity-bar"><span id="capacity-fill"></span></div>
-        <p id="capacity-detail" class="capacity-detail">—</p>
-      </div>
-      <div class="table-scroll">
-        <table id="keys-table" aria-label="Clés API Gemini">
-          <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>Quota</th><th>État</th><th></th></tr></thead>
-          <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages.</td></tr></tbody>
-        </table>
-      </div>
-      <form id="add-key-form" class="add-key" hidden>
-        <label class="field">
-          <span>Nouvelle clé Gemini</span>
-          <input id="new-key" type="password" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" required>
-        </label>
-        <label class="field field-sm">
-          <span>Nom <em>(optionnel)</em></span>
-          <input id="new-key-label" type="text" placeholder="compte perso" autocomplete="off">
-        </label>
-        <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
-      </form>
-      <p id="keys-feedback" class="keys-feedback" hidden></p>
-    </section>
 
-    <div class="settings-actions">
-      <button id="btn-save" class="btn btn-primary" type="button">Enregistrer</button>
+        <dl id="status-list" class="status-list">
+          <div><dt>Statut</dt><dd id="st-state">—</dd></div>
+          <!-- Un cycle dure une vingtaine de minutes sur 150 actifs : sans
+               compteur, rien ne distingue « ça travaille » de « c'est planté ». -->
+          <div id="st-progress-row" hidden>
+            <dt>Progression</dt>
+            <dd>
+              <div class="progress-track"><div id="st-progress-fill" class="progress-fill"></div></div>
+              <span id="st-progress-label" class="progress-label">—</span>
+            </dd>
+          </div>
+          <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
+          <div><dt>Marché</dt><dd id="st-market">—</dd></div>
+          <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
+          <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
+        </dl>
+
+        <div class="drawer-actions" hidden id="engine-actions">
+          <button id="btn-run-cycle" class="btn btn-primary" type="button">Lancer un cycle</button>
+          <button id="btn-toggle-pause" class="btn" type="button">Mettre en pause</button>
+        </div>
+      </section>
+
+      <!-- ── Connexion ──────────────────────────────────────────────── -->
+      <section class="drawer-section">
+        <div class="drawer-section-head"><h3>Connexion</h3></div>
+
+        <label class="field">
+          <span>URL du back-end</span>
+          <input id="api-url" type="url" placeholder="http://localhost:8099" autocomplete="off" spellcheck="false">
+          <small>Stockée dans ce navigateur uniquement.</small>
+        </label>
+
+        <label class="field">
+          <span>Jeton administrateur <em>(optionnel)</em></span>
+          <input id="admin-token" type="password" placeholder="ADMIN_TOKEN de ton back-end" autocomplete="off" spellcheck="false">
+          <small>Débloque la gestion des clés et le pilotage du moteur.</small>
+        </label>
+
+        <label class="field">
+          <span>Rafraîchissement</span>
+          <select id="refresh-interval">
+            <option value="0">Manuel</option>
+            <option value="15000">15 s</option>
+            <option value="30000" selected>30 s</option>
+            <option value="60000">1 min</option>
+            <option value="300000">5 min</option>
+          </select>
+        </label>
+
+        <div class="drawer-actions">
+          <button id="btn-save" class="btn btn-primary" type="button">Enregistrer</button>
+        </div>
+      </section>
+
+      <!-- ── Quota IA ───────────────────────────────────────────────── -->
+      <section class="drawer-section">
+        <div class="drawer-section-head">
+          <h3>Clés Gemini</h3>
+          <div class="head-actions">
+            <span id="keys-summary" class="card-meta">—</span>
+            <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester</button>
+          </div>
+        </div>
+
+        <div class="capacity-bar-wrap">
+          <div class="capacity-bar"><span id="capacity-fill"></span></div>
+          <p id="capacity-detail" class="capacity-detail">—</p>
+        </div>
+
+        <div class="table-scroll">
+          <table id="keys-table" aria-label="Clés API Gemini">
+            <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>État</th><th></th></tr></thead>
+            <tbody><tr class="empty"><td colspan="6">Renseigne ton jeton administrateur ci-dessus.</td></tr></tbody>
+          </table>
+        </div>
+
+        <form id="add-key-form" class="add-key" hidden>
+          <label class="field">
+            <span>Nouvelle clé</span>
+            <input id="new-key" type="password" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" required>
+          </label>
+          <label class="field">
+            <span>Nom <em>(optionnel)</em></span>
+            <input id="new-key-label" type="text" placeholder="compte perso" autocomplete="off">
+          </label>
+          <button id="btn-add-key" class="btn btn-primary" type="submit">Ajouter</button>
+        </form>
+        <p id="keys-feedback" class="keys-feedback" hidden></p>
+      </section>
+
+      <!-- ── Configuration ──────────────────────────────────────────── -->
+      <section class="drawer-section">
+        <div class="drawer-section-head"><h3>Configuration</h3></div>
+        <dl class="status-list">
+          <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
+          <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
+          <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
+          <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
+          <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
+          <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
+        </dl>
+      </section>
+
     </div>
-  </section>
+  </aside>
+
 
   <div id="alert" class="alert" hidden role="status"></div>
 
@@ -109,66 +178,7 @@
     </nav>
 
     <div id="tab-aujourdhui" class="tab-panel">
-    <!-- ═══ LE VERDICT — l'élément central du projet ═══════════════════ -->
-    <section id="verdict" class="verdict verdict-unknown" aria-live="polite">
-      <div class="verdict-head">
-        <span id="verdict-badge" class="verdict-badge">—</span>
-        <h2>Verdict statistique</h2>
-        <span id="verdict-meta" class="verdict-meta">—</span>
-      </div>
-      <p id="verdict-reason" class="verdict-reason">En attente de données.</p>
-      <div class="verdict-progress">
-        <div class="verdict-track"><span id="verdict-fill"></span></div>
-        <span id="verdict-progress-label" class="verdict-progress-label">—</span>
-      </div>
-      <p id="verdict-caveat" class="verdict-caveat" hidden></p>
-      <!-- Progression vers le verdict : sans elle, on ne sait pas si l'attente
-           est de trois jours ou de trois mois. -->
-      <div id="verdict-eta" class="verdict-eta" hidden></div>
-    </section>
 
-    <!-- ═══ Le classement du jour ═════════════════════════════════════ -->
-    <!-- C'est la décision réelle du bot depuis le passage au rang : il ne
-         compare plus chaque action à un seuil, il les classe entre elles.
-         Ça n'apparaissait nulle part, si bien qu'un HOLD ne disait pas si
-         l'action avait été mal notée ou simplement battue par une autre. -->
-    <section class="card" id="ranking-card">
-      <div class="card-head">
-        <h2>Classement du jour</h2>
-        <span id="ranking-meta" class="card-meta">—</span>
-      </div>
-
-      <!-- Dispersion : la mesure qui décide si le bot a le droit d'agir. -->
-      <div class="dispersion">
-        <div class="dispersion-head">
-          <span>Dispersion transversale</span>
-          <strong id="disp-value">—</strong>
-        </div>
-        <div class="dispersion-track">
-          <div id="disp-fill" class="dispersion-fill"></div>
-          <div id="disp-threshold" class="dispersion-threshold" title="Seuil d'abstention"></div>
-        </div>
-        <p class="dispersion-note" id="disp-note">
-          En dessous du seuil, le modèle note tout le monde pareil : le classement
-          ne porte aucune information et le bot s'abstient.
-        </p>
-      </div>
-
-      <div id="ranking-abstention" class="abstention" hidden role="status"></div>
-
-      <div class="filters" id="ranking-views">
-        <button class="chip chip-active" data-view="top">Podium</button>
-        <button class="chip" data-view="all">Tout (150)</button>
-        <button class="chip" data-view="sector">Par secteur</button>
-        <button class="chip" data-view="heat">Carte</button>
-      </div>
-
-      <div class="ranking-search" id="ranking-search-wrap">
-        <input id="ranking-search" type="search" placeholder="Filtrer par symbole ou secteur…" autocomplete="off">
-      </div>
-
-      <div id="ranking-body"></div>
-    </section>
 
 
     <!-- ═══ Indicateurs clés ══════════════════════════════════════════ -->
@@ -259,49 +269,53 @@
       </div>
     </section>
 
-    <!-- ═══ État du moteur ══════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head"><h2>État du moteur</h2></div>
-      <dl id="status-list" class="status-list">
-        <div><dt>Statut</dt><dd id="st-state">—</dd></div>
-        <!-- Un cycle dure une vingtaine de minutes sur 150 actifs : sans
-             compteur, rien ne distingue « ça travaille » de « c'est planté ». -->
-        <div id="st-progress-row" hidden>
-          <dt>Progression</dt>
-          <dd>
-            <div class="progress-track"><div id="st-progress-fill" class="progress-fill"></div></div>
-            <span id="st-progress-label" class="progress-label">—</span>
-          </dd>
+
+
+
+
+
+    <!-- ═══ Le classement du jour ═════════════════════════════════════ -->
+    <!-- C'est la décision réelle du bot depuis le passage au rang : il ne
+         compare plus chaque action à un seuil, il les classe entre elles.
+         Ça n'apparaissait nulle part, si bien qu'un HOLD ne disait pas si
+         l'action avait été mal notée ou simplement battue par une autre. -->
+    <section class="card" id="ranking-card">
+      <div class="card-head">
+        <h2>Classement du jour</h2>
+        <span id="ranking-meta" class="card-meta">—</span>
+      </div>
+
+      <!-- Dispersion : la mesure qui décide si le bot a le droit d'agir. -->
+      <div class="dispersion">
+        <div class="dispersion-head">
+          <span>Dispersion transversale</span>
+          <strong id="disp-value">—</strong>
         </div>
-        <div class="status-actions" hidden id="engine-actions">
-          <button id="btn-run-cycle" class="btn btn-primary btn-sm" type="button">Lancer un cycle</button>
-          <button id="btn-toggle-pause" class="btn btn-sm" type="button">Mettre en pause</button>
+        <div class="dispersion-track">
+          <div id="disp-fill" class="dispersion-fill"></div>
+          <div id="disp-threshold" class="dispersion-threshold" title="Seuil d'abstention"></div>
         </div>
-        <!-- Ne restent visibles que les lignes qui CHANGENT. Le reste est
-             de la configuration : elle ne bouge qu'à l'installation et n'a
-             pas à occuper l'écran en permanence. « Univers » était le pire
-             cas — il déverse maintenant 150 symboles. -->
-        <div><dt>Dernier cycle</dt><dd id="st-last">—</dd></div>
-        <div><dt>Marché</dt><dd id="st-market">—</dd></div>
-        <div><dt>Quota du jour</dt><dd id="st-quota">—</dd></div>
-        <div><dt>Coupe-circuit</dt><dd id="st-breaker">—</dd></div>
-      </dl>
-      <details class="status-config">
-        <summary>Configuration</summary>
-        <dl class="status-list">
-          <div><dt>Cycles exécutés</dt><dd id="st-count">—</dd></div>
-          <div><dt>Phase calendaire</dt><dd id="st-calendar">—</dd></div>
-          <div><dt>Modèle IA</dt><dd id="st-model">—</dd></div>
-          <div><dt>Fréquence</dt><dd id="st-cron">—</dd></div>
-          <div><dt>Broker</dt><dd id="st-broker">—</dd></div>
-          <div><dt>Univers</dt><dd id="st-symbols">—</dd></div>
-        </dl>
-      </details>
+        <p class="dispersion-note" id="disp-note">
+          En dessous du seuil, le modèle note tout le monde pareil : le classement
+          ne porte aucune information et le bot s'abstient.
+        </p>
+      </div>
+
+      <div id="ranking-abstention" class="abstention" hidden role="status"></div>
+
+      <div class="filters" id="ranking-views">
+        <button class="chip chip-active" data-view="top">Podium</button>
+        <button class="chip" data-view="all">Tout (150)</button>
+        <button class="chip" data-view="sector">Par secteur</button>
+        <button class="chip" data-view="heat">Carte</button>
+      </div>
+
+      <div class="ranking-search" id="ranking-search-wrap">
+        <input id="ranking-search" type="search" placeholder="Filtrer par symbole ou secteur…" autocomplete="off">
+      </div>
+
+      <div id="ranking-body"></div>
     </section>
-
-
-
-
     <!-- ═══ PANNEAU DE DIAGNOSTIC ═════════════════════════════════════ -->
     <section id="debug-panel" class="card debug" hidden>
       <div class="card-head">
@@ -336,9 +350,28 @@
         <pre id="debug-raw">—</pre>
       </details>
     </section>
+
     </div>
 
     <div id="tab-mesures" class="tab-panel" hidden>
+    <!-- ═══ LE VERDICT — l'élément central du projet ═══════════════════ -->
+    <section id="verdict" class="verdict verdict-unknown" aria-live="polite">
+      <div class="verdict-head">
+        <span id="verdict-badge" class="verdict-badge">—</span>
+        <h2>Verdict statistique</h2>
+        <span id="verdict-meta" class="verdict-meta">—</span>
+      </div>
+      <p id="verdict-reason" class="verdict-reason">En attente de données.</p>
+      <div class="verdict-progress">
+        <div class="verdict-track"><span id="verdict-fill"></span></div>
+        <span id="verdict-progress-label" class="verdict-progress-label">—</span>
+      </div>
+      <p id="verdict-caveat" class="verdict-caveat" hidden></p>
+      <!-- Progression vers le verdict : sans elle, on ne sait pas si l'attente
+           est de trois jours ou de trois mois. -->
+      <div id="verdict-eta" class="verdict-eta" hidden></div>
+    </section>
+
     <!-- ═══ Rang → résultat ═══════════════════════════════════════════ -->
     <!-- Le graphique le plus important du projet : si cette courbe monte, la
          sélection par classement repose sur quelque chose de réel. Si elle est
