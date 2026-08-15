@@ -43,6 +43,7 @@ const COLUMNS = [
   'pUp', 'pUpGivenMove', 'edge',
   'advisedAction', 'advisoryConflict', 'voided',
   'rank', 'rankTotal', 'rankFractional', 'selected',
+  'baselines',
   'outcomes', 'resolved',
 ];
 
@@ -79,6 +80,11 @@ const SCHEMA = `
     rankTotal      INTEGER,
     rankFractional REAL,
     selected       INTEGER NOT NULL DEFAULT 0,
+    -- Rangs des facteurs de référence pour le MÊME cycle, en JSON.
+    -- Une colonne unique plutôt qu'une par facteur : leur nombre évoluera, et
+    -- la mesure les parcourt toujours ensemble. Aucune requête ne filtre
+    -- dessus, donc rien n'exige de les indexer séparément.
+    baselines      TEXT,
     -- Résultats par horizon, en JSON : structure creuse (un horizon peut être
     -- échu et pas les autres) et interrogeable via json_extract.
     outcomes       TEXT,
@@ -257,7 +263,7 @@ export class SqliteStore {
 
 /** SQLite ne connaît ni booléen ni objet : on convertit à l'entrée. */
 function toSql(value, column) {
-  if (column === 'outcomes') return value == null ? null : JSON.stringify(value);
+  if (column === 'outcomes' || column === 'baselines') return value == null ? null : JSON.stringify(value);
   if (typeof value === 'boolean') return value ? 1 : 0;
   if (value === undefined) return null;
   return value;
@@ -275,5 +281,6 @@ function fromSql(row) {
     resolved: Boolean(row.resolved),
     selected: Boolean(row.selected),
     outcomes: row.outcomes ? JSON.parse(row.outcomes) : null,
+    baselines: row.baselines ? JSON.parse(row.baselines) : null,
   };
 }

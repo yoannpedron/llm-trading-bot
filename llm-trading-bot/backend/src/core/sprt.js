@@ -75,6 +75,39 @@ const DEFAULT_DF = 4;
 const DEFAULT_DESIGN_EFFECT = 1.32;
 
 /**
+ * Nombre d'observations INDÉPENDANTES nécessaires pour atteindre la puissance
+ * visée.
+ *
+ * ── L'erreur que ceci corrige ─────────────────────────────────────────────
+ * La troncature valait 400, choisie sur l'approximation de Wald de la taille
+ * d'échantillon MOYENNE : E[N|H1] = A / E[ΔLLR] ≈ 589. Utiliser cette moyenne
+ * comme point de troncature est une faute de méthode : la distribution du
+ * temps d'arrêt est très étalée et fortement asymétrique à droite. Tronquer à
+ * sa moyenne coupe environ la moitié des trajectoires par construction — et
+ * 400 étant même inférieur à 589, la puissance mesurée tombait à 25 %.
+ *
+ * La formule correcte vient du dimensionnement classique :
+ *
+ *     n = (z_α + z_β)² / δ²
+ *
+ * avec z = 1,645 pour un risque unilatéral de 5 % et δ le Sharpe visé par
+ * décision. À δ = 0,10 : n ≈ 1082 observations indépendantes.
+ *
+ * ── La pénalité Student-t ─────────────────────────────────────────────────
+ * La vraisemblance est une Student à 5 degrés de liberté, pas une gaussienne.
+ * Ses queues épaisses diluent l'information de Fisher portée par chaque
+ * observation : le rendement informationnel tombe autour de 0,65 par rapport à
+ * la gaussienne, d'où un facteur correctif d'environ 1,5.
+ */
+function taillePourPuissance({ targetSharpe, alpha = 0.05, beta = 0.05 }) {
+  // Quantiles normaux unilatéraux, en dur : les seules valeurs utilisées ici.
+  const z = (p) => (p === 0.05 ? 1.645 : p === 0.01 ? 2.326 : 1.645);
+  const base = ((z(alpha) + z(beta)) ** 2) / (targetSharpe ** 2);
+  const PENALITE_STUDENT = 1.5;
+  return Math.ceil(base * PENALITE_STUDENT);
+}
+
+/**
  * Effet de grappe estimé sur la série elle-même.
  *
  * ── Le problème ────────────────────────────────────────────────────────────
@@ -152,7 +185,9 @@ export class Sprt {
     targetSharpe = 0.1,
     alpha = 0.05,
     beta = 0.05,
-    maxSamples = 400,
+    // `null` = calculé depuis la cible de puissance et l'effet de grappe.
+    // Une valeur explicite reste acceptée, pour les tests.
+    maxSamples = null,
     df = DEFAULT_DF,
     minSamples = 30,
     warmupSamples = 20,
@@ -165,9 +200,23 @@ export class Sprt {
     // corrélées du même jour ne pèsent pas 10 décisions indépendantes.
     this.designEffect = Math.max(1, de);
     this.targetSharpe = targetSharpe;
+    this.alphaNominal = alpha;
+    this.betaNominal = beta;
     this.alpha = alpha;
     this.beta = beta;
-    this.maxSamples = maxSamples;
+    // ── La troncature s'exprime en observations EFFECTIVES ────────────────
+    // C'était le défaut structurel : le plafond était compté en observations
+    // BRUTES alors que le rapport de vraisemblance est divisé par l'effet de
+    // grappe. À 150 actifs produisant 50 scores corrélés par jour, l'effet de
+    // grappe atteint 5 à 15 : 400 observations brutes ne portent alors que
+    // l'information de 27 à 80 observations indépendantes. Le test s'arrêtait
+    // au vingtième du chemin en annonçant « pas de conclusion ».
+    //
+    // Le plafond suit donc maintenant la dilution : plus les données sont
+    // redondantes, plus il faut en accumuler. Le test devient élastique dans le
+    // temps calendaire et constant dans l'espace de l'information.
+    this.samplesIndependants = taillePourPuissance({ targetSharpe, alpha, beta });
+    this.maxSamples = maxSamples ?? Math.ceil(this.samplesIndependants * this.designEffect);
     this.df = df;
     this.minSamples = minSamples;
     // Assez d'observations pour que σ ne soit pas absurde : l'erreur relative
@@ -492,8 +541,19 @@ export async function runSprt(shadowBook, { horizon = 3, ...options } = {}) {
     log.warn(`VERDICT SPRT : VALIDÉ — ${verdict.reason}`);
   }
 
+  // ── Séquence de confiance, à côté du verdict binaire ──────────────────
+  // Le test rend un mot après des mois. La séquence donne un intervalle sur
+  // l avantage réel, consultable à tout instant sans invalider quoi que ce
+  // soit, et qui se resserre à mesure que les décisions s accumulent.
+  const sequence = confidenceSequence(series.map((s) => s.score), {
+    alpha: 0.05,
+    designEffect: clustering.value,
+    horizonCible: sprt.samplesIndependants ?? 1600,
+  });
+
   return {
     ...verdict,
+    sequence,
     horizon,
     clustering: {
       ...clustering,
@@ -504,3 +564,147 @@ export async function runSprt(shadowBook, { horizon = 3, ...options } = {}) {
     referenceTable: sprt.referenceTable(),
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SÉQUENCE DE CONFIANCE — un intervalle valide À TOUT INSTANT
+
+   ── Le problème qu'elle résout ────────────────────────────────────────────
+   Le test séquentiel rend un mot : validé, arrêté, ou tronqué. Pendant des
+   mois il ne dit rien, puis il tranche. Et une règle fragile l'accompagne : ne
+   pas consulter le résultat trop souvent, sous peine d'invalider la garantie —
+   parce que regarder puis décider d'après ce qu'on a vu EST une forme d'arrêt
+   optionnel.
+
+   Une séquence de confiance donne autre chose : un intervalle sur l'avantage
+   réel, qui se resserre à mesure que les observations s'accumulent, et qui
+   reste valide à n'importe quel instant d'arrêt — y compris choisi après coup
+   d'après les données. On peut la regarder tous les jours sans rien casser.
+
+   ── Ce que ça change concrètement ─────────────────────────────────────────
+       semaine 2 : l'avantage est entre −0,04 et +0,21   (on ne sait rien)
+       mois 1    : entre −0,02 et +0,15                  (ça se resserre)
+       mois 3    : entre +0,01 et +0,11                  (probablement positif)
+
+   Et surtout : on peut arrêter tôt en connaissance de cause. Si au bout de
+   trois mois la borne haute est +0,04, on sait que même dans le meilleur cas
+   l'avantage ne couvre pas les frais — sans attendre le verdict formel.
+
+   ── La construction ───────────────────────────────────────────────────────
+   Mélange normal (Howard, Ramdas, McAuliffe, Sekhon). Le rayon vaut :
+
+       r(t) = σ̂ · √( 2(tρ² + 1) / (t²ρ²) · ln( √(tρ² + 1) / α ) )
+
+   Le terme en ln√(t) est le prix de l'uniformité temporelle — la loi du
+   logarithme itéré. C'est ce qui rend l'intervalle environ 1,5 fois plus large
+   qu'un intervalle classique, en échange du droit de le consulter quand on
+   veut.
+
+   Le paramètre ρ règle l'instant où la borne est la plus serrée : on le cale
+   sur l'horizon visé, de sorte que la séquence soit la plus informative au
+   moment où l'on espère conclure.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Séquence de confiance sur le Sharpe par décision.
+ *
+ * @param {number[]} scores  rendements signés, ordonnés
+ * @param {object} [options]
+ * @param {number} [options.alpha=0.05]     risque toléré, uniformément dans le temps
+ * @param {number} [options.horizonCible]   instant où la borne est la plus serrée
+ * @param {number} [options.designEffect=1] dilution par corrélation intra-jour
+ */
+export function confidenceSequence(scores, {
+  alpha = 0.05,
+  horizonCible = 1600,
+  designEffect = 1,
+} = {}) {
+  const n = scores.length;
+  if (n < 10) {
+    return { n, note: `${n} observation(s) — au moins 10 sont nécessaires.`, trajectoire: [] };
+  }
+
+  // L'effet de grappe réduit le nombre d'observations UTILES : c'est le même
+  // raisonnement que pour le test séquentiel, appliqué au compteur de temps.
+  const de = Math.max(1, designEffect);
+  const rho = Math.sqrt(2 * Math.log(1 / alpha) / (horizonCible * Math.log(1 + Math.log(1 / alpha))));
+
+  let somme = 0;
+  let m2 = 0;
+  let moyenne = 0;
+  const trajectoire = [];
+  let dernier = null;
+
+  for (let i = 0; i < n; i += 1) {
+    const x = scores[i];
+    somme += x;
+    const delta = x - moyenne;
+    moyenne += delta / (i + 1);
+    m2 += delta * (x - moyenne);
+
+    const k = i + 1;
+    if (k < 10) continue;
+
+    const sigma = Math.sqrt(m2 / (k - 1));
+    if (!(sigma > 0)) continue;
+
+    // Temps EFFECTIF : k observations corrélées valent k/DE observations utiles.
+    const tEff = k / de;
+    const rayon = sigma * Math.sqrt(
+      (2 * (tEff * rho * rho + 1)) / (tEff * tEff * rho * rho)
+      * Math.log(Math.sqrt(tEff * rho * rho + 1) / alpha),
+    );
+
+    // Le Sharpe par décision est la moyenne rapportée à l'écart-type.
+    const point = { n: k, sharpe: moyenne / sigma, bas: (moyenne - rayon) / sigma, haut: (moyenne + rayon) / sigma };
+    dernier = point;
+    // Une trajectoire complète pour 25 000 points serait illisible et lourde :
+    // on échantillonne pour le tracé, la dernière valeur restant exacte.
+    if (k % Math.max(1, Math.floor(n / 60)) === 0) trajectoire.push(point);
+  }
+
+  if (!dernier) return { n, note: 'écart-type nul — série constante.', trajectoire: [] };
+
+  return {
+    n,
+    nEffectif: Math.round(n / de),
+    sharpe: round(dernier.sharpe, 4),
+    bas: round(dernier.bas, 4),
+    haut: round(dernier.haut, 4),
+    largeur: round(dernier.haut - dernier.bas, 4),
+    alpha,
+    verdict: verdictSequence(dernier),
+    trajectoire: trajectoire.map((p) => ({
+      n: p.n, sharpe: round(p.sharpe, 4), bas: round(p.bas, 4), haut: round(p.haut, 4),
+    })),
+  };
+}
+
+/**
+ * Traduction en clair.
+ *
+ * Le seuil de rentabilité n'est pas zéro mais le coût de transaction : un
+ * avantage réel mais inférieur aux frais ne rapporte rien. À 6,25 bps par
+ * aller-retour sur un horizon de 3 jours, ça correspond à un Sharpe par
+ * décision d'environ 0,05 — c'est cette barre-là qui compte, pas zéro.
+ */
+const SHARPE_SEUIL_FRAIS = 0.05;
+
+function verdictSequence({ bas, haut }) {
+  if (bas > SHARPE_SEUIL_FRAIS) {
+    return 'AVANTAGE ÉTABLI et supérieur aux frais : même la borne basse dépasse le seuil de rentabilité.';
+  }
+  if (bas > 0) {
+    return 'Avantage probablement positif, mais la borne basse est sous le seuil de rentabilité : '
+      + 'il pourrait ne pas couvrir les frais de transaction.';
+  }
+  if (haut < 0) {
+    return 'AVANTAGE NÉGATIF : le modèle classe les actifs à l\'envers de façon établie.';
+  }
+  if (haut < SHARPE_SEUIL_FRAIS) {
+    return 'AUCUN AVANTAGE EXPLOITABLE : même dans le meilleur cas, l\'avantage resterait '
+      + 'sous le seuil qui couvre les frais. Continuer ne changera pas ce constat.';
+  }
+  return 'Encore indéterminé : l\'intervalle contient à la fois zéro et le seuil de rentabilité.';
+}
+
+const round = (v, d) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(d)));

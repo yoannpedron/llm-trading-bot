@@ -173,6 +173,11 @@ export class ShadowBook {
       rankTotal: decision.rankTotal ?? null,
       rankFractional: decision.rankFractional ?? null,
       selected: Boolean(decision.selected),
+      // Rangs des facteurs calculés par formule sur le MÊME instantané de
+      // marché. C'est ce qui permettra de répondre à « l'IA bat-elle une simple
+      // formule ? » — question que le bot ne posait jamais, alors qu'elle
+      // décide si consulter un modèle de langage apporte quoi que ce soit.
+      baselines: decision.baselines ?? null,
       // Renseigné plus tard par resolve()
       outcomes: null,
       resolved: false,
@@ -370,6 +375,7 @@ export class ShadowBook {
         rankTotal: entry.rankTotal ?? null,
         rankFractional: entry.rankFractional ?? null,
         selected: Boolean(entry.selected),
+        baselines: entry.baselines ?? null,
       });
     }
 
@@ -481,6 +487,16 @@ export class ShadowBook {
       // aujourd'hui » ne se fasse pas passer pour de la sélection de titres.
       rangs: rankSection(all, horizon),
 
+      // ── LA question du projet : l IA bat-elle une formule ? ──────────────
+      // Le carnet mesurait si le modèle bat le hasard. Battre le hasard est la
+      // barre basse. La vraie question est de savoir si lire les actualités
+      // apporte quelque chose qu un calcul gratuit ne donne pas déjà.
+      comparaison: comparaisonFacteurs(all, horizon),
+
+      // Sans résolution, aucun classement n est exploitable — et c est une
+      // question EN AMONT de toutes les autres.
+      resolution: resolutionClassements(all),
+
       // ── Biais d'inaction, mesuré et non supposé ─────────────────────────
       // Part des décisions où le modèle recommandait autre chose que ce que sa
       // propre répartition impliquait, et dans quel sens. Si les conflits
@@ -530,6 +546,7 @@ export class ShadowBook {
       rank: e.rank ?? null,
       rankTotal: e.rankTotal ?? null,
       rankFractional: e.rankFractional ?? null,
+      baselines: e.baselines ?? null,
       selected: e.selected ?? false,
       outcomes: e.outcomes ?? null,
       resolved: e.resolved ?? false,
@@ -756,3 +773,129 @@ const round = (v, d) => (v == null || !Number.isFinite(v) ? null : Number(v.toFi
 
 export const shadowBook = new ShadowBook();
 export { HORIZONS, BENCHMARK, RULE_VERSION, LEGACY_RULE };
+
+/**
+ * ── LA COMPARAISON QUI MANQUAIT ──────────────────────────────────────────
+ *
+ * Le carnet mesurait si le modèle bat le HASARD. Il ne mesurait jamais s'il bat
+ * une FORMULE. Or battre le hasard est la barre basse : si le modèle obtient un
+ * rang de 0,03 quand un simple retour à la moyenne en fait 0,04, il coûte
+ * 450 appels par jour, vingt minutes par cycle et une surface de panne
+ * considérable — pour faire moins bien que trois lignes de calcul.
+ *
+ * Les deux classements sont notés sur EXACTEMENT les mêmes rendements, aux
+ * mêmes échéances, à partir du même instantané de marché. La seule différence
+ * entre eux est que le modèle a vu les actualités en plus. C'est donc bien la
+ * valeur ajoutée de la lecture d'actualités qu'on isole ici, et rien d'autre.
+ */
+function comparaisonFacteurs(all, horizon) {
+  const base = (predicteur) => all
+    .filter((s) => Number.isFinite(predicteur(s)) && Number.isFinite(s.excessReturn))
+    .map((s) => ({
+      day: s.t.slice(0, 10),
+      symbol: s.symbol,
+      predicted: predicteur(s),
+      realized: s.excessReturn,
+    }));
+
+  const sources = {
+    modele: { label: 'Modèle de langage', rows: base((s) => s.edge) },
+  };
+
+  // Les facteurs sont enregistrés en rang, pas en score : on utilise le rang
+  // fractionnaire, qui est déjà l'information exploitée par la stratégie.
+  const noms = new Set();
+  for (const s of all) for (const n of Object.keys(s.baselines ?? {})) noms.add(n);
+
+  for (const nom of noms) {
+    sources[nom] = {
+      label: nom,
+      rows: base((s) => s.baselines?.[nom]?.fractionnaire),
+    };
+  }
+
+  const resultats = {};
+  for (const [nom, src] of Object.entries(sources)) {
+    if (src.rows.length < 20) {
+      resultats[nom] = { label: src.label, n: src.rows.length, note: 'pas assez de décisions' };
+      continue;
+    }
+    const ic = rankIC(src.rows, { horizon });
+    resultats[nom] = {
+      label: src.label,
+      n: src.rows.length,
+      icMoyen: ic.icMoyen ?? null,
+      tStat: ic.tStat ?? null,
+      significatif: ic.significatif ?? false,
+      jours: ic.jours ?? 0,
+    };
+  }
+
+  // ── Le verdict ────────────────────────────────────────────────────────
+  // On compare le modèle au MEILLEUR facteur, pas à leur moyenne : la question
+  // n'est pas « bat-il un facteur quelconque » mais « apporte-t-il quelque
+  // chose qu'aucune formule ne donne déjà ».
+  const modele = resultats.modele;
+  const facteurs = Object.entries(resultats)
+    .filter(([nom, r]) => nom !== 'modele' && Number.isFinite(r.icMoyen));
+
+  let verdict = 'Pas encore assez de décisions échues pour comparer.';
+  let meilleurFacteur = null;
+
+  if (Number.isFinite(modele?.icMoyen) && facteurs.length) {
+    meilleurFacteur = facteurs.reduce((a, b) => (b[1].icMoyen > a[1].icMoyen ? b : a));
+    const ecart = modele.icMoyen - meilleurFacteur[1].icMoyen;
+
+    if (!modele.significatif && !meilleurFacteur[1].significatif) {
+      verdict = 'Ni le modèle ni les formules ne se distinguent du hasard pour l\'instant. '
+        + 'Rien ne permet encore de trancher.';
+    } else if (ecart > 0.01) {
+      verdict = `Le modèle DEVANCE la meilleure formule de ${(ecart * 100).toFixed(1)} points de corrélation. `
+        + 'La lecture des actualités apporte quelque chose qu\'aucun facteur ne capte.';
+    } else if (ecart < -0.01) {
+      verdict = `La formule « ${meilleurFacteur[1].label} » DEVANCE le modèle de ${(-ecart * 100).toFixed(1)} points. `
+        + 'À ce stade, consulter un modèle de langage coûte cher pour faire moins bien qu\'un calcul gratuit.';
+    } else {
+      verdict = 'Le modèle et la meilleure formule sont à égalité. '
+        + 'La formule étant gratuite, instantanée et reproductible, l\'avantage lui revient.';
+    }
+  }
+
+  return {
+    parSource: resultats,
+    meilleurFacteur: meilleurFacteur ? meilleurFacteur[0] : null,
+    verdict,
+  };
+}
+
+/**
+ * ── RÉSOLUTION DES CLASSEMENTS ───────────────────────────────────────────
+ *
+ * Combien de valeurs DISTINCTES chaque classement produit-il ?
+ *
+ * Mesuré en production : le modèle n'a donné que trois valeurs — 35, 40, 45 —
+ * sur vingt réponses. Un facteur numérique en produit autant qu'il y a
+ * d'actifs. Sans résolution, les rangs 4 à 100 sont massivement ex æquo et le
+ * tri départage au hasard : aucune règle de sortie, aucun calibrage de bande
+ * n'y remédie. C'est une question EN AMONT de toutes les autres.
+ */
+function resolutionClassements(all) {
+  const distinctes = (valeurs) => new Set(valeurs.map((v) => v.toFixed(6))).size;
+
+  const edges = all.map((s) => s.edge).filter(Number.isFinite);
+  const out = {
+    modele: edges.length
+      ? { n: edges.length, distinctes: distinctes(edges), part: distinctes(edges) / edges.length }
+      : null,
+    facteurs: {},
+  };
+
+  const noms = new Set();
+  for (const s of all) for (const n of Object.keys(s.baselines ?? {})) noms.add(n);
+  for (const nom of noms) {
+    const v = all.map((s) => s.baselines?.[nom]?.score).filter(Number.isFinite);
+    if (v.length) out.facteurs[nom] = { n: v.length, distinctes: distinctes(v), part: distinctes(v) / v.length };
+  }
+
+  return out;
+}

@@ -5,6 +5,7 @@ import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
+import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
 import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
 import { decide } from '../llm/agent.js';
@@ -227,7 +228,7 @@ export class TradingEngine {
   }
 
   /** Exécute une décision déjà évaluée, puis la consigne. */
-  async #executeEvaluation(evaluation, { selected, sorties, rankInfo, rankingReason }) {
+  async #executeEvaluation(evaluation, { selected, sorties, rankInfo, rankingReason, baselines }) {
     const { symbol, decision, snapshot, news, phase, price, fxRate, position, account, budget } = evaluation;
     const outcome = { symbol, action: decision.action, executed: false, reason: null };
 
@@ -366,6 +367,11 @@ export class TradingEngine {
         rankTotal: rankInfo?.total ?? null,
         rankFractional: rankInfo?.fractional ?? null,
         selected: selected.has(symbol),
+        // Rangs des facteurs de référence pour CE cycle. Enregistrés avec la
+        // décision du modèle pour que les deux soient notés sur exactement les
+        // mêmes rendements, à la même échéance — sans quoi la comparaison ne
+        // vaudrait rien.
+        baselines: baselines?.get(symbol) ?? null,
       });
 
       const f = decision.forecast;
@@ -467,6 +473,25 @@ export class TradingEngine {
       }
       this.progress = { ...this.progress, phase: 'classement', symbol: null, done: evaluations.length };
 
+      // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
+      // Le bot mesurait si l'IA bat le HASARD. Il ne mesurait jamais si elle bat
+      // une FORMULE — la seule question qui décide si consulter un modèle de
+      // langage apporte quoi que ce soit.
+      //
+      // Les facteurs sont calculés sur EXACTEMENT le même instantané de marché
+      // que celui envoyé au modèle. Les deux classements voient donc la même
+      // information ; la seule différence est que le modèle voit en plus les
+      // actualités. C'est la condition pour que la comparaison soit honnête.
+      //
+      // Coût : nul. Les bougies sont déjà en mémoire, aucun appel réseau.
+      const lignesFacteurs = evaluations
+        .filter((e) => e.evaluated && e.snapshot)
+        .map((e) => ({
+          symbol: e.symbol,
+          facteurs: facteursPour({ candles: e.snapshot.candles, indicators: e.snapshot.indicators }),
+        }));
+      const rangsFacteurs = classerFacteurs(lignesFacteurs);
+
       // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
       // On ne peut pas choisir les meilleurs sans les avoir tous vus. C'est
       // toute la raison d'être de la séparation en deux phases.
@@ -494,6 +519,22 @@ export class TradingEngine {
         maxRetenus: config.risk.maxPositions,
         seuilSortie: ranking.seuilSortie ?? null,
         sorties: [...(ranking.sorties ?? [])],
+        // Résolution comparée : combien de valeurs DISTINCTES chaque classement
+        // produit-il ? Observé en production, le modèle n'en donnait que trois
+        // sur vingt réponses. Un facteur numérique en donne autant qu'il y a
+        // d'actifs. Sans résolution, aucun classement n'est exploitable, et
+        // aucune règle de sortie n'y remédie.
+        resolution: {
+          modele: (() => {
+            const e = [...ranking.ranks.values()].map((r) => r.edge).filter(Number.isFinite);
+            return e.length
+              ? { n: e.length, distinctes: new Set(e.map((x) => x.toFixed(6))).size }
+              : null;
+          })(),
+          facteurs: Object.fromEntries(
+            Object.keys(FACTEURS).map((nom) => [nom, resolutionFacteur(lignesFacteurs, nom)]),
+          ),
+        },
         classement: [...ranking.ranks.entries()]
           .map(([symbol, r]) => ({
             symbol,
@@ -517,6 +558,7 @@ export class TradingEngine {
         results.push(await this.#executeEvaluation(evaluation, {
           selected: ranking.selected,
           sorties: ranking.sorties,
+          baselines: rangsFacteurs,
           rankInfo: ranking.ranks.get(evaluation.symbol) ?? null,
           rankingReason: ranking.reason,
         }));

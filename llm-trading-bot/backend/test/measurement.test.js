@@ -11,7 +11,8 @@ process.env.SYMBOLS = 'NVDA,AAPL';
 
 const { calendarPhase } = await import('../src/data/calendar.js');
 const { ShadowBook, RULE_VERSION } = await import('../src/core/shadowBook.js');
-const { Sprt, designEffect } = await import('../src/core/sprt.js');
+const { Sprt, designEffect, confidenceSequence } = await import('../src/core/sprt.js');
+const { reversalCourtTerme, momentum, classerFacteurs, resolutionFacteur } = await import('../src/core/baselines.js');
 const { normalizeForecast, deriveAction } = await import('../src/llm/agent.js');
 const { RiskManager } = await import('../src/core/riskManager.js');
 const { executionQuality } = await import('../src/data/executionQuality.js');
@@ -1050,5 +1051,117 @@ describe('sortie par classement — la moitié qui manquait', () => {
     const ancienne = 76 - 3;
     const nouvelle = exitRank({ universe: 150 }) - 3;
     assert.ok(ancienne / nouvelle > 5, `${ancienne} rangs contre ${nouvelle} — facteur ${(ancienne / nouvelle).toFixed(1)}`);
+  });
+});
+
+describe('classements de référence — l\'IA bat-elle une formule ?', () => {
+  const bougies = (n, forme) => Array.from({ length: n }, (_, i) => ({
+    time: new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString(),
+    open: forme(i), high: forme(i) * 1.01, low: forme(i) * 0.99, close: forme(i), volume: 1000,
+  }));
+
+  test('le retour à la moyenne inverse bien le signe du rendement récent', () => {
+    // C'est ce qui le distingue du momentum : une action qui vient de MONTER
+    // reçoit un score BAS. Confondre les deux inverserait le classement.
+    const monte = bougies(30, (i) => 100 + i);
+    const baisse = bougies(30, (i) => 100 - i);
+    assert.ok(reversalCourtTerme(monte) < 0, 'une hausse récente donne un score négatif');
+    assert.ok(reversalCourtTerme(baisse) > 0, 'une baisse récente donne un score positif');
+  });
+
+  test('les facteurs refusent de deviner quand l\'historique manque', () => {
+    // Renvoyer 0 au lieu de null ferait entrer un actif sans données au milieu
+    // du classement, comme s'il avait été mesuré. C'est une valeur inventée.
+    assert.equal(reversalCourtTerme(bougies(3, () => 100)), null);
+    assert.equal(momentum(bougies(50, () => 100)), null, 'le momentum 12-1 exige un an');
+  });
+
+  test('le classement partage les rangs entre ex æquo', () => {
+    // Départager des scores identiques par l'ordre d'arrivée fabriquerait de la
+    // corrélation à partir de rien — exactement ce que le Rank IC mesurerait
+    // ensuite comme du talent.
+    const lignes = [
+      { symbol: 'A', facteurs: { rsi: 0.5 } },
+      { symbol: 'B', facteurs: { rsi: 0.5 } },
+      { symbol: 'C', facteurs: { rsi: 0.1 } },
+    ];
+    const r = classerFacteurs(lignes);
+    assert.equal(r.get('A').rsi.rang, r.get('B').rsi.rang, 'deux scores égaux, un seul rang');
+    assert.equal(r.get('A').rsi.rang, 1.5);
+    assert.equal(r.get('C').rsi.rang, 3);
+  });
+
+  test('la résolution distingue un facteur continu d\'un modèle qui répond par paliers', () => {
+    // Le fait mesuré en production : sur 20 réponses le modèle n'a produit que
+    // trois valeurs. Un facteur numérique en produit autant qu'il y a d'actifs.
+    // Sans résolution, le classement n'est que du bruit de tri.
+    const continu = Array.from({ length: 50 }, (_, i) => ({ symbol: `S${i}`, facteurs: { rsi: i / 50 } }));
+    const paliers = Array.from({ length: 50 }, (_, i) => ({ symbol: `S${i}`, facteurs: { rsi: [0.35, 0.40, 0.45][i % 3] } }));
+    assert.equal(resolutionFacteur(continu, 'rsi').valeursDistinctes, 50);
+    assert.equal(resolutionFacteur(paliers, 'rsi').valeursDistinctes, 3);
+    assert.ok(resolutionFacteur(paliers, 'rsi').partDistinctes < 0.1);
+  });
+});
+
+describe('troncature du test séquentiel — exprimée en information', () => {
+  test('le plafond suit l\'effet de grappe', () => {
+    // C'était le défaut dominant : le plafond était compté en observations
+    // BRUTES alors que les preuves sont divisées par l'effet de grappe. À
+    // 150 actifs, 400 observations brutes ne portaient l'information que de 27
+    // observations indépendantes — le test s'arrêtait au vingtième du chemin.
+    const seul = new Sprt({ targetSharpe: 0.1, designEffect: 1 });
+    const groupe = new Sprt({ targetSharpe: 0.1, designEffect: 5.9 });
+    assert.equal(seul.samplesIndependants, groupe.samplesIndependants, 'la cible en information est la même');
+    assert.ok(groupe.maxSamples > seul.maxSamples * 5, 'le plafond brut suit la dilution');
+  });
+
+  test('la cible vient de la formule de dimensionnement, pas de l\'ASN', () => {
+    // L'ancien 400 venait de l'ASN de Wald (589), c'est-à-dire la MOYENNE de la
+    // distribution d'arrêt. Tronquer à la moyenne coupe la moitié des
+    // trajectoires par construction.
+    const s = new Sprt({ targetSharpe: 0.1 });
+    const base = ((1.645 + 1.645) ** 2) / (0.1 ** 2);
+    assert.ok(s.samplesIndependants > base, 'la pénalité Student-t s\'applique');
+    assert.ok(s.samplesIndependants > 1400 && s.samplesIndependants < 1800);
+  });
+});
+
+describe('séquence de confiance — valide à tout instant', () => {
+  const serie = (n, sharpe, graine) => {
+    let a = graine >>> 0;
+    const u = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    let spare = null;
+    const g = () => {
+      if (spare !== null) { const v = spare; spare = null; return v; }
+      let x, y, q; do { x = 2 * u() - 1; y = 2 * u() - 1; q = x * x + y * y; } while (q >= 1 || q === 0);
+      const f = Math.sqrt(-2 * Math.log(q) / q); spare = y * f; return x * f;
+    };
+    return Array.from({ length: n }, () => sharpe * 0.01 + g() * 0.01);
+  };
+
+  test('l\'intervalle se resserre avec les observations', () => {
+    const tout = serie(3000, 0.1, 999);
+    const tot = (n) => {
+      const cs = confidenceSequence(tout.slice(0, n), { alpha: 0.05 });
+      return cs.haut - cs.bas;
+    };
+    assert.ok(tot(2000) < tot(500), 'plus d\'observations, intervalle plus étroit');
+    assert.ok(tot(500) < tot(100));
+  });
+
+  test('l\'effet de grappe élargit l\'intervalle', () => {
+    // Des observations corrélées portent moins d'information : l'intervalle
+    // doit le refléter, sinon on annoncerait une précision qu'on n'a pas.
+    const tout = serie(2000, 0.1, 555);
+    const seul = confidenceSequence(tout, { alpha: 0.05, designEffect: 1 });
+    const groupe = confidenceSequence(tout, { alpha: 0.05, designEffect: 10 });
+    assert.ok(groupe.haut - groupe.bas > seul.haut - seul.bas);
+  });
+
+  test('le seuil de rentabilité n\'est pas zéro mais le coût des frais', () => {
+    // Un avantage réel mais inférieur aux frais ne rapporte rien. Annoncer
+    // « avantage établi » sur un Sharpe de 0,02 serait trompeur.
+    const faible = confidenceSequence(serie(4000, 0.02, 321), { alpha: 0.05 });
+    assert.doesNotMatch(faible.verdict, /ÉTABLI et supérieur/);
   });
 });
