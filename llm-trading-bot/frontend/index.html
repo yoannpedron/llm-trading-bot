@@ -31,6 +31,9 @@
   </header>
 
   <section id="settings" class="settings" hidden>
+    <!-- Les trois réglages de connexion tiennent sur une rangée ; le bloc des
+         clés, plus volumineux, occupe toute la largeur en dessous. -->
+    <div class="settings-row">
     <label class="field">
       <span>URL du back-end</span>
       <input id="api-url" type="url" placeholder="http://localhost:8099" autocomplete="off" spellcheck="false">
@@ -51,10 +54,14 @@
         <option value="300000">5 min</option>
       </select>
     </label>
-    <!-- ═══ Clés API ══════════════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Clés API Gemini</h2>
+    </div>
+
+    <!-- ═══ Clés API ══════════════════════════════════════════════════
+         Bloc du panneau Réglages, pas une carte : imbriquer une carte dans un
+         panneau qui a déjà son fond produisait un double encadrement. -->
+    <section class="settings-block">
+      <div class="settings-block-head">
+        <h3>Clés API Gemini</h3>
         <div class="head-actions">
           <span id="keys-summary" class="card-meta">—</span>
           <button id="btn-check-keys" class="btn btn-sm" type="button" hidden>Tester les clés</button>
@@ -271,28 +278,6 @@
     </div>
 
 
-    <!-- ═══ Journal de l'IA ═══════════════════════════════════════════ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Journal de l'IA</h2>
-        <div class="filters" id="journal-filters" role="group" aria-label="Filtrer le journal">
-          <button class="chip chip-active" data-filter="all" type="button">Tout</button>
-          <button class="chip" data-filter="selected" type="button">Retenus</button>
-          <button class="chip" data-filter="executed" type="button">Exécutés</button>
-          <button class="chip" data-filter="BUY" type="button">Achats</button>
-          <button class="chip" data-filter="SELL" type="button">Ventes</button>
-        </div>
-      </div>
-      <!-- À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour :
-           suivre une action précise devenait impossible sans recherche. -->
-      <div class="journal-search">
-        <input id="journal-search" type="search" placeholder="Chercher un symbole…" autocomplete="off">
-        <span id="journal-count" class="card-meta">—</span>
-      </div>
-      <div id="journal" class="journal">
-        <p class="empty-block">Aucune décision enregistrée.</p>
-      </div>
-    </section>
 
     <!-- ═══ Ordres ════════════════════════════════════════════════════ -->
     <section class="card">

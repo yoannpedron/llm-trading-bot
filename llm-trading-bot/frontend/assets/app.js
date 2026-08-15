@@ -13,8 +13,6 @@ const state = {
   apiUrl: '',
   adminToken: '',
   refreshInterval: 30000,
-  journalFilter: 'all',
-  journalSearch: '',
   logFilter: 'all',
   data: null,
   timer: null,
@@ -305,7 +303,9 @@ function render(data) {
   renderCalibration(m.shadow?.calibration);
   renderAdvisory(m.shadow?.advisory);
   renderCosts(m.spreads, m.execution);
-  renderJournal(data.journal);
+  // Le journal n'a plus de section propre : ses décisions alimentent les
+  // lignes du classement, dépliables une par une.
+  indexerJournal(data.journal);
   renderTrades(data.trades, data.account.currency);
   renderCapacityPanel(data.status.capacity);
   $('last-update').textContent = fmtDate(data.serverTime);
@@ -425,7 +425,7 @@ function renderShadow(shadow) {
     .map(([label, s]) => `<tr>
       <td>${esc(label)}</td>
       <td class="num">${s.n}</td>
-      <td class="num ${s.hitRate > 0.5 ? 'up' : s.hitRate < 0.5 ? 'down' : 'muted'}">${(s.hitRate * 100).toFixed(1)} %</td>
+      <td class="num ${s.hitRate > 0.5 ? 'up' : s.hitRate < 0.5 ? 'down' : 'muted'}">${fmtNum(s.hitRate * 100, 1)} %</td>
       <td class="num ${signClass(s.meanScorePct)}">${s.meanScorePct >= 0 ? '+' : ''}${s.meanScorePct} %</td>
       <td class="num muted">${s.meanExcessPct == null ? '—' : `${s.meanExcessPct >= 0 ? '+' : ''}${s.meanExcessPct} %`}</td>
       <td class="num muted">${s.sharpePerDecision ?? '—'}</td>
@@ -475,7 +475,7 @@ function renderCalibration(calib) {
     'calib-bias',
     k == null
       ? '—'
-      : `pente ${k} — ${k < 0.8 ? `écarts exagérés ${(1 / k).toFixed(1)}×` : k > 1.25 ? 'écarts trop timides' : 'échelle juste'}`
+      : `pente ${k} — ${k < 0.8 ? `écarts exagérés ${fmtNum(1 / k, 1)}×` : k > 1.25 ? 'écarts trop timides' : 'échelle juste'}`
         + ` · biais moyen ${calib.biaisMoyen > 0 ? '+' : ''}${calib.biaisMoyen}`,
     k == null ? 'muted' : k < 0.8 || k > 1.25 ? 'down' : 'up',
   );
@@ -752,7 +752,15 @@ function renderStatus(status, calendar) {
   $('st-last').textContent = `${fmtDate(status.lastCycleAt)} (${relativeTime(status.lastCycleAt)})`;
   $('st-count').textContent = status.cycleCount ?? 0;
   $('st-model').textContent = `${status.llmProvider} · ${status.model}`;
-  $('st-symbols').textContent = (status.symbols || []).join(', ') || '—';
+  // 150 tickers d'affilée forment un mur illisible, même dans un repli. On
+  // annonce le compte et les premiers ; la liste complète reste accessible en
+  // survol, et de toute façon le classement du jour la montre en entier.
+  const univers = status.symbols || [];
+  const apercu = univers.slice(0, 8).join(', ');
+  $('st-symbols').textContent = univers.length
+    ? (univers.length > 8 ? `${univers.length} actifs — ${apercu}…` : apercu)
+    : '—';
+  $('st-symbols').title = univers.join(', ');
   $('st-cron').textContent = `${status.cron} · ${status.interval}`;
   $('st-broker').textContent = `${status.broker}${status.isLive ? ' ⚠️ RÉEL' : ' (paper)'}`;
 
@@ -1296,43 +1304,44 @@ async function writeToClipboard(text) {
 
 const SENTIMENT_CLASS = { POSITIF: 'pill-pos', NEGATIF: 'pill-neg', NEUTRE: 'pill-neu', INDISPONIBLE: 'pill-skip' };
 
-const JOURNAL_PAGE = 30;
-let journalLimit = JOURNAL_PAGE;
 let lastJournal = null;
 
-function renderJournal(entries) {
-  if (entries) lastJournal = entries;
-  const host = $('journal');
-  // ── Recherche par symbole ──────────────────────────────────────────────
-  // À 150 actifs × 3 cycles, le journal reçoit 450 entrées par jour : suivre
-  // une action précise à l'œil était devenu impossible.
-  const q = (state.journalSearch || '').trim().toUpperCase();
+/**
+ * Décisions du dernier cycle, indexées par symbole.
+ *
+ * Le classement dit QUI a gagné ; le journal dit POURQUOI. Les tenir dans deux
+ * sections séparées obligeait à lire deux listes des mêmes actifs en parallèle.
+ * Cet index permet de rendre le raisonnement sous la ligne concernée.
+ *
+ * On garde la décision la PLUS RÉCENTE par symbole : le journal contient
+ * plusieurs cycles, et c'est celle du classement affiché qui nous intéresse.
+ */
+let journalParSymbole = new Map();
 
-  const filtered = (entries || []).filter((e) => {
-    if (q && !String(e.symbol || '').toUpperCase().includes(q)) return false;
-    if (state.journalFilter === 'all') return true;
-    if (state.journalFilter === 'executed') return e.executed;
-    // « Retenus » : ceux que le classement transversal a désignés, qu'ils aient
-    // été exécutés ou non. C'est la distinction utile depuis le passage au rang
-    // — un actif peut être retenu puis bloqué par le budget.
-    if (state.journalFilter === 'selected') return Boolean(e.selected);
-    return e.action === state.journalFilter;
-  });
-
-  $('journal-count').textContent = `${Math.min(filtered.length, journalLimit)} / ${filtered.length} affichées`;
-
-  if (!filtered.length) {
-    host.innerHTML = '<p class="empty-block">Aucune décision ne correspond à ce filtre.</p>';
-    return;
+function indexerJournal(entries) {
+  journalParSymbole = new Map();
+  for (const e of entries || []) {
+    if (!e?.symbol) continue;
+    const connue = journalParSymbole.get(e.symbol);
+    if (!connue || new Date(e.timestamp) > new Date(connue.timestamp)) {
+      journalParSymbole.set(e.symbol, e);
+    }
   }
+}
 
-  // Plafond d'affichage. Au-delà, le navigateur peine à construire le DOM et
-  // personne ne fait défiler 450 entrées : on en montre une tranche, avec un
-  // bouton pour la suite.
-  const visibles = filtered.slice(0, journalLimit);
-
-  host.innerHTML = visibles
-    .map((e) => {
+/**
+ * Raisonnement du modèle pour UNE décision.
+ *
+ * Le journal était une section à part, empilant les entrées de tous les actifs.
+ * C'était une seconde liste des mêmes symboles que le classement, à lire en
+ * parallèle : pour savoir pourquoi NVDA était premier, il fallait quitter le
+ * classement, chercher NVDA dans le journal, puis revenir. Les deux vues
+ * décrivaient le même cycle sans jamais se rejoindre.
+ *
+ * Le raisonnement est désormais rendu à la demande, sous la ligne du classement
+ * à laquelle il appartient — un seul endroit, un seul ordre de lecture.
+ */
+function journalBodyHtml(e) {
       const tag = e.action === 'BUY' ? 'tag-buy' : e.action === 'SELL' ? 'tag-sell' : 'tag-hold';
       const confidence = Math.round((e.confidence ?? 0) * 100);
       const sentimentClass = SENTIMENT_CLASS[e.newsSentiment] || 'pill-skip';
@@ -1345,17 +1354,6 @@ function renderJournal(entries) {
           return `<li>${label} <span class="src">— ${esc(h.source || '')}</span></li>`;
         })
         .join('');
-
-  if (filtered.length > journalLimit) {
-    host.insertAdjacentHTML(
-      'beforeend',
-      `<button class="load-more" id="journal-more">Voir ${Math.min(JOURNAL_PAGE, filtered.length - journalLimit)} entrées de plus (${filtered.length - journalLimit} restantes)</button>`,
-    );
-    $('journal-more').addEventListener('click', () => {
-      journalLimit += JOURNAL_PAGE;
-      renderJournal(lastJournal);
-    });
-  }
 
       const flags = (e.riskFlags || []).length
         ? `<div class="entry-block"><h4>Risques identifiés</h4><p>${esc(e.riskFlags.join(' · '))}</p></div>`
@@ -1412,16 +1410,8 @@ function renderJournal(entries) {
         ? `${e.forecast.edge >= 0 ? '+' : ''}${Math.round(e.forecast.edge * 100)} pts`
         : `${confidence} %`;
 
-      return `<details class="entry">
-        <summary class="entry-summary">
-          <span class="tag ${tag}">${esc(e.action)}</span>
-          <span class="entry-sym">${esc(e.symbol)}</span>
-          <span class="entry-gist">${esc(gist)}</span>
-          <span class="entry-edge">${esc(ecart)}</span>
-          <span class="entry-time">${esc(fmtDate(e.timestamp))}</span>
-        </summary>
-        <div class="entry-body">
-        <div class="entry-head">
+
+  return `        <div class="entry-head">
           <span class="entry-sym">${esc(e.symbol)}</span>
           <span class="tag ${tag}">${esc(e.action)}</span>
           <span class="pill ${e.executed ? 'pill-exec' : 'pill-skip'}">${e.executed ? 'Exécuté' : 'Non exécuté'}</span>
@@ -1462,12 +1452,9 @@ function renderJournal(entries) {
           e.indicators
             ? `<details class="raw"><summary>Données techniques du moment</summary><pre>${esc(JSON.stringify(e.indicators, null, 2))}</pre></details>`
             : ''
-        }
-        </div>
-      </details>`;
-    })
-    .join('');
+        }`;
 }
+
 
 const TRADES_PAGE = 25;
 let tradesLimit = TRADES_PAGE;
@@ -1548,14 +1535,6 @@ $('keys-table').addEventListener('click', (event) => {
 
 $('btn-settings').addEventListener('click', () => toggleSettings());
 
-$('journal-filters').addEventListener('click', (event) => {
-  const button = event.target.closest('.chip');
-  if (!button) return;
-  state.journalFilter = button.dataset.filter;
-  journalLimit = JOURNAL_PAGE;
-  document.querySelectorAll('#journal-filters .chip').forEach((c) => c.classList.toggle('chip-active', c === button));
-  if (state.data) renderJournal(state.data.journal);
-});
 
 for (const id of ['api-url', 'admin-token']) {
   $(id).addEventListener('keydown', (event) => {
@@ -1602,6 +1581,11 @@ function renderRanking(ranking) {
     // Sans cette ligne le marqueur reste à gauche à 0 %, et son étiquette —
     // centrée par translateX(-50%) — sortait de la carte : on lisait « uil ».
     $('disp-threshold').style.left = '25%';
+    $('disp-fill').classList.remove('below');
+    // La note aussi doit repartir à zéro : elle affirmait « le modèle
+    // différencie les actifs » sous un panneau qui annonce « aucun classement ».
+    $('disp-note').textContent = 'La dispersion sera mesurée au premier classement : c’est elle '
+      + 'qui décide si le bot a le droit d’agir.';
     // Sans classement, les boutons de vue restaient cliquables sans rien
     // produire — une commande qui ne répond pas fait croire à une panne. On
     // les masque tant qu'il n'y a rien à trier.
@@ -1624,7 +1608,7 @@ function renderRanking(ranking) {
   const seuil = ranking.seuilDispersion ?? 0.03;
   const disp = ranking.dispersion ?? 0;
   const echelle = seuil * 4;
-  $('disp-value').textContent = `${(disp * 100).toFixed(1)} pts`;
+  $('disp-value').textContent = `${fmtNum(disp * 100, 1)} pts`;
   const fill = $('disp-fill');
   fill.style.width = `${Math.min(100, (disp / echelle) * 100)}%`;
   fill.classList.toggle('below', disp < seuil);
@@ -1696,11 +1680,19 @@ function rowsHtml(rows, ranking, sansSecteur = false) {
     const tag = r.retenu
       ? '<span class="rank-tag picked">retenu</span>'
       : (r.detenu ? '<span class="rank-tag held">détenu</span>' : '<span class="rank-tag">écarté</span>');
-    out.push(`<div class="rank-row${cls}">`
+    // Chaque ligne porte le raisonnement du modèle sur cet actif, déplié à la
+    // demande. Le corps n'est PAS construit ici : 150 raisonnements complets
+    // représenteraient 70 000 px de DOM pour un panneau dont on ouvre une ligne.
+    const aDecision = journalParSymbole.has(r.symbol);
+    out.push(`<details class="rank-item" data-symbol="${esc(r.symbol)}">`
+      + `<summary class="rank-row${cls}">`
       + `<span class="rank-pos">${r.rang}</span>`
       + `<span class="rank-sym">${esc(r.symbol)}${sansSecteur ? '' : `<span class="rank-sector">${esc(r.secteur || '')}</span>`}</span>`
       + `<span class="rank-edge">${r.ecart >= 0 ? '+' : ''}${(r.ecart * 100).toFixed(0)} pts</span>`
-      + `${tag}</div>`);
+      + `${tag}`
+      + `<span class="rank-chevron"${aDecision ? '' : ' hidden'}>›</span>`
+      + `</summary>`
+      + `<div class="rank-detail"></div></details>`);
   }
   return out.join('');
 }
@@ -1783,7 +1775,7 @@ function renderRankMetrics(rangs) {
   chart.innerHTML = rce.tranches.map((t) => {
     const h = Math.max(2, (Math.abs(t.resultatMoyen) / max) * 100);
     const neg = t.resultatMoyen < 0;
-    const valeur = (t.resultatMoyen >= 0 ? '+' : '') + (t.resultatMoyen * 100).toFixed(2) + '%';
+    const valeur = (t.resultatMoyen >= 0 ? '+' : '') + fmtNum(t.resultatMoyen * 100, 2) + ' %';
     // La valeur est placée du côté de la barre : au-dessus si positive,
     // en dessous si négative, pour que l'œil suive la progression.
     return `<div class="bucket" title="${esc(t.tranche)} — ${t.n} décisions">`
@@ -1795,10 +1787,10 @@ function renderRankMetrics(rangs) {
 
   const cases = [];
   if (ic?.icMoyen != null) {
-    cases.push(`<div class="rank-stat">Corrélation de rang<strong>${(ic.icMoyen * 100).toFixed(1)} %</strong></div>`);
+    cases.push(`<div class="rank-stat">Corrélation de rang<strong>${fmtNum(ic.icMoyen * 100, 1)} %</strong></div>`);
     cases.push(`<div class="rank-stat">Significativité (t)<strong>${ic.tStat ?? '—'}</strong></div>`);
   }
-  cases.push(`<div class="rank-stat">Écart haut–bas<strong>${rce.ecartHautBas >= 0 ? '+' : ''}${(rce.ecartHautBas * 100).toFixed(2)} %</strong></div>`);
+  cases.push(`<div class="rank-stat">Écart haut–bas<strong>${fmtPct(rce.ecartHautBas * 100)}</strong></div>`);
   if (ic?.ampleur) {
     // Le chiffre qui corrige l'illusion : 150 actifs corrélés ne sont pas
     // 150 paris indépendants.
@@ -1857,7 +1849,7 @@ function renderVerdictEta(sprt, shadow) {
     const parJour = n / joursEcoules;
     const joursRestants = Math.ceil((cible - n) / parJour);
     const date = new Date(Date.now() + joursRestants * 86400000);
-    phrase += ` Au rythme observé (${parJour.toFixed(1)}/jour), verdict attendu vers le `
+    phrase += ` Au rythme observé (${fmtNum(parJour, 1)}/jour), verdict attendu vers le `
       + `<strong>${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</strong>.`;
   } else {
     phrase += ' Le rythme sera estimé après quelques jours de collecte.';
@@ -1923,12 +1915,6 @@ function stopProgressWatch() {
   progressTimer = null;
 }
 
-// Recherche dans le journal : le rendu est purement local, aucun appel réseau.
-$('journal-search').addEventListener('input', (event) => {
-  state.journalSearch = event.target.value;
-  journalLimit = JOURNAL_PAGE;
-  if (lastJournal) renderJournal(lastJournal);
-});
 
 /* ═══════════════════════════════════════════════════════════════════════
    ONGLETS
@@ -2108,3 +2094,26 @@ $('positions-table').addEventListener('click', (event) => {
   else showSymbolChart(row.dataset.symbol);
   document.getElementById('chart').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
+
+
+/**
+ * Le raisonnement est construit à l'ouverture, pas au rendu de la liste.
+ *
+ * Sur 150 actifs, produire les 150 corps d'un coup représenterait environ
+ * 70 000 px de DOM pour un panneau dont on déplie une ligne à la fois — c'est
+ * exactement le défaut qui rendait l'ancien journal inutilisable.
+ */
+$('ranking-body').addEventListener('toggle', (event) => {
+  const item = event.target.closest('details.rank-item');
+  if (!item || !item.open) return;
+
+  const hote = item.querySelector('.rank-detail');
+  if (hote.dataset.rempli === '1') return;
+
+  const decision = journalParSymbole.get(item.dataset.symbol);
+  hote.innerHTML = decision
+    ? journalBodyHtml(decision)
+    : '<p class="empty-block">Aucun raisonnement enregistré pour cet actif sur le dernier cycle — '
+      + 'il a pu être écarté avant l\'appel au modèle (marché fermé, cotation absente).</p>';
+  hote.dataset.rempli = '1';
+}, true);

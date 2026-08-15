@@ -52,16 +52,6 @@
    Sans ce rappel explicite, l'attribut `hidden` n'a aucun effet visible. */
 [hidden] { display: none !important; }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 
 /* ── Barre supérieure ─────────────────────────────────────── */
@@ -137,14 +127,27 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 
 /* ── Réglages ─────────────────────────────────────────────── */
 
+/*
+ * Le panneau s'empile en colonne : une rangée de réglages courts, puis le bloc
+ * des clés qui occupe toute la largeur. Il était en `flex-wrap: row`, ce qui
+ * traitait le bloc des clés comme un champ de formulaire parmi d'autres — d'où
+ * un bouton « Enregistrer » collé à côté de « Ajouter » au lieu d'être en bas.
+ */
 .settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 24px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Les trois réglages de connexion tiennent sur une rangée. */
+.settings-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   align-items: flex-end;
-  padding: 18px 24px;
-  background: var(--bg-elev);
-  border-bottom: 1px solid var(--border);
 }
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; }
@@ -649,7 +652,7 @@ details.raw pre {
   color: var(--text-faint);
   white-space: nowrap;
 }
-.dispersion-note { font-size: 12px; color: var(--text-faint); margin: 8px 0 0; }
+.dispersion-note { font-size: 12px; color: var(--text-faint); margin: 0; }
 
 /* ═══ Abstention expliquée ══════════════════════════════════════════════ */
 .abstention {
@@ -831,49 +834,6 @@ details.raw pre {
 .tab-panel { display: grid; gap: 20px; align-content: start; }
 .tab-panel[hidden] { display: none; }
 
-/* ═══ Journal replié ════════════════════════════════════════════════════
-   Chaque entrée dépliée mesurait 467 px. À 150 actifs × 3 cycles, le journal
-   aurait atteint 200 écrans par jour. La ligne fermée en fait 40.          */
-.entry-summary {
-  display: grid;
-  grid-template-columns: 62px 52px 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 10px;
-  cursor: pointer;
-  border-radius: 8px;
-  font-size: 13px;
-  list-style: none;
-}
-.entry-summary::-webkit-details-marker { display: none; }
-.entry-summary:hover { background: var(--bg-elev-2); }
-.entry-summary .entry-sym { font-weight: 600; }
-.entry-summary .entry-edge { font-family: var(--mono); color: var(--text-dim); }
-.entry-summary .entry-gist {
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.entry-summary .entry-time { color: var(--text-faint); font-size: 11px; }
-.entry-chevron { color: var(--text-faint); transition: transform 0.15s ease; }
-details[open] > .entry-summary .entry-chevron { transform: rotate(90deg); }
-details.entry { border: 0; padding: 0; }
-details.entry + details.entry { border-top: 1px solid var(--border); }
-details.entry > .entry-body { padding: 4px 10px 16px; }
-
-.load-more {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: none;
-  color: var(--text-dim);
-  font-size: 13px;
-  cursor: pointer;
-}
-.load-more:hover { color: var(--text); border-color: var(--text-faint); }
 
 /* ═══ Graphique d'un actif ══════════════════════════════════════════════ */
 .chart-head {
@@ -891,7 +851,7 @@ details.entry > .entry-body { padding: 4px 10px 16px; }
 
 /* Les clés API vivent maintenant dans Réglages : elles ne changent qu'à
    l'installation et n'ont aucune raison d'occuper la page en permanence. */
-.settings-card { margin-top: 4px; }
+
 
 /* ═══ Onglets collants ══════════════════════════════════════════════════
    En mobile l'en-tête occupe 300 px sur 812 : les onglets disparaissaient au
@@ -923,7 +883,9 @@ details.entry > .entry-body { padding: 4px 10px 16px; }
 /* ═══ Repère de seuil ═══════════════════════════════════════════════════
    L'étiquette flottait au-dessus de la piste et chevauchait la valeur quand la
    dispersion était faible. On la descend sous la piste, où rien ne la gêne. */
-.dispersion-track { margin-bottom: 16px; }
+/* Assez de place sous la piste pour l'étiquette « seuil », qui y est ancrée
+   en absolu et chevauchait la note explicative. */
+.dispersion-track { margin-bottom: 24px; }
 .dispersion-threshold::after {
   top: auto;
   bottom: -15px;
@@ -969,4 +931,120 @@ details.entry > .entry-body { padding: 4px 10px 16px; }
   .chargement .card,
   .chargement .kpi,
   .chargement .verdict { animation: none; opacity: 0.6; }
+}
+
+/* ═══ Bloc de réglages ══════════════════════════════════════════════════
+   Les clés API étaient rendues avec la classe .card : fond, bordure et ombre,
+   posés à l'intérieur d'un panneau qui a déjà les siens. Le double encadrement
+   donnait l'impression d'une carte égarée dans le formulaire. Un simple filet
+   de séparation suffit à délimiter le bloc. */
+.settings-block {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.settings-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.settings-block-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.settings-block .table-scroll { margin-bottom: 12px; }
+.settings-block .add-key { margin-top: 12px; }
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+/* ═══ Repli « Configuration » de l'état du moteur ═══════════════════════
+   Le <details> était posé sans aucun style : marqueur triangulaire par défaut
+   du navigateur, aucun alignement avec le reste de la carte. */
+.status-config {
+  border-top: 1px solid var(--border);
+}
+.status-config > summary {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-config > summary::-webkit-details-marker { display: none; }
+/* Chevron dessiné plutôt que le triangle natif, pour suivre le reste de l'UI
+   (mêmes repliages que dans le journal). */
+.status-config > summary::before {
+  content: "›";
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+.status-config[open] > summary::before { transform: rotate(90deg); }
+.status-config > summary:hover { color: var(--text-dim); }
+.status-config .status-list { padding-top: 0; }
+
+
+/* ═══ Listes libellé/valeur en colonne étroite ══════════════════════════
+   Le couple `dt`/`dd` est posé côte à côte, ce qui va bien tant que la valeur
+   est courte. Dans la colonne étroite de la grille à deux colonnes, des valeurs
+   comme « -0,45 bps sur 3 ordres mesurables » se coupent en deux lignes dont la
+   seconde est alignée à droite, sans lien visuel avec son libellé — trois cas
+   sur les cinq lignes du panneau des coûts.
+
+   En dessous de 1100 px de fenêtre, on empile : libellé au-dessus, valeur en
+   dessous alignée à gauche. Chaque ligne redevient lisible d'un coup d'œil. */
+@media (max-width: 1100px) {
+  .grid-2 .status-list > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .grid-2 .status-list dd { text-align: left; }
+}
+
+/* ═══ Le classement porte le raisonnement ═══════════════════════════════
+   Le journal était une seconde liste des mêmes actifs, à lire en parallèle du
+   classement : pour savoir pourquoi NVDA était premier, il fallait quitter le
+   classement, chercher NVDA dans le journal, puis revenir. Les deux vues
+   décrivaient le même cycle sans jamais se rejoindre. */
+details.rank-item { border-radius: 8px; }
+details.rank-item > summary { list-style: none; cursor: pointer; }
+details.rank-item > summary::-webkit-details-marker { display: none; }
+details.rank-item[open] > summary { border-radius: 8px 8px 0 0; }
+
+.rank-chevron {
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+details.rank-item[open] .rank-chevron { transform: rotate(90deg); }
+
+.rank-detail {
+  padding: 4px 12px 14px;
+  border-left: 2px solid var(--accent-soft);
+  margin: 0 0 6px 10px;
+}
+.rank-detail:empty { display: none; }
+
+/* La ligne accueille désormais le chevron : une colonne de plus. */
+.rank-row {
+  grid-template-columns: 34px 1fr auto auto 14px;
 }
