@@ -173,6 +173,14 @@ async function main() {
       } catch (err) {
         log.error(`${bras.label} #${i + 1} en échec : ${err.message}`);
       }
+
+      // Le palier gratuit plafonne à 15 requêtes/minute. Vingt appels d'affilée
+      // les déclencheraient, et un 429 ici ne coûterait pas qu'un appel : il
+      // laisserait un bras avec moins d'observations que les autres, ce qui
+      // fausse la comparaison des variances que tout le protocole vise.
+      if (config.llm.cooldownMs > 0) {
+        await new Promise((r) => { setTimeout(r, config.llm.cooldownMs); });
+      }
     }
 
     resultats.push({ ...bras, obs });
