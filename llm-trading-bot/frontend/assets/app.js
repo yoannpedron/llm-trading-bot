@@ -47,6 +47,54 @@ const fmtNum = (value, digits = 2) => {
 
 const fmtPct = (value, digits = 2) => (value == null || Number.isNaN(value) ? '—' : `${value >= 0 ? '+' : ''}${fmtNum(value, digits)} %`);
 
+// ── Points de base et prix ────────────────────────────────────────────────
+// Les valeurs venant de l'API étaient interpolées telles quelles dans les
+// gabarits, si bien que JavaScript les rendait avec le point décimal anglais :
+// « 6.04 bps » et « +0.0625 % » voisinaient avec « 99,43 $US ». Trois
+// conventions sur une même page, sur un projet qui ne produit que des chiffres.
+const fmtBps = (value, digits = 2) => (value == null || Number.isNaN(value) ? '—' : `${fmtNum(value, digits)} bps`);
+
+const fmtSignedBps = (value, digits = 2) => (value == null || Number.isNaN(value)
+  ? '—'
+  : `${value >= 0 ? '+' : ''}${fmtNum(value, digits)} bps`);
+
+// Un prix se lit comme un montant : « 495,91 $US », pas « 495,91 USD ». Le
+// tableau des positions affichait le code brut juste sous un KPI en symbole,
+// ce qui donnait l'impression de deux devises différentes.
+const fmtPrice = (value, currency = 'USD') => fmtMoney(value, currency);
+
+/**
+ * Message d'attente d'une mesure.
+ *
+ * Un « — » ne dit pas si la valeur manque parce que le bot est cassé, parce
+ * qu'il n'a pas encore assez tourné, ou parce que la mesure ne s'applique pas.
+ * Le projet passe ses trois premières semaines à collecter : pendant tout ce
+ * temps la page doit annoncer « je collecte », pas « je suis vide ».
+ *
+ * L'échéance est estimée sur le rythme RÉEL de collecte quand on en a un —
+ * jamais déduite du nombre d'actifs, qui donnerait un chiffre trop optimiste :
+ * le dégroupage sériel ne retient qu'une observation par actif tous les 3 jours.
+ */
+function attente({ n = 0, requis, quoi = 'décisions échues', premierAt = null }) {
+  if (!requis) return 'En attente de données.';
+  const manque = requis - n;
+  if (manque <= 0) return null;
+
+  let phrase = `${n} / ${requis} ${quoi}`;
+
+  if (premierAt && n >= 3) {
+    const jours = Math.max(1, (Date.now() - new Date(premierAt).getTime()) / 86400000);
+    const parJour = n / jours;
+    if (parJour > 0) {
+      const date = new Date(Date.now() + Math.ceil(manque / parJour) * 86400000);
+      phrase += ` — vers le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`;
+    }
+  } else if (n === 0) {
+    phrase += ' — la collecte démarre au premier cycle en séance';
+  }
+  return phrase;
+}
+
 const fmtDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -237,6 +285,10 @@ let lastData = null;
 
 function render(data) {
   lastData = data;
+  // Premier rendu réussi : on retire le voile de chargement. Avant lui, tous
+  // les emplacements affichent « — », ce qui est indiscernable d'un tableau
+  // de bord en panne. Le voile dit « ça arrive » pendant les ~700 ms d'appel.
+  document.body.classList.remove('chargement');
   const m = data.measurement || {};
   renderVerdict(m.sprt);
   renderKpis(data.account, m.shadow);
@@ -333,9 +385,12 @@ function renderShadow(shadow) {
   const tbody = $('shadow-table').querySelector('tbody');
 
   if (!shadow || shadow.error || !shadow.samples) {
+    // « — » ne dit pas si le bot est cassé, s'il n'a pas assez tourné, ou si
+    // la mesure ne s'applique pas encore. Le projet passe ses trois premières
+    // semaines à collecter : la page doit annoncer « je collecte ».
     $('shadow-meta').textContent = shadow?.pendingResolution
-      ? `${shadow.pendingResolution} en attente de résolution`
-      : '—';
+      ? `${shadow.pendingResolution} décision(s) en attente d'échéance`
+      : attente({ n: 0, requis: 30 });
     // La note du serveur distingue « rien d'enregistré » de « enregistré mais
     // pas encore échu » — deux situations très différentes pour qui se demande
     // si le bot fonctionne.
@@ -394,7 +449,9 @@ function renderCalibration(calib) {
   };
 
   if (!calib || calib.brier == null) {
-    $('calib-meta').textContent = calib?.n ? `${calib.n} observations` : '—';
+    // 30 observations : en dessous, la fréquence réalisée est dominée par sa
+    // propre variance et on lirait du bruit comme un biais.
+    $('calib-meta').textContent = attente({ n: calib?.n ?? 0, requis: 30, quoi: 'prévisions résolues' }) ?? '—';
     ['calib-verdict', 'calib-bias', 'calib-brier', 'calib-skill'].forEach((id) => set(id, '—', 'muted'));
     tbody.innerHTML = `<tr class="empty"><td colspan="5">${
       esc(calib?.note ?? 'Aucune prévision résolue pour le moment.')
@@ -455,7 +512,7 @@ function renderAdvisory(advisory) {
   const note = $('adv-note');
 
   if (!advisory) {
-    $('advisory-meta').textContent = '—';
+    $('advisory-meta').textContent = attente({ n: 0, requis: 20, quoi: 'décisions du modèle' }) ?? '—';
     ['adv-rate', 'adv-held', 'adv-pushed'].forEach((id) => set(id, '—', 'muted'));
     note.hidden = true;
     return;
@@ -488,7 +545,7 @@ function renderCosts(spreads, execution) {
     // médian » calculé sur 8 actifs au lieu de 11 doit s'annoncer, sinon le
     // chiffre paraît porter sur tout l'univers.
     const exclus = overall.excludedSymbols || [];
-    $('cost-spread').innerHTML = `${overall.medianOfMedians} bps `
+    $('cost-spread').innerHTML = `${fmtBps(overall.medianOfMedians)} `
       + `<span class="muted">(flux ${esc(spreads.feed)}, ${overall.symbolsMeasured} actifs)</span>`
       + (exclus.length
         ? `<br><span class="warn-text" title="Cotations invraisemblables sur ce flux : ces actifs ne participent pas au calcul">`
@@ -500,8 +557,8 @@ function renderCosts(spreads, execution) {
     // `Object.values(symbols)[0]`, donc un actif au hasard selon l'ordre des
     // clés, et affichait son coût comme s'il était général.
     const rt = overall.roundTrip;
-    $('cost-roundtrip').textContent = rt ? `${rt.totalBps} bps — ${fmtMoney(rt.total, 'USD')}` : '—';
-    $('cost-breakeven').textContent = rt ? `+${rt.breakEvenPct} % pour être à l'équilibre` : '—';
+    $('cost-roundtrip').textContent = rt ? `${fmtBps(rt.totalBps)} — ${fmtMoney(rt.total, 'USD')}` : '—';
+    $('cost-breakeven').textContent = rt ? `${fmtPct(rt.breakEvenPct, 4)} pour être à l'équilibre` : '—';
   } else {
     $('cost-meta').textContent = '—';
     $('cost-spread').textContent = 'aucune mesure en séance';
@@ -513,17 +570,17 @@ function renderCosts(spreads, execution) {
     const med = execution.vsExpectedSide.medianBps;
     const cls = med < -0.5 ? 'up' : med > 0.5 ? 'down' : 'muted';
     $('cost-execution').innerHTML =
-      `<span class="${cls}">${med >= 0 ? '+' : ''}${med} bps</span> ` +
-      `<span class="muted">sur ${execution.measurable} fills</span>`;
+      `<span class="${cls}">${fmtSignedBps(med)}</span> ` +
+      `<span class="muted">sur ${execution.measurable} ordre${execution.measurable > 1 ? "s" : ""} mesurable${execution.measurable > 1 ? "s" : ""}</span>`;
     // Le nombre de fills écartés doit accompagner le taux : une « amélioration
     // de prix » calculée après avoir jeté la moitié des échantillons ne se lit
     // pas comme un taux sur tous les ordres.
-    $('cost-improvement').innerHTML = `${(execution.priceImprovementRate * 100).toFixed(0)} % des ordres`
+    $('cost-improvement').innerHTML = `${fmtNum(execution.priceImprovementRate * 100, 0)} % des ordres`
       + (execution.excluded
-        ? ` <span class="muted" title="Cotation de référence inutilisable">(${execution.excluded} fill${execution.excluded > 1 ? 's' : ''} écarté${execution.excluded > 1 ? 's' : ''})</span>`
+        ? ` <span class="muted" title="Cotation de référence inutilisable">(${execution.excluded} ordre${execution.excluded > 1 ? 's' : ''} écarté${execution.excluded > 1 ? 's' : ''})</span>`
         : '');
   } else {
-    $('cost-execution').textContent = execution?.note ? 'aucun fill mesurable' : '—';
+    $('cost-execution').textContent = execution?.note ? 'aucun ordre mesurable' : '—';
     $('cost-improvement').textContent = '—';
   }
 }
@@ -671,10 +728,10 @@ function renderPositions(positions, currency) {
       // La classe `active` est réappliquée ICI, et pas seulement au clic : le
       // tableau est reconstruit à chaque rafraîchissement, ce qui effaçait le
       // surlignage de la ligne dont on consulte justement le cours.
-      (p) => `<tr class="position-row${chartSymbol === p.symbol ? ' active' : ''}" data-symbol="${esc(p.symbol)}" title="Voir le cours de ${esc(p.symbol)}">
+      (p) => `<tr class="position-row${chartSymbol === p.symbol ? ' active' : ''}" data-symbol="${esc(p.symbol)}" tabindex="0" role="button" aria-pressed="${chartSymbol === p.symbol}" aria-label="Voir le cours de ${esc(p.symbol)}" title="Voir le cours de ${esc(p.symbol)}">
         <td class="sym">${esc(p.symbol)}</td>
         <td class="num">${fmtNum(p.quantity, 4)}</td>
-        <td class="num">${fmtNum(p.avgPrice, 2)} ${esc(p.currency || '')}</td>
+        <td class="num">${fmtPrice(p.avgPrice, p.currency || 'USD')}</td>
         <td class="num">${fmtNum(p.lastPrice, 2)}</td>
         <td class="num">${fmtMoney(p.marketValue, currency)}</td>
         <td class="num ${signClass(p.unrealizedPnl)}">${fmtMoney(p.unrealizedPnl, currency)} <span class="muted">(${fmtPct(p.unrealizedPnlPct)})</span></td>
@@ -1442,7 +1499,7 @@ function renderTrades(trades, currency) {
         <td><span class="tag ${t.side === 'BUY' ? 'tag-buy' : 'tag-sell'}">${esc(t.side)}</span></td>
         <td class="sym">${esc(t.symbol)}</td>
         <td class="num">${fmtNum(t.quantity, 4)}</td>
-        <td class="num">${fmtNum(t.price, 2)} ${esc(t.currency || '')}</td>
+        <td class="num">${fmtPrice(t.price, t.currency || 'USD')}</td>
         <td class="num">${fmtMoney(t.notional, currency)}</td>
         <td class="num ${signClass(t.realizedPnl)}">${t.side === 'SELL' ? fmtMoney(t.realizedPnl, currency) : '—'}</td>
         <td class="muted">${esc(t.source || 'llm')}</td>
@@ -1542,9 +1599,20 @@ function renderRanking(ranking) {
     $('ranking-abstention').hidden = true;
     $('disp-value').textContent = '—';
     $('disp-fill').style.width = '0%';
-    body.innerHTML = '<p class="empty-block">Aucun classement — le bot n’a pas encore analysé l’univers en séance.</p>';
+    // Sans cette ligne le marqueur reste à gauche à 0 %, et son étiquette —
+    // centrée par translateX(-50%) — sortait de la carte : on lisait « uil ».
+    $('disp-threshold').style.left = '25%';
+    // Sans classement, les boutons de vue restaient cliquables sans rien
+    // produire — une commande qui ne répond pas fait croire à une panne. On
+    // les masque tant qu'il n'y a rien à trier.
+    $('ranking-views').hidden = true;
+    $('ranking-search-wrap').hidden = true;
+    body.innerHTML = '<p class="empty-block">Aucun classement — le bot n’a pas encore analysé l’univers en séance. '
+      + 'Le premier arrivera au prochain cycle en séance.</p>';
     return;
   }
+
+  $('ranking-views').hidden = false;
 
   const rows = ranking.classement;
   const retenus = rows.filter((r) => r.retenu).length;
@@ -1866,14 +1934,33 @@ $('journal-search').addEventListener('input', (event) => {
    ONGLETS
    ═══════════════════════════════════════════════════════════════════════ */
 
+/**
+ * L'onglet actif vit dans le fragment d'URL.
+ *
+ * Deux bénéfices pour trois lignes : un rafraîchissement ne ramène plus de
+ * force sur « Aujourd'hui » — ce qui était pénible en pleine lecture des
+ * mesures — et la page peut être mise en favori directement sur l'onglet
+ * voulu.
+ */
+function activerOnglet(nom, ecrireUrl = true) {
+  const valide = nom === 'mesures' ? 'mesures' : 'aujourdhui';
+  for (const tab of $('tabs').querySelectorAll('.tab')) {
+    const actif = tab.dataset.tab === valide;
+    tab.classList.toggle('tab-active', actif);
+    tab.setAttribute('aria-selected', String(actif));
+  }
+  $('tab-aujourdhui').hidden = valide !== 'aujourdhui';
+  $('tab-mesures').hidden = valide !== 'mesures';
+  if (ecrireUrl) history.replaceState(null, '', `#${valide}`);
+}
+
+activerOnglet(location.hash.replace('#', ''), false);
+window.addEventListener('hashchange', () => activerOnglet(location.hash.replace('#', ''), false));
+
 $('tabs').addEventListener('click', (event) => {
   const button = event.target.closest('button[data-tab]');
   if (!button) return;
-  for (const tab of $('tabs').querySelectorAll('.tab')) {
-    tab.classList.toggle('tab-active', tab === button);
-  }
-  $('tab-aujourdhui').hidden = button.dataset.tab !== 'aujourdhui';
-  $('tab-mesures').hidden = button.dataset.tab !== 'mesures';
+  activerOnglet(button.dataset.tab);
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1897,7 +1984,11 @@ async function showSymbolChart(symbol, range = chartRange) {
     chip.classList.toggle('chip-active', chip.dataset.range === range);
   }
   for (const row of document.querySelectorAll('.position-row')) {
-    row.classList.toggle('active', row.dataset.symbol === symbol);
+    const actif = row.dataset.symbol === symbol;
+    row.classList.toggle('active', actif);
+    // aria-pressed doit suivre la classe : un lecteur d'écran annonce sinon
+    // « non pressé » sur la ligne qu'on vient justement d'activer.
+    row.setAttribute('aria-pressed', String(actif));
   }
 
   try {
@@ -1919,7 +2010,10 @@ function showEquityChart() {
   $('chart-title').textContent = 'Évolution du capital';
   $('chart-ranges').hidden = true;
   $('chart-back').hidden = true;
-  for (const row of document.querySelectorAll('.position-row')) row.classList.remove('active');
+  for (const row of document.querySelectorAll('.position-row')) {
+    row.classList.remove('active');
+    row.setAttribute('aria-pressed', 'false');
+  }
   if (lastData) renderChart(lastData.equityCurve, lastData.account, lastData.serverTime);
 }
 
@@ -1971,7 +2065,7 @@ function drawSeries(data) {
   const graduations = [0, 0.25, 0.5, 0.75, 1].map((f) => {
     const v = lo + f * (hi - lo);
     return `<line x1="${PAD.left}" y1="${y(v).toFixed(1)}" x2="${W - PAD.right}" y2="${y(v).toFixed(1)}" class="grid-line"/>`
-      + `<text x="${W - PAD.right + 6}" y="${(y(v) + 3.5).toFixed(1)}" class="axis-label">${v.toFixed(dec)}</text>`;
+      + `<text x="${W - PAD.right + 6}" y="${(y(v) + 3.5).toFixed(1)}" class="axis-label">${fmtNum(v, dec)}</text>`;
   }).join('');
 
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
@@ -1983,8 +2077,8 @@ function drawSeries(data) {
   </svg>`;
 
   const variation = ((dernier - premier) / premier) * 100;
-  $('chart-range').textContent = `${points.length} points · ${dernier.toFixed(dec)} ${data.currency || 'USD'} · `
-    + `${variation >= 0 ? '+' : ''}${variation.toFixed(2)} % sur la période`;
+  $('chart-range').textContent = `${points.length} points · ${fmtPrice(dernier, data.currency || 'USD')} · `
+    + `${fmtPct(variation)} sur la période`;
 }
 
 $('chart-ranges').addEventListener('click', (event) => {
@@ -1994,6 +2088,17 @@ $('chart-ranges').addEventListener('click', (event) => {
 });
 
 // Clic sur une position : le graphique bascule sur le cours de l'action.
+// Entrée et Espace déclenchent la ligne comme un bouton. Sans ça, les lignes
+// annoncées « role=button » aux lecteurs d'écran ne répondaient qu'à la souris —
+// promettre une interaction qu'on ne fournit pas est pire que ne rien annoncer.
+$('positions-table').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const row = event.target.closest('.position-row');
+  if (!row) return;
+  event.preventDefault();
+  row.click();
+});
+
 $('positions-table').addEventListener('click', (event) => {
   const row = event.target.closest('.position-row');
   if (!row) return;

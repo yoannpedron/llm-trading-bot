@@ -629,7 +629,10 @@ details.raw pre {
 .dispersion-fill.below { background: var(--warn); }
 /* Le seuil est matérialisé sur la piste : on veut voir d'un coup d'œil si le
    bot en était loin ou à un cheveu. */
+/* Position par défaut : le marqueur ne doit jamais coller au bord, sinon son
+   étiquette centrée déborde de la carte. */
 .dispersion-threshold {
+  left: 25%;
   position: absolute;
   top: -4px;
   bottom: -4px;
@@ -889,3 +892,81 @@ details.entry > .entry-body { padding: 4px 10px 16px; }
 /* Les clés API vivent maintenant dans Réglages : elles ne changent qu'à
    l'installation et n'ont aucune raison d'occuper la page en permanence. */
 .settings-card { margin-top: 4px; }
+
+/* ═══ Onglets collants ══════════════════════════════════════════════════
+   En mobile l'en-tête occupe 300 px sur 812 : les onglets disparaissaient au
+   premier défilement et il fallait remonter toute la page pour en changer. */
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding-top: 8px;
+}
+
+/* ═══ Chiffres alignés ══════════════════════════════════════════════════
+   Sans chasse fixe, les décimales dansent d'une ligne à l'autre et deux
+   montants de même ordre de grandeur paraissent différents. */
+.num,
+.mono,
+.rank-edge,
+.rank-pos,
+.bucket-value,
+.progress-label,
+.dispersion-head strong,
+.rank-stat strong,
+.kpi-value {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ═══ Repère de seuil ═══════════════════════════════════════════════════
+   L'étiquette flottait au-dessus de la piste et chevauchait la valeur quand la
+   dispersion était faible. On la descend sous la piste, où rien ne la gêne. */
+.dispersion-track { margin-bottom: 16px; }
+.dispersion-threshold::after {
+  top: auto;
+  bottom: -15px;
+}
+
+
+/* ═══ Ligne de position au clavier ══════════════════════════════════════ */
+.position-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ═══ En-tête compact sur petit écran ═══════════════════════════════════
+   Trois rangées — titre, sous-titre, badges, trois boutons — mangeaient 300 px
+   avant le moindre contenu. Le sous-titre et l'horodatage disparaissent : ils
+   ne servent pas à décider. */
+@media (max-width: 600px) {
+  .topbar { padding: 10px 14px; gap: 8px; }
+  .brand-sub { display: none; }
+  .conn { font-size: 11px; }
+  .topbar-right { gap: 6px; }
+  .topbar-right .btn { padding: 6px 10px; font-size: 12px; }
+  .tabs { padding-top: 4px; }
+}
+
+/* ═══ Voile de premier chargement ═══════════════════════════════════════
+   Avant la première réponse, chaque emplacement affiche « — ». C'est
+   indiscernable d'un tableau de bord en panne — d'autant que ce projet passe
+   ses trois premières semaines avec des mesures légitimement vides. Le voile
+   distingue « je charge » de « il n'y a rien ». */
+.chargement .card,
+.chargement .kpi,
+.chargement .verdict {
+  animation: pulsation 1.4s ease-in-out infinite;
+}
+@keyframes pulsation {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+/* Respecte le réglage système : une animation qui pulse en continu est
+   pénible, voire déclenchante, pour qui a demandé moins de mouvement. */
+@media (prefers-reduced-motion: reduce) {
+  .chargement .card,
+  .chargement .kpi,
+  .chargement .verdict { animation: none; opacity: 0.6; }
+}

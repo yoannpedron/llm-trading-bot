@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
-<body>
+<body class="chargement">
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">◈</span>
@@ -65,7 +65,7 @@
         <p id="capacity-detail" class="capacity-detail">—</p>
       </div>
       <div class="table-scroll">
-        <table id="keys-table">
+        <table id="keys-table" aria-label="Clés API Gemini">
           <thead><tr><th>Nom</th><th>Clé</th><th>Source</th><th class="num">Consommé</th><th>Quota</th><th>État</th><th></th></tr></thead>
           <tbody><tr class="empty"><td colspan="7">Renseigne ton jeton administrateur dans Réglages.</td></tr></tbody>
         </table>
@@ -97,13 +97,13 @@
          consultent de temps en temps, pas à chaque coup d'œil : les
          séparer évite de faire défiler ce qu'on ne lit jamais.      -->
     <nav class="tabs" id="tabs" role="tablist">
-      <button class="tab tab-active" data-tab="aujourdhui" role="tab">Aujourd'hui</button>
-      <button class="tab" data-tab="mesures" role="tab">Mesures</button>
+      <button class="tab tab-active" data-tab="aujourdhui" role="tab" aria-selected="true">Aujourd'hui</button>
+      <button class="tab" data-tab="mesures" role="tab" aria-selected="false">Mesures</button>
     </nav>
 
     <div id="tab-aujourdhui" class="tab-panel">
     <!-- ═══ LE VERDICT — l'élément central du projet ═══════════════════ -->
-    <section id="verdict" class="verdict verdict-unknown">
+    <section id="verdict" class="verdict verdict-unknown" aria-live="polite">
       <div class="verdict-head">
         <span id="verdict-badge" class="verdict-badge">—</span>
         <h2>Verdict statistique</h2>
@@ -147,7 +147,7 @@
         </p>
       </div>
 
-      <div id="ranking-abstention" class="abstention" hidden></div>
+      <div id="ranking-abstention" class="abstention" hidden role="status"></div>
 
       <div class="filters" id="ranking-views">
         <button class="chip chip-active" data-view="top">Podium</button>
@@ -219,7 +219,7 @@
           <span id="positions-count" class="card-meta">—</span>
         </div>
         <div class="table-scroll">
-          <table id="positions-table">
+          <table id="positions-table" aria-label="Positions ouvertes">
             <thead>
               <tr><th>Actif</th><th class="num">Qté</th><th class="num">PRU</th><th class="num">Cours</th>
                   <th class="num">Valeur actuelle</th><th class="num">P&amp;L latent</th><th class="num">Stop</th></tr>
@@ -301,7 +301,7 @@
         <span id="trades-count" class="card-meta">—</span>
       </div>
       <div class="table-scroll">
-        <table id="trades-table">
+        <table id="trades-table" aria-label="Historique des ordres">
           <thead><tr><th>Date</th><th>Sens</th><th>Actif</th><th class="num">Qté</th>
                      <th class="num">Prix</th><th class="num">Montant payé</th><th class="num">P&amp;L</th><th>Origine</th></tr></thead>
           <tbody><tr class="empty"><td colspan="8">Aucun ordre passé.</td></tr></tbody>
@@ -376,7 +376,7 @@
           C'est la seule mesure non contaminée par la mémorisation des LLM.
         </p>
         <div class="table-scroll">
-          <table id="shadow-table">
+          <table id="shadow-table" aria-label="Qualité de prédiction par segment">
             <thead><tr><th>Segment</th><th class="num">n</th><th class="num">Réussite</th><th class="num">Score moyen</th><th class="num">Excédent réel</th><th class="num">Sharpe</th></tr></thead>
             <tbody><tr class="empty"><td colspan="6">Aucune décision résolue.</td></tr></tbody>
           </table>
@@ -421,7 +421,7 @@
           <div><dt>Pouvoir discriminant</dt><dd id="calib-skill">—</dd></div>
         </dl>
         <div class="table-scroll">
-          <table id="calib-table">
+          <table id="calib-table" aria-label="Fiabilité des probabilités par tranche">
             <thead><tr><th>Annoncé</th><th class="num">n</th><th class="num">Moyenne annoncée</th><th class="num">Réalisé</th><th class="num">Écart</th></tr></thead>
             <tbody><tr class="empty"><td colspan="5">Aucune prévision résolue.</td></tr></tbody>
           </table>
