@@ -415,6 +415,26 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
 
   let noms = [...new Set(signaux.values().next().value ? Object.keys([...signaux.values()][0]) : [])];
 
+  // ── `reversal` est la NÉGATION EXACTE de `momentumCourt` ────────────────
+  // Vérifié sur données réelles : momentumCourt = −0,022618 et reversal =
+  // +0,022618, somme nulle à la précision machine. Les deux facteurs sont le
+  // même rendement 5 séances, au signe près.
+  //
+  // Une fois `reversal` réorienté pour ne pas annuler le momentum, sa colonne
+  // devient donc RIGOUREUSEMENT IDENTIQUE. On fournissait deux fois le même
+  // signal : l'orthogonalisation détectait une direction sans information
+  // propre et la neutralisait — proprement, mais pour rien. L'entropie de
+  // diversité en était mécaniquement abaissée.
+  //
+  // Il reste mesuré comme témoin négatif dans le carnet, où sa valeur est
+  // réelle : c'est lui qui dira si le sens choisi était le bon. Mais il n'a
+  // rien à faire dans le mélange.
+  const NEGATIONS_EXACTES = ['reversal'];
+  const doublons = noms.filter((n) => NEGATIONS_EXACTES.includes(n));
+  if (doublons.length && noms.length > doublons.length) {
+    noms = noms.filter((n) => !doublons.includes(n));
+  }
+
   // ── Le modèle est ÉCARTÉ du mélange s'il n'a rien différencié ───────────
   // Le test global vérifie que le classement du modèle est distinguable d'un
   // tirage au sort. Quand il échoue, la bonne réponse n'est plus de tout
@@ -451,10 +471,16 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
     noms,
     stress: regime.stress,
     // Le retour à la moyenne est remis dans le sens du momentum, sans quoi
-    // les deux s'annulent. Sa sensibilité au régime est NÉGATIVE : en
-    // dislocation, il reprend son sens propre et s'oppose au momentum.
-    orientations: { reversal: -1 },
-    sensibiliteRegime: { reversal: -1 },
+    // ── Plus aucune réorientation à faire ─────────────────────────────────
+    // Le seul signal de signe opposé était `reversal`, et il vient d'être
+    // écarté comme doublon exact de `momentumCourt`. Les quatre autres
+    // pointent tous dans le sens « plus c'est haut, mieux c'est ».
+    //
+    // La bascule de régime reste calculée et publiée, mais elle ne pondère
+    // plus rien : imposer aujourd'hui quel signal doit dominer en dislocation
+    // serait deviner. Le carnet le dira, en segmentant les scores par régime.
+    orientations: {},
+    sensibiliteRegime: {},
   });
 
   return {
