@@ -413,7 +413,25 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
     return { scores: new Map(), note: 'trop peu d\'actifs pour combiner' };
   }
 
-  const noms = [...new Set(signaux.values().next().value ? Object.keys([...signaux.values()][0]) : [])];
+  let noms = [...new Set(signaux.values().next().value ? Object.keys([...signaux.values()][0]) : [])];
+
+  // ── Le modèle est ÉCARTÉ du mélange s'il n'a rien différencié ───────────
+  // Le test global vérifie que le classement du modèle est distinguable d'un
+  // tirage au sort. Quand il échoue, la bonne réponse n'est plus de tout
+  // bloquer : les cinq facteurs mécaniques restent parfaitement exploitables,
+  // et s'en priver reviendrait à laisser une défaillance du modèle paralyser
+  // des formules qui, elles, n'ont pas failli.
+  //
+  // On retire donc la seule colonne fautive. Le bot continue de décider, avec
+  // un signal de moins et en le disant.
+  const modeleInutilisable = listwise?.test && listwise.test.significatif === false;
+  if (modeleInutilisable && noms.includes('llm') && noms.length > 1) {
+    noms = noms.filter((n) => n !== 'llm');
+    log.warn(
+      `Classement du modèle non distinguable du hasard (p = ${listwise.test.p?.toFixed(3)}) — `
+      + `écarté du mélange, décision prise sur ${noms.length} facteur(s) mécanique(s).`,
+    );
+  }
 
   // Dispersion transversale du momentum court : elle sert d'indicateur de
   // régime. Choisie plutôt que la volatilité de l'indice parce qu'elle se lit
@@ -443,6 +461,7 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
     ...resultat,
     regime,
     signauxUtilises: noms,
+    modeleEcarte: Boolean(modeleInutilisable && !noms.includes('llm')),
     testGlobalListwise: listwise?.test?.significatif ?? null,
   };
 }

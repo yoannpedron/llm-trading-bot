@@ -7,6 +7,7 @@ process.env.GEMINI_API_KEY = '';
 const {
   zscoreWinsorise, jacobiEigen, lowdinOrthogonalise,
   combinerSignaux, poidsSelonRegime, entropieDiversite,
+  melangerSignaux,
 } = await import('../src/core/signalBlend.js');
 
 function mulberry32(a) {
@@ -296,5 +297,66 @@ describe('combinaison complète', () => {
     const { signaux } = universSynthetique();
     const r = combinerSignaux(signaux, { noms, orientations });
     assert.ok(r.entropieDiversite > 0 && r.entropieDiversite <= 1);
+  });
+});
+
+describe('le modèle défaillant n\'arrête pas le bot', () => {
+
+  function cycle(n = 60, graine = 31) {
+    const r = mulberry32(graine);
+    const g = () => { const u = r(); const v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const evals = []; const rangs = new Map();
+    for (let i = 0; i < n; i += 1) {
+      const s = `S${i}`; const v = g();
+      evals.push({ symbol: s, evaluated: true, decision: { lambda: v + 0.4 * g() } });
+      rangs.set(s, {
+        momentumCourt: { score: v + 0.5 * g() },
+        reversal: { score: -(v + 0.5 * g()) },
+        volatilite: { score: -Math.abs(g()) },
+        rsi: { score: g() },
+      });
+    }
+    return { evals, rangs };
+  }
+
+  test('quand le classement du modèle est du bruit, il est ÉCARTÉ et non bloquant', () => {
+    // C'était le mauvais arbitrage : bloquer tout le cycle parce qu'un signal
+    // sur six a failli, en paralysant cinq formules qui, elles, fonctionnent.
+    const { evals, rangs } = cycle();
+    const r = melangerSignaux(evals, rangs, { test: { significatif: false, p: 0.42 } });
+
+    assert.equal(r.modeleEcarte, true);
+    assert.equal(r.signauxUtilises.includes('llm'), false, 'le signal fautif doit sortir du mélange');
+    assert.ok(r.scores.size > 0, 'le bot doit continuer à classer sur les autres signaux');
+  });
+
+  test('quand le modèle fonctionne, il participe au mélange', () => {
+    const { evals, rangs } = cycle();
+    const r = melangerSignaux(evals, rangs, { test: { significatif: true, p: 0.004 } });
+    assert.equal(r.modeleEcarte, false);
+    assert.ok(r.signauxUtilises.includes('llm'));
+  });
+
+  test('le score combiné ne produit aucun ex æquo', () => {
+    const { evals, rangs } = cycle(150, 77);
+    const r = melangerSignaux(evals, rangs, { test: { significatif: true } });
+    const scores = [...r.scores.values()].filter(Number.isFinite);
+    assert.equal(new Set(scores.map((v) => v.toFixed(9))).size, scores.length);
+  });
+
+  test('un actif sans aucun facteur reste classé sur le seul modèle', () => {
+    const { evals, rangs } = cycle(60, 5);
+    rangs.delete('S3');
+    const r = melangerSignaux(evals, rangs, { test: { significatif: true } });
+    assert.ok(Number.isFinite(r.scores.get('S3')), 'un trou de données ne doit pas éliminer l\'actif');
+  });
+
+  test('le régime est calculé sur la dispersion, jamais sur l\'exposition', () => {
+    // La recherche invalide la modulation d'exposition. Ce qui bascule ici est
+    // le POIDS DES SIGNAUX, jamais la part investie.
+    const { evals, rangs } = cycle();
+    const r = melangerSignaux(evals, rangs, { test: { significatif: true } });
+    assert.ok(['calme', 'intermédiaire', 'dislocation', 'inconnu'].includes(r.regime.regime));
+    assert.ok(r.regime.stress >= 0 && r.regime.stress <= 1);
   });
 });

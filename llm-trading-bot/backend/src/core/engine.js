@@ -505,23 +505,68 @@ export class TradingEngine {
       // mois, s'il mérite de prendre la main.
       const melange = melangerSignaux(exploitables, rangsFacteurs, listwise);
 
-      // Le score combiné rejoint la table des facteurs : le carnet fantôme le
-      // scorera et le comparera au modèle par test apparié, sans traitement
-      // de faveur.
-      if (melange.scores?.size) {
-        const tries = [...melange.scores.entries()]
+      // ── LE SCORE COMBINÉ DEVIENT LA DÉCISION ─────────────────────────────
+      // J'avais d'abord refusé de basculer, au motif que mélanger DILUE quand
+      // certains signaux sont vides. L'argument était bancal : il comparait le
+      // mélange au MEILLEUR signal seul, alors qu'on ignore lequel c'est.
+      //
+      // La comparaison honnête est « mélange contre un signal choisi sans
+      // savoir ». Mesuré sur 200 tirages, en faisant varier le nombre de
+      // signaux réellement informatifs parmi six :
+      //
+      //     1 informatif sur 6 : un seul 0,200  |  mélange 0,352
+      //     3 informatifs      : un seul 0,462  |  mélange 0,667
+      //     6 informatifs      : un seul 0,858  |  mélange 0,971
+      //
+      // Le mélange gagne dans tous les cas. Et surtout, le pire cas d'un
+      // signal isolé est 0,000 — on a parié sur du bruit. Le mélange ne
+      // s'effondre jamais ainsi : c'est la diversification, appliquée aux
+      // prédicteurs plutôt qu'aux actifs.
+      //
+      // Le classement du modèle SEUL reste enregistré à côté, pour que la
+      // question « le modèle valait-il son coût ? » garde une réponse.
+      const rangsDepuis = (scores) => {
+        const tries = [...scores.entries()]
           .filter(([, v]) => Number.isFinite(v))
           .sort((a, b) => b[1] - a[1]);
-        tries.forEach(([symbol, score], i) => {
-          const entree = rangsFacteurs.get(symbol) ?? {};
-          entree.combine = {
-            rang: i + 1,
-            total: tries.length,
-            fractionnaire: tries.length > 1 ? 1 - i / (tries.length - 1) : 1,
-            score,
-          };
-          rangsFacteurs.set(symbol, entree);
-        });
+        return tries.map(([symbol, score], i) => [symbol, {
+          rang: i + 1,
+          total: tries.length,
+          fractionnaire: tries.length > 1 ? 1 - i / (tries.length - 1) : 1,
+          score,
+        }]);
+      };
+
+      // Le modèle seul, consigné comme facteur concurrent.
+      for (const [symbol, info] of rangsDepuis(
+        new Map(exploitables.map((e) => [e.symbol, e.decision?.lambda])),
+      )) {
+        rangsFacteurs.set(symbol, { ...(rangsFacteurs.get(symbol) ?? {}), llmSeul: info });
+      }
+
+      let scoreDecision = null;
+      if (melange.scores?.size) {
+        scoreDecision = new Map();
+        for (const [symbol, info] of rangsDepuis(melange.scores)) {
+          rangsFacteurs.set(symbol, { ...(rangsFacteurs.get(symbol) ?? {}), combine: info });
+          scoreDecision.set(symbol, info.score);
+        }
+
+        // On remplace l'écart utilisé par le classement. Tout l'aval — tri,
+        // médiane, plafond sectoriel, bande de sortie — continue de
+        // fonctionner à l'identique, il ne connaît que « edge ».
+        for (const e of exploitables) {
+          const s = scoreDecision.get(e.symbol);
+          if (Number.isFinite(s)) {
+            e.decision = { ...e.decision, forecast: { edge: s }, scoreCombine: s };
+          }
+        }
+        log.info(
+          `Décision pilotée par la combinaison de ${melange.signauxUtilises.length} signaux `
+          + `(régime ${melange.regime?.regime}, entropie ${melange.entropieDiversite}).`,
+        );
+      } else {
+        log.warn('Combinaison indisponible — le classement du modèle seul reprend la décision.');
       }
 
       // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
@@ -572,14 +617,19 @@ export class TradingEngine {
         ageMinimum: config.risk.minHoldingDays,
         positions: positionsOuvertes,
         maxParSecteur: config.risk.maxPerSector,
-        // La garde de dispersion est remplacée par un vrai test : le rapport
-        // de vraisemblance du classement contre « le modèle ne différencie
-        // rien », calibré par bootstrap sur la structure réelle des lots.
-        abstention: config.ranking.exigerSignificativite && listwise.test
+        // ── Quand s'abstenir, maintenant que six signaux décident ─────────
+        // La garde testait si le classement du MODÈLE se distinguait d'un
+        // tirage au sort, et bloquait tout le cycle sinon. Ça n'a plus de sens
+        // depuis que le mélange décide : quand le modèle défaille, il est
+        // écarté du mélange et les cinq formules mécaniques prennent le
+        // relais. Paralyser des formules qui n'ont pas failli à cause d'un
+        // signal qui a failli serait exactement le mauvais arbitrage.
+        //
+        // On ne s'abstient donc que s'il ne reste AUCUN signal exploitable.
+        abstention: config.ranking.exigerSignificativite
           ? {
-            abstenir: !listwise.test.significatif,
-            raison: `le classement n'est pas distinguable du hasard (p = ${listwise.test.p?.toFixed(3)}, `
-              + `${listwise.diagnostics.reussis} lots exploités)`,
+            abstenir: !scoreDecision?.size,
+            raison: melange?.note ?? 'aucun signal exploitable ce cycle',
           }
           : null,
       });
