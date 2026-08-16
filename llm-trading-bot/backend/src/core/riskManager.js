@@ -332,8 +332,22 @@ export class RiskManager {
    * ── Le NIVEAU, lui, n'est pas déterminable ──────────────────────────────
    * Entre 13 % et 17 %, la période 2017-2019 donne +4,1 / -1,1 / +0,9 / -4,6.
    * Des seuils voisins produisent des portefeuilles quasi identiques : cette
-   * oscillation de cinq points est du bruit de trades individuels, rien de
-   * plus. On retient donc le MILIEU de la bande, jamais son maximum.
+   * oscillation de cinq points est du bruit de trades individuels.
+   *
+   * ── Et le piège s'est refermé une première fois ─────────────────────────
+   * J'avais retenu 13 %, en croyant prendre le milieu de la bande. Rejoué sur
+   * dix ans, ce seuil-là donnait 1428 $ quand ses quatre voisins immédiats
+   * tenaient tous autour de 1080 $ :
+   *
+   *     11 %    12 %     13 %     14 %     15 %     16 %    17 %
+   *     756 $  1081 $   1428 $   1100 $   1073 $   1028 $   837 $
+   *
+   * 13 % n'était pas le centre, c'était le sommet — et un sommet isolé de
+   * 32 % au-dessus de ses deux voisins ne décrit aucun phénomène.
+   *
+   * Le plateau réel va de 12 % à 16 %, et son milieu est 14 %. Sa valeur
+   * (1100 $) est représentative de la bande, non exceptionnelle. C'est ce qui
+   * la rend utilisable : on n'attend pas 1428 $, on attend ~1080 $.
    *
    * ── Pourquoi ça peut marcher ───────────────────────────────────────────
    * Le classement achète des titres à momentum extrême. Or l'IC transversal
