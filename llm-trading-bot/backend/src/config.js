@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // entities.js ne dépend que de node: — pas de cycle d'import avec config.
 import { entityCoverage } from './llm/entities.js';
+import { UNIVERSE_150 } from './data/universe.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -68,9 +69,25 @@ export const config = {
   },
 
   universe: {
-    // Watchlist analysée à chaque cycle. Ce n'est PAS le nombre de positions :
-    // le gestionnaire de risque en autorise 3 simultanées au maximum.
-    symbols: list('SYMBOLS', ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD', 'NFLX', 'AVGO']),
+    // Univers analysé à chaque cycle. Ce n'est PAS le nombre de positions :
+    // le gestionnaire de risque en retient 10 au maximum.
+    //
+    // ── Pourquoi le défaut est l'univers complet ───────────────────────────
+    // Il valait ici une liste de DIX valeurs codée en dur, pendant que
+    // `.env.example` annonçait « vide = univers de 150 valeurs par défaut ».
+    // La documentation décrivait une intention, le code faisait autre chose,
+    // et rien ne signalait l'écart.
+    //
+    // La conséquence n'est pas cosmétique. Toute la stratégie est un
+    // CLASSEMENT TRANSVERSAL : on retient les dix meilleurs d'un univers
+    // large. Avec dix candidats pour dix places, il n'y a plus de sélection —
+    // le bot achète tout ce qu'il regarde, et le classement, la bande de
+    // non-négociation et le plafond sectoriel deviennent tous inertes.
+    //
+    // Le serveur tournait exactement dans cet état. Renseigner les 150
+    // symboles à la main dans chaque `.env` reconduirait le piège au premier
+    // oubli : le défaut doit être l'univers complet.
+    symbols: list('SYMBOLS', UNIVERSE_150),
     // Bougies journalières : l'horizon de détention visé est de 1 à 7 jours.
     // L'intraday est écarté — le coût de rotation le rend non rentable ici.
     interval: str('CANDLE_INTERVAL', '1d'),

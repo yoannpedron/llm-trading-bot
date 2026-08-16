@@ -655,3 +655,50 @@ describe('journalisation — une sortie cassée ne doit pas tuer le bot', () => 
     assert.equal(recent[recent.length - 1].message, 'entrée 499', 'et la plus récente est bien la dernière');
   });
 });
+
+describe('univers par défaut — le piège qui a tourné en production', () => {
+  // `config.js` doit être chargé dans un processus PROPRE : la suite de tests
+  // fixe elle-même `SYMBOLS`, et le module est mis en cache au premier import.
+  const universeAvec = (env) => {
+    const enfant = spawnSync(
+      process.execPath,
+      ['-e', 'import("./src/config.js").then(({config:c})=>console.log(c.universe.symbols.length))'],
+      { env: { ...process.env, DATA_DIR: process.env.DATA_DIR, ...env }, encoding: 'utf8', timeout: 20000 },
+    );
+    return Number((enfant.stdout || '').trim().split('\n').pop());
+  };
+
+  test('sans SYMBOLS, l\'univers complet est chargé', () => {
+    // Le défaut valait une liste de DIX valeurs codée en dur, pendant que
+    // `.env.example` annonçait « vide = univers de 150 valeurs par défaut ».
+    //
+    // Ce n'est pas un détail de documentation. La stratégie est un CLASSEMENT
+    // TRANSVERSAL : elle retient les dix meilleurs d'un univers large. Avec
+    // dix candidats pour dix places il n'y a plus de sélection — le bot achète
+    // tout ce qu'il regarde, et le classement, la bande de non-négociation et
+    // le plafond sectoriel deviennent tous inertes.
+    //
+    // Le serveur a tourné dans cet état, sans que rien ne le signale.
+    const env = { ...process.env };
+    delete env.SYMBOLS;
+    const enfant = spawnSync(
+      process.execPath,
+      ['-e', 'import("./src/config.js").then(({config:c})=>console.log(c.universe.symbols.length))'],
+      { env, encoding: 'utf8', timeout: 20000 },
+    );
+    const n = Number((enfant.stdout || '').trim().split('\n').pop());
+    assert.ok(n >= 100, `univers par défaut trop étroit : ${n} titres — le classement n'a plus rien à classer`);
+  });
+
+  test('SYMBOLS vide se comporte comme SYMBOLS absent', () => {
+    // C'est la forme qu'a un `.env` où la ligne existe sans valeur, et c'est
+    // exactement ce que `.env.example` propose de laisser tel quel.
+    assert.ok(universeAvec({ SYMBOLS: '' }) >= 100);
+  });
+
+  test('une liste explicite reste prioritaire', () => {
+    // Le repli ne doit pas empêcher de restreindre l'univers volontairement,
+    // ce dont les tests et le développement local dépendent.
+    assert.equal(universeAvec({ SYMBOLS: 'AAPL,MSFT,NVDA' }), 3);
+  });
+});
