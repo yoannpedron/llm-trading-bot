@@ -298,6 +298,49 @@ describe('combinaison complète', () => {
     const r = combinerSignaux(signaux, { noms, orientations });
     assert.ok(r.entropieDiversite > 0 && r.entropieDiversite <= 1);
   });
+
+  test('le poids de base bascule le classement vers le signal favorisé', () => {
+    // Ce qu'on vérifie n'est pas qu'un nombre a changé, mais que le score
+    // combiné se RAPPROCHE du signal qu'on privilégie — sans quoi le poids
+    // serait décoratif.
+    const { signaux } = universSynthetique();
+    const egal = combinerSignaux(signaux, { noms, orientations });
+    const penche = combinerSignaux(signaux, { noms, orientations, poidsBase: { momentum: 8 } });
+
+    const cle = [...signaux.keys()];
+    const colonneMomentum = cle.map((s) => signaux.get(s).momentum);
+    const rhoEgal = Math.abs(correlation(cle.map((s) => egal.scores.get(s)), colonneMomentum));
+    const rhoPenche = Math.abs(correlation(cle.map((s) => penche.scores.get(s)), colonneMomentum));
+
+    assert.ok(
+      rhoPenche > rhoEgal,
+      `pondérer le momentum doit rapprocher le score du momentum : ${rhoPenche.toFixed(3)} > ${rhoEgal.toFixed(3)}`,
+    );
+  });
+
+  test('le poids de base se multiplie au poids de régime, il ne l\'écrase pas', () => {
+    const { signaux } = universSynthetique();
+    const r = combinerSignaux(signaux, {
+      noms: ['momentum', 'reversal'],
+      orientations,
+      stress: 1,
+      poidsBase: { momentum: 4 },
+      sensibiliteRegime: { reversal: 3 },
+    });
+    // momentum : 4 × 1 = 4 ; reversal : 1 × (1 + 1×(3−1)) = 3. Somme 7.
+    // Les poids sont publiés arrondis à 4 décimales, d'où la tolérance.
+    assert.ok(Math.abs(r.poids.momentum - 4 / 7) < 1e-4, `momentum = ${r.poids.momentum}`);
+    assert.ok(Math.abs(r.poids.reversal - 3 / 7) < 1e-4, `reversal = ${r.poids.reversal}`);
+  });
+
+  test('un poids de base absent, nul ou aberrant vaut 1', () => {
+    const { signaux } = universSynthetique();
+    const reference = combinerSignaux(signaux, { noms, orientations });
+    for (const mauvais of [{}, { momentum: 0 }, { momentum: -3 }, { momentum: Number.NaN }, { inconnu: 9 }]) {
+      const r = combinerSignaux(signaux, { noms, orientations, poidsBase: mauvais });
+      assert.deepEqual(r.poids, reference.poids, `poidsBase ${JSON.stringify(mauvais)} doit rester neutre`);
+    }
+  });
 });
 
 describe('le modèle défaillant n\'arrête pas le bot', () => {

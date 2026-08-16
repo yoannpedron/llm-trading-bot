@@ -288,12 +288,14 @@ export function poidsSelonRegime(dispersion, { seuilBas = 0.02, seuilHaut = 0.06
  * @param {number} options.stress        0 = calme, 1 = dislocation
  * @param {object} options.orientations  nom → +1 (garder) ou -1 (inverser)
  * @param {object} options.sensibiliteRegime  nom → poids en régime de stress
+ * @param {object} options.poidsBase     nom → poids constant, défaut 1 partout
  */
 export function combinerSignaux(signauxParActif, {
   noms,
   stress = 0.5,
   orientations = {},
   sensibiliteRegime = {},
+  poidsBase = {},
 } = {}) {
   const symboles = [...signauxParActif.keys()];
   if (symboles.length < 3 || !noms?.length) {
@@ -312,15 +314,30 @@ export function combinerSignaux(signauxParActif, {
   // 2. Orthogonalisation symétrique.
   const ortho = lowdinOrthogonalise(colonnes);
 
-  // 3. Pondération par régime, puis somme.
-  // Un signal « sensible au régime » voit son poids monter en dislocation ;
-  // les autres restent constants. La somme des poids est renormalisée pour que
-  // le score reste comparable d'un cycle à l'autre.
+  // 3. Pondération, puis somme.
+  //
+  // Deux étages multiplicatifs. Le POIDS DE BASE est constant et dit quel
+  // signal on croit le plus informatif ; la SENSIBILITÉ AU RÉGIME le module
+  // selon la dislocation. La somme des poids est renormalisée pour que le
+  // score reste comparable d'un cycle à l'autre.
+  //
+  // ── Ce que pondère réellement ce poids ──────────────────────────────────
+  // Il s'applique aux colonnes ORTHOGONALISÉES, pas aux signaux bruts. La
+  // matrice S^(-1/2) étant pleine, chaque colonne de sortie mélange toutes
+  // les entrées : mettre un poids à 0 ne retire donc PAS le facteur
+  // correspondant — pour cela il faut l'ôter de `noms`.
+  //
+  // Le basculement reste néanmoins fidèle à son intention, et c'est la
+  // propriété qui distingue Löwdin de Gram-Schmidt : la colonne orthonormée
+  // Zⱼ est celle qui minimise ‖Zⱼ − Xⱼ‖, donc la plus proche du signal j
+  // débarrassé de ce qu'il partage avec les autres. Lui donner plus de poids,
+  // c'est bien basculer vers ce signal-là.
   const poids = noms.map((nom) => {
+    const base = Number.isFinite(poidsBase[nom]) && poidsBase[nom] > 0 ? poidsBase[nom] : 1;
     const sensible = sensibiliteRegime[nom];
-    if (sensible == null) return 1;
+    if (sensible == null) return base;
     // Interpolation linéaire entre le poids calme (1) et le poids de stress.
-    return 1 + stress * (sensible - 1);
+    return base * (1 + stress * (sensible - 1));
   });
   const total = poids.reduce((a, b) => a + Math.abs(b), 0) || 1;
 
@@ -377,6 +394,58 @@ export function entropieDiversite(valeursPropres) {
   // complémentaires, 0 = un seul signal déguisé en plusieurs.
   return Number((h / Math.log(valeursPropres.length)).toFixed(4));
 }
+
+/**
+ * ── POIDS DE BASE : pourquoi le momentum court pèse trois fois plus ──────
+ *
+ * Mesuré par backtest sur 148 titres de l'univers, août 2024 → août 2026,
+ * moteur identique à celui du bot (10 positions, détention 21 séances,
+ * plafond 2 par secteur, bande de non-négociation en racine cubique) :
+ *
+ *     ne rien faire                        142,32 $
+ *     les 4 facteurs mécaniques à égalité  134,22 $   ← SOUS le passif
+ *     classement sur le momentum 5 j seul  199,21 $
+ *
+ * Le mélange à poids égaux fait donc PERDRE de l'argent par rapport à
+ * l'inaction, alors que l'un de ses composants gagne largement. Les trois
+ * autres facteurs ne diluent pas le signal, ils le combattent : le RSI et le
+ * momentum 12-1 sont des lectures de retour à la moyenne, opposées par
+ * construction au momentum court.
+ *
+ * ── Pourquoi 3, et pas le poids qui maximise le backtest ─────────────────
+ * Le balayage donne 134 / 143 / 163 / 145 / 156 / 206 / 179 / 184 / 180 / 208
+ * pour des poids de 1 à 50. La courbe est DENTELÉE — elle monte et descend
+ * sans optimum stable. Retenir 6 parce qu'il affiche 206 $ serait ajuster un
+ * paramètre continu sur deux ans de données, exactement l'erreur que le reste
+ * de ce travail s'emploie à éviter.
+ *
+ * Ce qui résiste, c'est la seule chose non ajustable : le poids égal est la
+ * PIRE des dix valeurs testées, battue 9 fois sur 9. La direction est solide,
+ * la magnitude ne l'est pas. On prend donc un chiffre rond et modeste, choisi
+ * pour n'être pas le sommet local.
+ *
+ * L'argument décisif est ailleurs, dans le semestre perdant :
+ *
+ *     semestre         passif   égalité   poids 3
+ *     2024-08 → 2025-01  +8,3 %   +15,8 %   +11,6 %
+ *     2025-02 → 2025-08  +2,3 %   −16,3 %    −1,8 %   ← le basculement protège
+ *     2025-08 → 2026-02 +13,2 %    +8,0 %   +12,9 %
+ *
+ * Le basculement rend un peu du meilleur semestre et récupère l'essentiel du
+ * pire. C'est un gain de robustesse, pas une course au rendement.
+ *
+ * ── Ce que ce chiffre vaut, et sa date de péremption ─────────────────────
+ * Deux ans, trois semestres indépendants, t = 1,74 : NON significatif. Ce
+ * poids est un a priori, pas une mesure. Il tient tant que le carnet fantôme
+ * n'a rien de mieux — c'est lui qui mesure chaque facteur contre les
+ * rendements réalisés, et c'est lui qui devra trancher au bout de quelques
+ * mois de données réelles.
+ *
+ * Le modèle garde un poids de 1 : rien ne justifie encore de le favoriser ni
+ * de le brider, et son classement est déjà écarté d'office quand le test
+ * global le juge indistinguable du hasard.
+ */
+export const POIDS_BASE = { momentumCourt: 3 };
 
 /**
  * Adaptateur : assemble les six signaux du cycle et produit le score combiné.
@@ -470,6 +539,7 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
   const resultat = combinerSignaux(signaux, {
     noms,
     stress: regime.stress,
+    poidsBase: POIDS_BASE,
     // Le retour à la moyenne est remis dans le sens du momentum, sans quoi
     // ── Plus aucune réorientation à faire ─────────────────────────────────
     // Le seul signal de signe opposé était `reversal`, et il vient d'être
