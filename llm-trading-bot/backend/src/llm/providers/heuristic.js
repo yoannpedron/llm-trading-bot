@@ -31,6 +31,30 @@ export const heuristicProvider = {
   isConfigured: true,
 
   async decide(_userPrompt, context = {}) {
+    // ── Demande de CLASSEMENT : ce fournisseur n'a pas d'avis ─────────────
+    // Depuis que le modèle ordonne des lots au lieu de noter des actifs
+    // isolés, le repli reçoit un schéma qu'il ne sait pas remplir. Il
+    // renvoyait alors une prévision, que la validation rejetait — chaque lot
+    // échouait en silence et le classement ressortait vide.
+    //
+    // Fabriquer un ordre plausible serait pire : le bot croirait avoir un
+    // avis là où il n'y en a aucun. Le repli déclare donc franchement ne rien
+    // distinguer. Le test global le constatera, écartera ce signal du
+    // mélange, et les cinq facteurs mécaniques décideront seuls — ce qui est
+    // exactement le comportement voulu quand le modèle est indisponible.
+    const etiquettes = context?.schema?.properties?.classement?.items?.enum;
+    if (Array.isArray(etiquettes) && etiquettes.length) {
+      return {
+        raw: JSON.stringify({
+          analyse: 'Moteur de secours : aucune capacité de comparaison sémantique.',
+          classement: etiquettes,
+          separation: 'AUCUNE',
+        }),
+        usage: null,
+        model: 'heuristic',
+      };
+    }
+
     const ind = context.snapshot?.indicators ?? {};
     const sentiment = scoreNews(context.news);
     const hasPosition = (context.position?.quantity ?? 0) > 0;

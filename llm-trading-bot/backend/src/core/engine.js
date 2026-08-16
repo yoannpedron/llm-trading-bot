@@ -485,6 +485,26 @@ export class TradingEngine {
         if (!parSymbole.has(e.symbol)) e.evaluated = false;
       }
 
+
+      // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
+      // Le bot mesurait si l'IA bat le HASARD. Il ne mesurait jamais si elle bat
+      // une FORMULE — la seule question qui décide si consulter un modèle de
+      // langage apporte quoi que ce soit.
+      //
+      // Les facteurs sont calculés sur EXACTEMENT le même instantané de marché
+      // que celui envoyé au modèle. Les deux classements voient donc la même
+      // information ; la seule différence est que le modèle voit en plus les
+      // actualités. C'est la condition pour que la comparaison soit honnête.
+      //
+      // Coût : nul. Les bougies sont déjà en mémoire, aucun appel réseau.
+      const lignesFacteurs = evaluations
+        .filter((e) => e.evaluated && e.snapshot)
+        .map((e) => ({
+          symbol: e.symbol,
+          facteurs: facteursPour({ candles: e.snapshot.candles, indicators: e.snapshot.indicators }),
+        }));
+      const rangsFacteurs = classerFacteurs(lignesFacteurs);
+
       // ── COMBINAISON DES SIX SIGNAUX — MESURÉE, PAS EXÉCUTÉE ──────────────
       // Le bot calcule six classements et n'en utilise qu'un. Les combiner
       // correctement suppose de les décorréler d'abord : le classement du
@@ -568,25 +588,6 @@ export class TradingEngine {
       } else {
         log.warn('Combinaison indisponible — le classement du modèle seul reprend la décision.');
       }
-
-      // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
-      // Le bot mesurait si l'IA bat le HASARD. Il ne mesurait jamais si elle bat
-      // une FORMULE — la seule question qui décide si consulter un modèle de
-      // langage apporte quoi que ce soit.
-      //
-      // Les facteurs sont calculés sur EXACTEMENT le même instantané de marché
-      // que celui envoyé au modèle. Les deux classements voient donc la même
-      // information ; la seule différence est que le modèle voit en plus les
-      // actualités. C'est la condition pour que la comparaison soit honnête.
-      //
-      // Coût : nul. Les bougies sont déjà en mémoire, aucun appel réseau.
-      const lignesFacteurs = evaluations
-        .filter((e) => e.evaluated && e.snapshot)
-        .map((e) => ({
-          symbol: e.symbol,
-          facteurs: facteursPour({ candles: e.snapshot.candles, indicators: e.snapshot.indicators }),
-        }));
-      const rangsFacteurs = classerFacteurs(lignesFacteurs);
 
       // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
       // On ne peut pas choisir les meilleurs sans les avoir tous vus. C'est

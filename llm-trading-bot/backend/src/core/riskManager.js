@@ -199,11 +199,23 @@ export class RiskManager {
     if (!budget.canBuy) {
       return { approved: false, quantity: 0, reason: `achat bloqué : ${budget.blockReason}`, adjustments };
     }
-    // Le repli explicite n'est pas décoratif : `limits` peut arriver partiel, et
-    // `confiance < undefined` vaut toujours faux — le garde-fou se
-    // désactiverait sans le dire.
+    // ── Le seuil de confiance ne s'applique QUE si une confiance existe ────
+    // Ce garde-fou datait de l'époque où le modèle annonçait une probabilité.
+    // Depuis qu'il ORDONNE au lieu de noter, il n'en annonce plus aucune, et
+    // le champ vaut délibérément `null` — écrire 0 ferait croire à une
+    // confiance nulle mesurée là où il n'y a rien à mesurer.
+    //
+    // Or en JavaScript, `null < 0.35` vaut VRAI : le garde-fou bloquait donc
+    // la totalité des achats, en silence, avec un message parlant d'une
+    // « probabilité null ». Le bot classait, sélectionnait, filtrait, puis
+    // refusait tout au dernier verrou.
+    //
+    // Un seuil sur une valeur absente n'a pas de sens. Quand aucune confiance
+    // n'est annoncée, il n'y a rien à comparer — c'est le RANG qui joue déjà
+    // ce rôle, et il l'a joué en amont.
     const minConfidence = this.limits.minConfidence ?? 0.35;
-    if (decision.confidence < minConfidence) {
+    const confianceAnnoncee = Number.isFinite(decision.confidence);
+    if (confianceAnnoncee && decision.confidence < minConfidence) {
       return {
         approved: false,
         quantity: 0,
