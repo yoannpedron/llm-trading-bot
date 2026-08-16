@@ -79,8 +79,28 @@ export const config = {
     feed: str('ALPACA_DATA_FEED', 'iex'),
   },
 
+  /**
+   * ── Un seul cycle par jour, et dans la bonne fenêtre ──────────────────
+   * Il y en avait trois : 16h30, 19h30 et 21h30 heure de Paris. Converties à
+   * New York, cela donne 10h30, 13h30 et 15h30 — or la fenêtre d'exécution
+   * ne s'ouvre qu'entre 11h et 14h. Deux cycles sur trois calculaient donc un
+   * classement qu'ils n'avaient pas le droit d'utiliser.
+   *
+   * Et ils calculaient le MÊME. Les bougies sont journalières : entre 10h30 et
+   * 15h30, le RSI, l'ATR, la tendance et le rendement 5 séances sont
+   * rigoureusement identiques. Seules les actualités bougent. Les trois cycles
+   * refaisaient le même travail sur les mêmes chiffres, pour 180 appels par
+   * jour au lieu de 60.
+   *
+   * Un cycle unique à 19h30 Paris tombe à 13h30 à New York : en plein milieu
+   * de séance, là où le spread est au plus bas, et dans la fenêtre d'achat.
+   *
+   * Le risque assumé est qu'une panne ce jour-là fasse sauter le cycle. À 21
+   * séances de détention, un jour manqué ne coûte presque rien — le classement
+   * du lendemain sera quasi identique.
+   */
   schedule: {
-    cron: str('CRON_SCHEDULE', '30 16,19,21 * * 1-5'),
+    cron: str('CRON_SCHEDULE', '30 19 * * 1-5'),
     timezone: str('CRON_TIMEZONE', 'Europe/Paris'),
     runOnStart: bool('RUN_ON_START', true),
     onlyMarketHours: bool('ONLY_MARKET_HOURS', true),
