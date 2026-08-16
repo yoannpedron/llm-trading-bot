@@ -329,6 +329,58 @@ export const config = {
     minEdgeDegraded: num('MIN_EDGE_DEGRADED', 0.35),
   },
 
+  /**
+   * ── Classement transversal ────────────────────────────────────────────
+   * Le modèle ordonne des lots au lieu de noter des actifs isolés. Mesuré sur
+   * l'API réelle : 10 rangs distincts sur 10, contre 3 valeurs distinctes sur
+   * 20 réponses en notation.
+   */
+  ranking: {
+    /**
+     * Taille des lots.
+     *
+     * Dix est le compromis documenté : au-delà, la fenêtre d'attention se
+     * dégrade au milieu de la liste ; en deçà, on multiplie les appels sans
+     * gagner en information puisqu'un lot de m actifs porte m−1 comparaisons.
+     */
+    tailleLot: num('RANKING_TAILLE_LOT', 10),
+
+    /**
+     * Nombre de tours de re-partitionnement.
+     *
+     * Mesuré par simulation à 150 actifs, pour un signal d'écart-type 0,3 :
+     *
+     *     2 tours (30 appels) → puissance 19 %
+     *     3 tours (45 appels) → puissance 31 %
+     *     4 tours (60 appels) → puissance 51 %
+     *     6 tours (90 appels) → puissance 68 %
+     *
+     * Quatre tours placent le bot au-dessus d'une chance sur deux de détecter
+     * un signal réel, pour 60 appels — moins que les 150 de la notation
+     * individuelle. C'est là que la courbe commence à s'aplatir.
+     */
+    tours: num('RANKING_TOURS', 4),
+
+    /**
+     * Tirages de la calibration bootstrap.
+     *
+     * Sert à établir la distribution du rapport de vraisemblance sous
+     * l'hypothèse « le modèle ne différencie rien ». Ne consomme aucun appel
+     * d'API, uniquement du calcul : environ 2,5 s pour 200 tirages à 150
+     * actifs, une fois par cycle.
+     */
+    tiragesBootstrap: num('RANKING_TIRAGES_BOOTSTRAP', 200),
+
+    /**
+     * Exiger que le test global soit significatif pour autoriser un achat.
+     *
+     * C'est le remplaçant de la garde de dispersion, qui surveillait la
+     * largeur de la distribution des notes et laissait donc passer cinquante
+     * ex æquo au sommet sans broncher.
+     */
+    exigerSignificativite: bool('RANKING_EXIGER_SIGNIFICATIVITE', true),
+  },
+
   broker: {
     // `alpaca` = compte paper réel chez Alpaca (recommandé).
     // `paper`  = simulateur interne, conservé pour les tests hors ligne.

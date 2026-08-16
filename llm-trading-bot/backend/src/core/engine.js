@@ -8,6 +8,7 @@ import { filtrerParSpread, fenetreExecution } from './execution.js';
 import { filtrerParVeto } from '../llm/veto.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
+import { classerUnivers, decisionDepuisRang } from './listwiseRanking.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
 import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
@@ -15,7 +16,6 @@ import { decide, providerActif } from '../llm/agent.js';
 
 const log = createLogger('engine');
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Moteur de trading — orchestre un cycle complet :
@@ -151,7 +151,7 @@ export class TradingEngine {
    * simplement les premiers de la liste à franchir la barre — l'ordre du
    * fichier de configuration décidait du portefeuille.
    */
-  async #evaluateSymbol(symbol, { quotes, circuitBreaker }) {
+  async #evaluateSymbol(symbol, { quotes, circuitBreaker, sansLlm = false }) {
     const outcome = { symbol, action: 'HOLD', executed: false, reason: null };
 
     try {
@@ -203,6 +203,25 @@ export class TradingEngine {
       const promptBudget = this.risk.computeBudget({
         account, position, price, fxRate, circuitBreaker, ignorePolicyGates: true,
       });
+
+      // ── Mode classement : aucun appel au modèle ici ───────────────────────
+      // Le modèle n'est plus interrogé actif par actif. Il l'est par LOTS,
+      // après cette phase, et il ORDONNE au lieu de noter. La raison tient en
+      // un chiffre : mesuré sur l'API, la notation individuelle produisait
+      // trois valeurs distinctes sur vingt réponses, soit une cinquantaine
+      // d'ex æquo au sommet sur 150 actifs — et le tri les départageait par
+      // ordre alphabétique.
+      //
+      // Cette phase ne fait donc plus que RASSEMBLER le contexte. La décision
+      // est injectée ensuite, à partir de la force latente reconstruite.
+      if (sansLlm) {
+        return {
+          ...outcome,
+          evaluated: true,
+          decision: null,
+          snapshot, news, phase, price, fxRate, position, account, budget,
+        };
+      }
 
       const decision = await decide({
         snapshot,
@@ -465,16 +484,36 @@ export class TradingEngine {
       // négociable — il n'y a aucun débit à ménager. Attendre quand même
       // faisait durer 12 minutes un cycle de week-end qui ne décide de rien, à
       // raison de 5 secondes par actif ignoré sur 150.
+      // Rassemblement du contexte — aucun appel au modèle, donc aucun délai à
+      // respecter entre deux actifs. La boucle qui prenait douze minutes en
+      // interrogeant le modèle cent cinquante fois en prend quelques secondes.
       const evaluations = [];
-      let appelPrecedent = false;
       for (const symbol of config.universe.symbols) {
-        if (appelPrecedent && config.llm.cooldownMs > 0) await sleep(config.llm.cooldownMs);
         this.progress = { ...this.progress, phase: 'analyse', symbol, done: evaluations.length };
-        const evaluation = await this.#evaluateSymbol(symbol, { quotes, circuitBreaker });
-        appelPrecedent = Boolean(evaluation.evaluated);
-        evaluations.push(evaluation);
+        evaluations.push(await this.#evaluateSymbol(symbol, { quotes, circuitBreaker, sansLlm: true }));
       }
+
+      // ── LE MODÈLE ENTRE EN JEU ICI, ET IL ORDONNE ────────────────────────
+      // Quatre tours de lots de dix, re-tirés au hasard. Soixante appels au
+      // lieu de cent cinquante, et un ordre au lieu de notes agglutinées.
       this.progress = { ...this.progress, phase: 'classement', symbol: null, done: evaluations.length };
+
+      const exploitables = evaluations.filter((e) => e.evaluated);
+      const donnees = new Map(exploitables.map((e) => [e.symbol, { snapshot: e.snapshot, news: e.news }]));
+
+      const listwise = await classerUnivers(donnees, {
+        provider: providerActif(),
+        onProgress: (p) => {
+          this.progress = { ...this.progress, phase: 'classement', lot: p.lot, totalLots: p.total };
+        },
+      });
+
+      // Report des décisions synthétisées sur les évaluations existantes.
+      const parSymbole = new Map(listwise.evaluations.map((e) => [e.symbol, e.decision]));
+      for (const e of exploitables) {
+        e.decision = parSymbole.get(e.symbol) ?? decisionDepuisRang(null);
+        if (!parSymbole.has(e.symbol)) e.evaluated = false;
+      }
 
       // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
       // Le bot mesurait si l'IA bat le HASARD. Il ne mesurait jamais si elle bat
@@ -524,6 +563,16 @@ export class TradingEngine {
         ageMinimum: config.risk.minHoldingDays,
         positions: positionsOuvertes,
         maxParSecteur: config.risk.maxPerSector,
+        // La garde de dispersion est remplacée par un vrai test : le rapport
+        // de vraisemblance du classement contre « le modèle ne différencie
+        // rien », calibré par bootstrap sur la structure réelle des lots.
+        abstention: config.ranking.exigerSignificativite && listwise.test
+          ? {
+            abstenir: !listwise.test.significatif,
+            raison: `le classement n'est pas distinguable du hasard (p = ${listwise.test.p?.toFixed(3)}, `
+              + `${listwise.diagnostics.reussis} lots exploités)`,
+          }
+          : null,
       });
 
       // Un actif exclu pour cause de résultats ne peut pas être acheté, même
@@ -606,6 +655,21 @@ export class TradingEngine {
         // ouverture qui n'a pas eu lieu doit être explicable ; sinon un bon
         // classement suivi d'aucun achat ressemble à une panne.
         filtresExecution,
+        // ── Diagnostic du classement par comparaison ──────────────────────
+        // `valeursDistinctes` est le chiffre à surveiller : c'est celui qui
+        // valait 3 sur 150 avec la notation individuelle. S'il retombe, tout
+        // le reste est décoratif.
+        listwise: {
+          test: listwise.test,
+          lots: listwise.diagnostics.lots,
+          reussis: listwise.diagnostics.reussis,
+          appels: listwise.diagnostics.appelsConsommes,
+          valeursDistinctes: listwise.diagnostics.valeursDistinctes,
+          partAveugle: listwise.diagnostics.partAveugle,
+          connexe: listwise.diagnostics.connexe,
+          biaisDePosition: listwise.diagnostics.biaisDePosition,
+          wald: listwise.diagnostics.wald,
+        },
         resultats: {
           calendrierDisponible,
           exclus: [...exclusResultats.entries()].map(([symbol, r]) => ({

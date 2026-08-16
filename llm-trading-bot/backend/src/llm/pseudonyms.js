@@ -98,6 +98,58 @@ export function pseudonymePour(symbol, sel = '') {
 }
 
 /**
+ * Attribue des pseudonymes GARANTIS distincts à un groupe d'actifs.
+ *
+ * ── Pourquoi le hachage seul ne suffit pas ────────────────────────────────
+ * `pseudonymePour` tire indépendamment dans 40 racines × 6 suffixes. Sur 150
+ * symboles, mesuré : 46 collisions — trois actifs se retrouvaient nommés
+ * « Escaly Group ».
+ *
+ * Anodin tant que chaque actif était interrogé seul. Fatal dès qu'on en
+ * présente dix ensemble et qu'on demande un classement : le modèle renvoie
+ * « Escaly Group », et rien ne dit lequel des trois il désigne. Le classement
+ * devient inexploitable au moment précis où il compte.
+ *
+ * On sonde donc les combinaisons à partir de la position dictée par le
+ * hachage, jusqu'à en trouver une libre. Le résultat reste déterministe pour
+ * un groupe donné — rejouer le même lot redonne les mêmes noms.
+ *
+ * ── Et le fait que les noms changent d'un lot à l'autre est un avantage ───
+ * Un actif apparaît dans plusieurs lots au cours d'un cycle, souvent sous des
+ * noms différents. Loin d'être un défaut, c'est exactement le protocole
+ * d'échange d'entités : si le nom influençait le jugement, l'effet se
+ * disperserait sur quatre tirages au lieu de s'accumuler.
+ */
+export function pseudonymesUniques(symbols, sel = '') {
+  const pris = new Set();
+  const out = new Map();
+
+  // Ordre de traitement déterministe : sans tri, l'ordre d'arrivée déciderait
+  // qui garde son nom de prédilection et le résultat varierait d'un appel à
+  // l'autre pour un même ensemble.
+  for (const symbol of [...symbols].sort()) {
+    const h = hacher(`${symbol}|${sel}`);
+    let nom = null;
+
+    for (let essai = 0; essai < RACINES.length * SUFFIXES.length; essai += 1) {
+      const racine = RACINES[(h + essai) % RACINES.length];
+      const suffixe = SUFFIXES[((h >>> 8) + Math.floor((h + essai) / RACINES.length)) % SUFFIXES.length];
+      const candidat = `${racine}${suffixe}`;
+      if (!pris.has(candidat)) { nom = candidat; break; }
+    }
+
+    // Réserve épuisée : ne peut arriver qu'au-delà de 240 actifs simultanés.
+    // On suffixe plutôt que de rendre un doublon silencieux.
+    if (!nom) nom = `${RACINES[h % RACINES.length]} ${pris.size}`;
+
+    pris.add(nom);
+    out.set(symbol, nom);
+  }
+
+  return out;
+}
+
+/**
  * Jeu complet de substituts pour un actif : société, dirigeants, produits.
  *
  * Les dirigeants et produits sont dérivés du MÊME hachage que la société, donc

@@ -137,6 +137,7 @@ export function rankAndSelect(evaluations, {
   positions = null,
   maxParSecteur = 0,
   secteurDe = sectorOf,
+  abstention = null,
 } = {}) {
   const ages = positions
     ? new Map(positions.map((p) => [p.symbol, ageEnSeances(p.openedAt)]).filter(([, a]) => a != null))
@@ -177,7 +178,28 @@ export function rankAndSelect(evaluations, {
     });
   });
 
-  if (dispersion < MIN_DISPERSION) {
+  // ── La garde de dispersion ne servait à rien, et il a fallu le mesurer ───
+  // Elle surveille l'écart-type des notes. Or le défaut réel n'est pas la
+  // largeur de la distribution mais le nombre d'actifs COLLÉS sur chaque
+  // valeur. Vérifié : trois valeurs distinctes réparties sur 150 actifs — donc
+  // cinquante ex æquo au sommet, départagés par l'ordre du fichier de
+  // configuration — donnent une dispersion de 0,07, largement au-dessus du
+  // seuil de 0,03. La garde ne se déclenchait pas.
+  //
+  // Quand l'appelant dispose d'un vrai test — le rapport de vraisemblance du
+  // classement contre l'hypothèse « le modèle ne différencie rien », calibré
+  // par bootstrap — il l'injecte ici et la dispersion n'est plus consultée.
+  if (abstention) {
+    if (abstention.abstenir) {
+      return {
+        selected: new Set(),
+        sorties: sortiesParRang(ranks, held, scored.length, maxSelected, optionsSortie),
+        ranks,
+        dispersion,
+        reason: abstention.raison ?? 'classement jugé non significatif',
+      };
+    }
+  } else if (dispersion < MIN_DISPERSION) {
     log.warn(
       `Dispersion transversale ${(dispersion * 100).toFixed(1)} pts < ${MIN_DISPERSION * 100} : `
       + 'le modèle ne différencie pas les actifs, aucune sélection.',
