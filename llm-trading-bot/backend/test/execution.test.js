@@ -118,10 +118,30 @@ describe('filtre de spread', () => {
     assert.equal(spreadAcceptable(12, limites).acceptable, false);
   });
 
-  test('le coût annoncé est bien celui de l\'ALLER-RETOUR', () => {
-    // L'erreur classique est de comparer le spread au coût cible alors qu'on
-    // le paie deux fois.
-    assert.equal(spreadAcceptable(12, limites).coutAllerRetourBps, 24);
+  test('le spread n\'est compté QU\'UNE FOIS sur l\'aller-retour', () => {
+    // On achète à l'ask et on revend au bid : l'écart total parcouru vaut un
+    // spread plein, pas deux. Je l'avais doublé, en contradiction avec
+    // `roundTripCost` qui documente explicitement la convention — le seuil de
+    // décision restait juste, le chiffre affiché était deux fois trop grand.
+    assert.equal(spreadAcceptable(12, limites).coutAllerRetourBps, 12);
+  });
+
+  test('une mesure aberrante n\'écarte PAS l\'actif', () => {
+    // Le flux gratuit IEX donne META à 118 bps, AVGO à 88, TSLA à 63 — pour
+    // des mégacapitalisations dont l'écart réel tient dans 1 à 5 bps. Un tel
+    // relevé dit que la cotation est défaillante, pas que l'actif coûte cher.
+    // Les traiter pareil retirerait les plus grosses valeurs de l'univers pour
+    // une raison fausse.
+    const r = spreadAcceptable(118, limites);
+    assert.equal(r.acceptable, true);
+    assert.equal(r.mesureDouteuse, true);
+    assert.match(r.raison, /défaillant/);
+  });
+
+  test('un spread élevé mais plausible reste écarté', () => {
+    const r = spreadAcceptable(25, limites);
+    assert.equal(r.acceptable, false);
+    assert.notEqual(r.mesureDouteuse, true);
   });
 
   test('un spread inconnu ne fait pas écarter l\'actif', () => {
@@ -132,9 +152,10 @@ describe('filtre de spread', () => {
   });
 
   test('filtre un lot de candidats', () => {
-    const spreads = new Map([['A', 3], ['B', 15], ['C', 6.9], ['D', 7.1]]);
-    const { retenus, ecartes } = filtrerParSpread(['A', 'B', 'C', 'D'], spreads, limites);
-    assert.deepEqual([...retenus].sort(), ['A', 'C']);
+    // 'E' à 200 bps : mesure aberrante, donc laissée passer.
+    const spreads = new Map([['A', 3], ['B', 15], ['C', 6.9], ['D', 7.1], ['E', 200]]);
+    const { retenus, ecartes } = filtrerParSpread(['A', 'B', 'C', 'D', 'E'], spreads, limites);
+    assert.deepEqual([...retenus].sort(), ['A', 'C', 'E']);
     assert.deepEqual([...ecartes.keys()].sort(), ['B', 'D']);
   });
 });

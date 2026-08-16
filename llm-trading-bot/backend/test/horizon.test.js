@@ -196,8 +196,10 @@ describe('le stop devient un coupe-circuit de catastrophe', () => {
   test('le stop est assez loin pour ne jamais trancher sur du bruit', () => {
     const rm = new RiskManager(limites());
     const { stopPct } = rm.protectionLevels(100, 2);
-    // ATR 2 % => 25 % vaut 12,5 ATR. L'ancien réglage était à 4 ATR, dont la
-    // probabilité de déclenchement mesurée sur 3 séances était de 0,20 %.
+    // ATR 2 % => 25 % vaut 12,5 ATR, soit 2,7 σ cumulés sur 21 séances :
+    // probabilité de toucher 0,4 à 0,6 %. L'ancien réglage à 4 ATR aurait valu
+    // 0,87 σ sur ce même horizon, donc 32 à 38 % de déclenchements sur du
+    // bruit — il était calibré pour une détention de trois jours.
     assert.ok(stopPct / 0.02 > 10, 'le coupe-circuit doit être hors de portée du bruit ordinaire');
   });
 

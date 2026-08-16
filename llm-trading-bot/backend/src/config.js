@@ -264,12 +264,25 @@ export const config = {
     minOrderValue: num('MIN_ORDER_VALUE', 5),
 
     /**
-     * ── Le stop ne protège de rien, et on a fini par le mesurer ───────────
-     * Il était dimensionné à 4 × ATR, ce qui paraissait prudent. Converti en
-     * écarts-types, 4 × ATR vaut environ 5 σ : sous une marche aléatoire, la
-     * probabilité qu'il se déclenche sur 3 séances est de 0,20 %. Deux fois
-     * sur mille. Il ne faisait donc littéralement rien — et sur 21 séances il
-     * reste marginal.
+     * ── Le stop, recalculé plutôt que recopié ─────────────────────────────
+     * J'avais repris d'un rapport le chiffre « 4 × ATR ≈ 5 σ, probabilité de
+     * déclenchement 0,20 % sur 3 séances ». Les deux valeurs sont fausses et
+     * je n'ai pas su reproduire leur dérivation.
+     *
+     * Le calcul juste : sur h séances la volatilité cumulée croît en √h, donc
+     * 4 × ATR vaut 4/√3 ≈ 2,3 σ cumulés sur trois séances, pas 5. Et la
+     * probabilité de TOUCHER la barrière — le minimum du chemin, pas la
+     * clôture — s'obtient par la formule de réflexion 2·Φ(−a/σ√T) :
+     *
+     *     4 × ATR sur  3 séances : 1,1 % (clôtures) à 2,1 % (continu)
+     *     4 × ATR sur 21 séances :  32 %           à  38 %
+     *
+     * Le premier chiffre justifiait déjà de retirer le stop : à 1 ou 2 %, il ne
+     * protégeait de rien. Le second est bien plus décisif, et je ne l'avais pas
+     * vu. En allongeant la détention à 21 séances SANS toucher au stop, on
+     * aurait liquidé un tiers des positions sur du bruit de marché pur, en
+     * payant l'aller-retour à chaque fois. La distance était calibrée pour un
+     * horizon de trois jours ; l'horizon a été multiplié par sept.
      *
      * Pire, quand il se déclenche, c'est sur le seul événement contre lequel
      * il est inopérant. La totalité du rendement des actions américaines se

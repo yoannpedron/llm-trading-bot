@@ -70,6 +70,22 @@ export function fenetreExecution(date = new Date(), limites = config.risk) {
  *
  * @param {number} spreadBps  spread courant, en points de base
  */
+/**
+ * Au-delà de ce spread, la cotation n'est plus une information sur le coût :
+ * c'est un défaut de mesure.
+ *
+ * Le palier gratuit ne donne accès qu'au flux IEX, une place unique à environ
+ * 2 % de part de marché. Ses cotations sont régulièrement larges ou périmées.
+ * Mesuré en séance sur notre propre univers : META à 118 bps, AVGO à 88, TSLA
+ * à 63 — pour des mégacapitalisations dont l'écart réel tient dans 1 à 5 bps.
+ *
+ * Un relevé à 118 bps sur META ne dit pas que META coûte cher. Il dit que le
+ * flux est inexploitable sur cet actif. Traiter les deux cas de la même façon
+ * reviendrait à retirer les plus grosses valeurs de l'univers pour une raison
+ * fausse — et sans que rien ne le signale.
+ */
+const SPREAD_INVRAISEMBLABLE_BPS = 50;
+
 export function spreadAcceptable(spreadBps, limites = config.risk) {
   // Spread inconnu : on laisse passer. Refuser sur une donnée manquante
   // reviendrait à écarter les actifs dont le fournisseur de cotation est
@@ -79,18 +95,34 @@ export function spreadAcceptable(spreadBps, limites = config.risk) {
   }
 
   const plafond = limites.maxSpreadBps;
+
+  // Mesure aberrante : on ne peut rien en conclure sur le coût. On laisse
+  // passer et on le signale, plutôt que d'exclure un actif liquide sur une
+  // cotation défaillante.
+  if (spreadBps > SPREAD_INVRAISEMBLABLE_BPS) {
+    return {
+      acceptable: true,
+      spreadBps,
+      mesureDouteuse: true,
+      raison: `spread ${spreadBps.toFixed(1)} bps invraisemblable — flux de cotation défaillant, non un coût réel`,
+    };
+  }
+
   const acceptable = spreadBps <= plafond;
 
   return {
     acceptable,
     spreadBps,
     plafond,
-    // Ce qu'il en coûterait réellement : le spread se paie à l'aller ET au
-    // retour.
-    coutAllerRetourBps: spreadBps * 2,
+    // Le spread n'est payé QU'UNE FOIS sur l'aller-retour : on achète à l'ask
+    // et on revend au bid, soit un écart total d'un spread plein. Je l'avais
+    // doublé ici, en contradiction avec `roundTripCost` qui documente
+    // explicitement la convention. Le seuil de décision était juste, le chiffre
+    // affiché deux fois trop grand.
+    coutAllerRetourBps: spreadBps,
     raison: acceptable
       ? `spread ${spreadBps.toFixed(2)} bps, sous le plafond de ${plafond}`
-      : `spread ${spreadBps.toFixed(2)} bps > ${plafond} — l'aller-retour coûterait ${(spreadBps * 2).toFixed(1)} bps`,
+      : `spread ${spreadBps.toFixed(2)} bps > ${plafond} — l'aller-retour coûterait ${spreadBps.toFixed(1)} bps`,
   };
 }
 
