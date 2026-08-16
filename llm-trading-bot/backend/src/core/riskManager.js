@@ -307,17 +307,49 @@ export class RiskManager {
    * calme donnerait un stop si serré qu'il déclencherait au moindre tick, un
    * actif en crise donnerait un stop si large qu'il ne protégerait plus rien.
    *
-   * Aucun take-profit n'est posé : un objectif fixe tronque la queue droite de
+   * ── L'objectif de gain, longtemps refusé, et pourquoi il revient ────────
+   * Il était écarté au motif qu'« un objectif fixe tronque la queue droite de
    * la distribution et détruit l'espérance des mouvements de tendance, qui
-   * reposent précisément sur une minorité de gains très étendus.
+   * reposent précisément sur une minorité de gains très étendus ».
+   *
+   * L'argument est juste pour une stratégie de tendance longue. Il ne l'est
+   * pas ici : mesuré sur dix ans de simulation du code réel, les dix meilleurs
+   * trades ne font que 9 % des gains et le plus gros vaut +64 %. La détention
+   * de 21 séances et la sortie au rang 23 empêchent déjà toute position de
+   * courir. L'objectif protégeait une queue qui n'existe pas.
+   *
+   * Médiane de l'excédent annuel contre le même univers, par régime :
+   *
+   *     régime            sans objectif   bande 10-16 %
+   *     2017-2019 calme       -5,3 pt        -0,0 pt
+   *     2020-2022 disloqué    +8,7 pt       +12,8 pt
+   *     2023-2026 récent      +3,2 pt        +9,0 pt
+   *
+   * Les trois régimes s'améliorent, et six valeurs contiguës de la bande sont
+   * toutes au-dessus de la référence. C'est ce qui distingue cet effet des
+   * pistes écartées cette semaine, où une valeur isolée sortait du bruit.
+   *
+   * ── Le NIVEAU, lui, n'est pas déterminable ──────────────────────────────
+   * Entre 13 % et 17 %, la période 2017-2019 donne +4,1 / -1,1 / +0,9 / -4,6.
+   * Des seuils voisins produisent des portefeuilles quasi identiques : cette
+   * oscillation de cinq points est du bruit de trades individuels, rien de
+   * plus. On retient donc le MILIEU de la bande, jamais son maximum.
+   *
+   * ── Pourquoi ça peut marcher ───────────────────────────────────────────
+   * Le classement achète des titres à momentum extrême. Or l'IC transversal
+   * de `momentumCourt` est NÉGATIF : les gagnants extrêmes reviennent en
+   * arrière. Le bot exploite malgré tout son décile de tête, mais garder une
+   * position après +13 % de hausse SUPPLÉMENTAIRE, c'est la détenir dans la
+   * zone où le signal se retourne. L'objectif sort avant.
    */
   protectionLevels(entryPrice, atr) {
     const raw = atr > 0 ? (this.limits.stopAtrMultiple * atr) / entryPrice : this.limits.stopMinPct;
     const stopPct = Math.min(Math.max(raw, this.limits.stopMinPct), this.limits.stopMaxPct);
+    const tp = this.limits.takeProfitPct;
 
     return {
       stopPrice: Number((entryPrice * (1 - stopPct)).toFixed(4)),
-      takeProfitPrice: null,
+      takeProfitPrice: tp > 0 ? Number((entryPrice * (1 + tp)).toFixed(4)) : null,
       stopPct: Number(stopPct.toFixed(4)),
       atrUsed: atr ?? null,
     };

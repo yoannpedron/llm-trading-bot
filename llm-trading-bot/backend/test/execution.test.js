@@ -308,3 +308,39 @@ describe('durée minimale de détention — le garde-fou qui était invérifiabl
     assert.equal(r.sorties.has('S19'), false);
   });
 });
+
+describe('objectif de gain — posé, et posé au bon endroit', () => {
+  test('le niveau est calculé sur le prix d\'entrée', async () => {
+    const { RiskManager } = await import('../src/core/riskManager.js');
+    const r = new RiskManager({ stopAtrMultiple: 0, stopMinPct: 0.35, stopMaxPct: 0.35, takeProfitPct: 0.13 });
+    const p = r.protectionLevels(100, 2.5);
+    assert.equal(p.takeProfitPrice, 113);
+    assert.equal(p.stopPrice, 65);
+  });
+
+  test('un objectif nul ou absent laisse la position courir', async () => {
+    // C'était le comportement historique, et il doit rester atteignable :
+    // TAKE_PROFIT_PCT=0 remet le bot dans son ancien mode.
+    const { RiskManager } = await import('../src/core/riskManager.js');
+    for (const tp of [0, null, undefined]) {
+      const r = new RiskManager({ stopAtrMultiple: 0, stopMinPct: 0.35, stopMaxPct: 0.35, takeProfitPct: tp });
+      assert.equal(r.protectionLevels(100, 2.5).takeProfitPrice, null, `takeProfitPct=${tp}`);
+    }
+  });
+
+  test('l\'objectif se déclenche sans attendre la durée minimale', async () => {
+    // C'est une sortie de PROTECTION : comme le coupe-circuit, elle passe
+    // avant le classement et n'est pas soumise aux 21 séances. Une position
+    // qui gagne 13 % en trois jours est prise.
+    const { RiskManager } = await import('../src/core/riskManager.js');
+    const r = new RiskManager({ stopAtrMultiple: 0, stopMinPct: 0.35, stopMaxPct: 0.35, takeProfitPct: 0.13 });
+    const prot = r.protectionLevels(100, 2.5);
+    const position = { quantity: 1, avgPrice: 100, ...prot };
+
+    assert.equal(r.checkExits(position, 112.9), null, 'sous l\'objectif : on garde');
+    const atteint = r.checkExits(position, 113.1);
+    assert.equal(atteint?.triggered, 'TAKE_PROFIT');
+    const casse = r.checkExits(position, 64);
+    assert.equal(casse?.triggered, 'STOP_LOSS', 'le coupe-circuit reste prioritaire');
+  });
+});

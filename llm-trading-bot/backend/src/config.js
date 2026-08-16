@@ -407,7 +407,11 @@ export const config = {
     // Pas de take-profit fixe : il tronque la queue droite de la distribution
     // et détruit l'espérance des stratégies de suivi de tendance. La sortie
     // se fait sur signal du LLM ou sur stop.
-    takeProfitPct: num('TAKE_PROFIT_PCT', 0) || null,
+    // Objectif de gain, en fraction du prix d'entrée. Voir la justification
+    // détaillée dans `RiskManager.protectionLevels` : l'effet est cohérent sur
+    // les trois régimes testés, le niveau exact ne l'est pas — 0,13 est le
+    // milieu de la bande 10-16 %, pas son maximum.
+    takeProfitPct: num('TAKE_PROFIT_PCT', 0.13) || null,
 
     // Coupe-circuit MENSUEL et non journalier : 10 % de 100 $ = 10 $, très
     // en dessous du bruit stochastique normal du portefeuille.
