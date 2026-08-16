@@ -153,13 +153,14 @@ export function rankAndSelect(evaluations, {
   secteurDe = sectorOf,
   abstention = null,
   maintenant = undefined,
+  kappa = KAPPA,
 } = {}) {
   const ages = positions
     ? new Map(positions
       .map((p) => [p.symbol, maintenant ? ageEnSeances(p.openedAt, maintenant) : ageEnSeances(p.openedAt)])
       .filter(([, a]) => a != null))
     : null;
-  const optionsSortie = { ageMinimum, ages };
+  const optionsSortie = { ageMinimum, ages, kappa };
   const scored = evaluations
     .filter((e) => e?.decision?.forecast)
     .map((e) => ({ symbol: e.symbol, edge: e.decision.forecast.edge }));
@@ -379,8 +380,8 @@ export { MIN_DISPERSION };
  * information sur sa qualité. Vendre sur une absence de données serait la pire
  * des raisons d'agir.
  */
-function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ages = null } = {}) {
-  const seuil = exitRank({ universe, maxSelected });
+function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ages = null, kappa = KAPPA } = {}) {
+  const seuil = exitRank({ universe, maxSelected, kappa });
   const sorties = new Set();
   const retenuesParAge = new Map();
 
