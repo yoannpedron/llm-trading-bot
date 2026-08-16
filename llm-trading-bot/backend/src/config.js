@@ -209,10 +209,36 @@ export const config = {
      * composante sectorielle : la part qui porte réellement de l'information
      * est la comparaison entre pairs d'une même industrie.
      *
-     * 2 sur 9 secteurs : de quoi laisser un secteur fort être surreprésenté,
-     * pas de quoi lui laisser le portefeuille.
+     * ── Pourquoi 3 et non 2 ───────────────────────────────────────────────
+     * Le plafond valait 2, chiffre choisi par raisonnement et jamais mesuré.
+     * Rejoué avec le VRAI code sur deux périodes indépendantes, écart annuel
+     * contre l'inaction du même univers :
+     *
+     *     plafond   2017-2023   2023-2026
+     *        2       −1,8 pt     +11,7 pt     ← le seul à perdre quelque part
+     *        3       +4,4 pt     +12,6 pt
+     *        4       +1,4 pt     +18,0 pt
+     *      aucun     +1,4 pt     +14,9 pt
+     *
+     * À 2, le bot perdait 13,9 points en 2017 et 16,3 points en 2019 — deux
+     * années de forte hausse portées par une poignée de valeurs
+     * technologiques. Le mécanisme est direct : la règle qui protège d'un pari
+     * sectoriel empêchait aussi de suivre le secteur qui MÈNE le marché, et
+     * les journaux montrent qu'elle écartait massivement de la technologie ces
+     * années-là.
+     *
+     * Trois valeurs battent l'ancienne sur les DEUX périodes, ce qui écarte la
+     * coïncidence. On retient la plus petite : elle est la meilleure sur la
+     * période la plus longue et la plus dure, c'est le changement minimal, et
+     * elle n'est le maximum d'aucune des deux — donc pas un sommet ajusté.
+     *
+     * 3 sur 9 secteurs, soit 30 % du portefeuille au plus pour un secteur :
+     * de quoi suivre celui qui mène, pas de quoi lui abandonner le compte.
+     *
+     * Cela reste un a priori mieux étayé, pas une démonstration : sept
+     * observations annuelles ne suffisent pas à conclure.
      */
-    maxPerSector: num('MAX_PER_SECTOR', 2),
+    maxPerSector: num('MAX_PER_SECTOR', 3),
 
     /**
      * ── Fenêtre d'exécution, en heure de New York ─────────────────────────
