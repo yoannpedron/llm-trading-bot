@@ -35,8 +35,11 @@ ExecStart=/usr/bin/node --experimental-sqlite src/server.js
 Environment=DATA_DIR=/opt/llm-trading-bot/backend/data
 Environment=NODE_ENV=production
 
-# Redemarrage systematique. Le bot doit etre vivant a 16h30, 19h30 et 21h30
-# heure de Paris : chaque cycle manque est de la donnee definitivement perdue.
+# Redemarrage systematique. Le bot doit etre vivant a 13h30 heure de New York,
+# chaque jour de bourse. Il n'y a plus qu'UN cycle par jour : une minute
+# d'indisponibilite au mauvais moment coute une journee entiere de decisions,
+# et le carnet fantome a besoin d'une cinquantaine d'observations pour
+# conclure quoi que ce soit. Un cycle manque ne se rattrape pas.
 Restart=always
 RestartSec=10
 

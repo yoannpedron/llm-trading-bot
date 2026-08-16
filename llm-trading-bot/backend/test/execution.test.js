@@ -144,6 +144,26 @@ describe('filtre de spread', () => {
     assert.notEqual(r.mesureDouteuse, true);
   });
 
+  test('un spread négatif est une cotation cassée, pas une aubaine', () => {
+    // Relevé en séance sur IEX le 16 août 2026 : META, AAPL et NVDA à
+    // −20 000 bps, c'est-à-dire une offre à zéro. La demande sous l'offre est
+    // impossible sur un marché ordinaire.
+    //
+    // Avant correction, le filtre répondait « sous le plafond de 7 » : il
+    // annonçait un spread excellent là où il n'avait aucune cotation, sur
+    // trois des plus grosses valeurs de l'univers.
+    for (const casse of [-20000, -1, 0]) {
+      const r = spreadAcceptable(casse, limites);
+      assert.equal(r.acceptable, true, `${casse} : ne pas exclure sur une mesure inexploitable`);
+      assert.equal(r.mesureDouteuse, true, `${casse} : doit être signalé comme douteux`);
+      assert.doesNotMatch(
+        r.raison,
+        /sous le plafond/,
+        `${casse} : ne doit pas prétendre avoir mesuré un bon spread`,
+      );
+    }
+  });
+
   test('un spread inconnu ne fait pas écarter l\'actif', () => {
     // Une donnée manquante n'est pas une information sur le coût.
     assert.equal(spreadAcceptable(null, limites).acceptable, true);

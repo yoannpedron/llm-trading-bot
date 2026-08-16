@@ -10,10 +10,20 @@ d'environ 50 observations, soit une semaine de bourse. Un système de fichiers
 remis à zéro à chaque redéploiement fait repartir la mesure de zéro **sans que
 rien ne le signale** : le dashboard afficherait simplement « 0 en attente ».
 
-**Il doit rester allumé.** Les décisions sont prises par un cron interne à 16:30,
-19:30 et 21:30 heure de Paris. Un service qui s'endort après quinze minutes
-d'inactivité ne se réveille pas tout seul pour honorer un cron — les cycles sont
-purement et simplement sautés.
+**Il doit rester allumé.** La décision est prise par un cron interne, **une
+seule fois par jour de bourse, à 13 h 30 heure de New York**. Un service qui
+s'endort après quinze minutes d'inactivité ne se réveille pas tout seul pour
+honorer un cron — le cycle est purement et simplement sauté.
+
+Et un cycle sauté ne se rattrape pas : c'est une journée de décisions perdue
+pour le carnet fantôme, qui a besoin d'environ 50 observations pour conclure.
+
+> Le fuseau est **`America/New_York`**, pas celui de la machine. C'est
+> délibéré : avec un cron réglé sur l'Europe, les trois semaines de décalage
+> entre les changements d'heure américain et européen faisaient tomber le
+> cycle hors de la fenêtre d'exécution — 20 séances par an perdues, sans le
+> moindre message d'erreur. Ne change pas le fuseau du serveur en espérant
+> déplacer l'horaire : `node-cron` reçoit le fuseau explicitement.
 
 Vérifié en août 2026 :
 
@@ -166,10 +176,28 @@ se chevauchent, et l'un écrase l'état de l'autre. C'est exactement comme ça
 qu'une clé Gemini ajoutée depuis le dashboard a disparu pendant le développement.
 Donc : arrête le bot local avant de démarrer celui du serveur.
 
-**Le stop-loss n'existe pas chez Alpaca.** Il est vérifié par le code à chaque
-cycle, soit trois fois par jour. Entre 16:30 et 19:30, une chute de 20 % passe
-inaperçue jusqu'au cycle suivant. Acceptable sur un compte de démonstration à
-100 $ ; à revoir avant tout passage en réel.
+**Le stop-loss n'est posé nulle part chez Alpaca.** Aucun ordre de protection
+n'existe côté courtier : le niveau est vérifié par le code, et uniquement
+pendant un cycle.
+
+Or il n'y a plus qu'**un cycle par jour de bourse**. L'angle mort n'est donc
+plus de trois heures comme quand le bot tournait trois fois par jour — il est
+de **24 heures en semaine, et d'environ 72 heures du vendredi au lundi**. Un
+titre peut perdre 30 % le vendredi soir sur des résultats : personne ne
+regarde avant lundi 13 h 30 à New York.
+
+Ce n'est pas un oubli, c'est un arbitrage assumé, et il faut le connaître :
+
+- le stop est un **plancher à −25 %**, pas un outil de gestion fine ;
+- la stratégie détient 21 séances minimum, ce qui est incompatible avec une
+  surveillance à la minute — un stop serré ne ferait que payer l'aller-retour
+  sur du bruit ;
+- sur 10 lignes de 10 $, une position anéantie coûte 10 % du capital, pas le
+  compte.
+
+Acceptable sur un compte de démonstration à 100 $. **À revoir impérativement
+avant tout passage en argent réel**, où il faudrait de vrais ordres stop
+déposés chez le courtier.
 
 ## Vérifier que tout va bien
 

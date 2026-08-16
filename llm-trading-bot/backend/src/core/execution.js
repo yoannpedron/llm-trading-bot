@@ -96,6 +96,28 @@ export function spreadAcceptable(spreadBps, limites = config.risk) {
 
   const plafond = limites.maxSpreadBps;
 
+  // ── Spread nul ou négatif : cotation cassée, pas cotation parfaite ───────
+  // Un spread négatif signifie que la demande est passée sous l'offre. C'est
+  // physiquement impossible sur un marché ordinaire : la valeur trahit une
+  // cotation incomplète, typiquement une offre à zéro.
+  //
+  // Relevé en séance sur le flux IEX, le 16 août 2026 : META, AAPL et NVDA
+  // renvoyaient tous les trois −20 000 bps. Sans cette branche, le filtre les
+  // déclarait « sous le plafond de 7 » — il annonçait un spread excellent là
+  // où il n'avait aucune cotation. Trois des plus grosses valeurs de
+  // l'univers, avec un motif rassurant et faux.
+  //
+  // La DÉCISION ne change pas : on laisse passer, comme pour toute mesure
+  // inexploitable. Ce qui change, c'est qu'on cesse de prétendre avoir mesuré.
+  if (spreadBps <= 0) {
+    return {
+      acceptable: true,
+      spreadBps,
+      mesureDouteuse: true,
+      raison: `spread ${spreadBps.toFixed(1)} bps impossible — cotation incomplète, aucune mesure exploitable`,
+    };
+  }
+
   // Mesure aberrante : on ne peut rien en conclure sur le coût. On laisse
   // passer et on le signale, plutôt que d'exclure un actif liquide sur une
   // cotation défaillante.
