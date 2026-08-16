@@ -162,11 +162,22 @@ export function fenetreResultats(symbol, calendrier = cache, maintenant = new Da
   const avant = SEANCES_AVANT * JOURS_PAR_SEANCE;
   const apres = SEANCES_APRES * JOURS_PAR_SEANCE;
 
-  for (const d of dates) {
-    const annonce = new Date(`${d}T00:00:00Z`);
-    if (Number.isNaN(annonce.getTime())) continue;
+  // ── On compare des DATES, pas des instants ──────────────────────────────
+  // La version précédente divisait un écart de millisecondes par 86 400 000,
+  // ce qui rendait la frontière dépendante de l'heure d'exécution : une action
+  // publiant la veille donnait −1,33 jour à 8 h du matin — donc exclue — et
+  // −1,54 à 13 h — donc éligible. Le même titre, le même jour, deux verdicts
+  // opposés selon l'heure du cycle.
+  //
+  // En ramenant les deux dates à minuit UTC, « hier » vaut exactement −1,
+  // toujours.
+  const aujourdhui = Date.parse(`${jour(maintenant)}T00:00:00Z`);
 
-    const ecartJours = (annonce.getTime() - maintenant.getTime()) / MS_PAR_JOUR;
+  for (const d of dates) {
+    const annonce = Date.parse(`${d}T00:00:00Z`);
+    if (Number.isNaN(annonce)) continue;
+
+    const ecartJours = Math.round((annonce - aujourdhui) / MS_PAR_JOUR);
 
     // Positif = l'annonce est à venir ; négatif = elle est passée.
     if (ecartJours <= avant && ecartJours >= -apres) {

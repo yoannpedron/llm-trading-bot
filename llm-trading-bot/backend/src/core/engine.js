@@ -9,6 +9,7 @@ import { filtrerParVeto } from '../llm/veto.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { rankAndSelect, actionEffective } from './ranking.js';
 import { classerUnivers, decisionDepuisRang } from './listwiseRanking.js';
+import { melangerSignaux } from './signalBlend.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
 import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
@@ -484,6 +485,45 @@ export class TradingEngine {
         if (!parSymbole.has(e.symbol)) e.evaluated = false;
       }
 
+      // ── COMBINAISON DES SIX SIGNAUX — MESURÉE, PAS EXÉCUTÉE ──────────────
+      // Le bot calcule six classements et n'en utilise qu'un. Les combiner
+      // correctement suppose de les décorréler d'abord : le classement du
+      // modèle corrèle à +0,89 avec le momentum 5 jours, et le retour à la
+      // moyenne est de signe exactement opposé — les additionner tels quels
+      // double une dimension et en annule une autre.
+      //
+      // L'orthogonalisation symétrique règle les deux, mais elle ne règle PAS
+      // la question de savoir si chaque signal porte de l'information. Mesuré
+      // sur données synthétiques : trois signaux informatifs combinés battent
+      // le meilleur d'entre eux (0,959 contre 0,891), mais y ajouter deux
+      // signaux vides fait retomber à 0,740. Le poids égal ne protège que si
+      // les signaux sont comparables en qualité.
+      //
+      // Or on ignore encore lesquels des six prédisent réellement. Le score
+      // combiné est donc CALCULÉ et CONSIGNÉ, sans jamais décider : c'est la
+      // comparaison appariée du carnet fantôme qui tranchera, dans quelques
+      // mois, s'il mérite de prendre la main.
+      const melange = melangerSignaux(exploitables, rangsFacteurs, listwise);
+
+      // Le score combiné rejoint la table des facteurs : le carnet fantôme le
+      // scorera et le comparera au modèle par test apparié, sans traitement
+      // de faveur.
+      if (melange.scores?.size) {
+        const tries = [...melange.scores.entries()]
+          .filter(([, v]) => Number.isFinite(v))
+          .sort((a, b) => b[1] - a[1]);
+        tries.forEach(([symbol, score], i) => {
+          const entree = rangsFacteurs.get(symbol) ?? {};
+          entree.combine = {
+            rang: i + 1,
+            total: tries.length,
+            fractionnaire: tries.length > 1 ? 1 - i / (tries.length - 1) : 1,
+            score,
+          };
+          rangsFacteurs.set(symbol, entree);
+        });
+      }
+
       // ── CLASSEMENTS DE RÉFÉRENCE, CALCULÉS PAR FORMULE ────────────────────
       // Le bot mesurait si l'IA bat le HASARD. Il ne mesurait jamais si elle bat
       // une FORMULE — la seule question qui décide si consulter un modèle de
@@ -629,6 +669,18 @@ export class TradingEngine {
         // `valeursDistinctes` est le chiffre à surveiller : c'est celui qui
         // valait 3 sur 150 avec la notation individuelle. S'il retombe, tout
         // le reste est décoratif.
+        // Combinaison des six signaux — mesurée, jamais exécutée. L'entropie
+        // de diversité dit si les signaux sont complémentaires ou redondants ;
+        // le taux d'imputation, si les données se dégradent.
+        combinaison: melange?.scores?.size ? {
+          entropieDiversite: melange.entropieDiversite,
+          regime: melange.regime?.regime ?? null,
+          stress: melange.regime?.stress ?? null,
+          poids: melange.poids,
+          imputations: melange.imputations,
+          actifsSansSignal: melange.actifsSansSignal,
+          degenere: melange.degenere,
+        } : null,
         listwise: {
           test: listwise.test,
           lots: listwise.diagnostics.lots,
