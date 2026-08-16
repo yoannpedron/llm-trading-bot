@@ -327,6 +327,53 @@
         </p>
       </div>
 
+      <!--
+        Ce qui décide réellement.
+
+        Le bloc ci-dessus juge le CLASSEMENT DU MODÈLE. Or le modèle ne pèse
+        que 10 % de la décision : ce sont cinq signaux orthogonalisés qui
+        départagent les actifs, et le momentum 5 séances en représente 60 % à
+        lui seul. Ce réglage est le choix le plus lourd de tout le code, et il
+        n'apparaissait nulle part — le backend le publiait, l'écran l'ignorait.
+
+        Trois chiffres suffisent à savoir si le mélange fonctionne :
+
+          · le POIDS effectif du momentum court. S'il s'écarte de 60 %, c'est
+            qu'un signal a disparu du mélange et que les poids se sont
+            redistribués ;
+          · l'ENTROPIE de diversité. Elle vaut 1 quand les signaux sont
+            parfaitement complémentaires, et s'effondre quand ils redisent la
+            même chose — auquel cas en ajouter un de plus ne sert à rien ;
+          · les IMPUTATIONS. Chaque valeur manquante est remplacée par la
+            moyenne. Un taux qui grimpe signale une dégradation des DONNÉES,
+            pas du marché, et ce sont deux problèmes très différents.
+      -->
+      <div class="sante-classement" id="combinaison-bloc" hidden>
+        <div class="sante-grille">
+          <div class="sante-item">
+            <span class="sante-label">Poids du momentum 5 j</span>
+            <strong id="cb-momentum">—</strong>
+            <span class="sante-sous" id="cb-momentum-sous">attendu 60 %</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Diversité des signaux</span>
+            <strong id="cb-entropie">—</strong>
+            <span class="sante-sous" id="cb-entropie-sous">—</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Régime</span>
+            <strong id="cb-regime">—</strong>
+            <span class="sante-sous" id="cb-regime-sous">—</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Valeurs imputées</span>
+            <strong id="cb-imputations">—</strong>
+            <span class="sante-sous" id="cb-imputations-sous">—</span>
+          </div>
+        </div>
+        <p class="sante-note" id="cb-note">—</p>
+      </div>
+
       <div id="ranking-abstention" class="abstention" hidden role="status"></div>
 
       <!--

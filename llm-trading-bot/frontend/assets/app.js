@@ -1591,6 +1591,7 @@ function renderRanking(ranking) {
   $('ranking-meta').textContent = `${rows.length} actifs classés · ${retenus} retenu(s) · ${fmtDate(ranking.at)}`;
 
   renderSanteClassement(ranking, rows.length);
+  renderCombinaison(ranking);
   renderFiltresExecution(ranking);
 
   // ── Abstention expliquée ──────────────────────────────────────────────
@@ -1687,6 +1688,110 @@ function renderSanteClassement(ranking, total) {
   $('rk-note').textContent = aveugle != null && aveugle > 0
     ? `Sur ${Math.round(aveugle * 100)} % des lots, le modèle a déclaré lui-même ne rien distinguer entre les actifs.`
     : 'Le modèle ordonne des lots de dix ; un calcul recolle les morceaux en un classement complet, chaque actif avec sa marge d’erreur.';
+}
+
+/** Poids de base attendu pour le momentum court, tel qu'inscrit côté serveur. */
+const POIDS_MOMENTUM_ATTENDU = 0.6;
+
+/**
+ * Ce qui décide vraiment.
+ *
+ * Le panneau précédent juge le classement DU MODÈLE. Mais le modèle ne pèse
+ * qu'un dixième de la décision : cinq signaux orthogonalisés départagent les
+ * actifs, et le momentum 5 séances en fait 60 % à lui seul. Ce réglage est le
+ * choix le plus lourd de tout le code — il a fait passer, en simulation, un
+ * mélange qui perdait contre l'inaction à un mélange qui la bat trois fois sur
+ * quatre — et il n'apparaissait sur aucun écran.
+ *
+ * Trois défaillances sont visibles ici, et nulle part ailleurs :
+ *
+ *   · un signal DISPARAÎT du mélange (données manquantes, ou modèle écarté
+ *     par le test global) : les poids se redistribuent et celui du momentum
+ *     s'écarte de 60 % ;
+ *   · les signaux deviennent REDONDANTS : l'entropie chute, et en ajouter un
+ *     de plus ne rapporterait rien ;
+ *   · les DONNÉES se dégradent : le taux d'imputation grimpe. C'est un
+ *     problème de tuyauterie, pas de marché — et le confondre avec un mauvais
+ *     cycle ferait chercher au mauvais endroit.
+ */
+function renderCombinaison(ranking) {
+  const bloc = $('combinaison-bloc');
+  const c = ranking?.combinaison;
+
+  // Pas de mélange ce cycle : le cacher plutôt qu'afficher quatre tirets, qui
+  // se lisent comme « zéro » alors qu'ils veulent dire « rien mesuré ».
+  if (!c) { bloc.hidden = true; return; }
+  bloc.hidden = false;
+
+  // ── Poids du momentum court ─────────────────────────────────────────────
+  const poids = c.poids ?? {};
+  const pm = poids.momentumCourt;
+  if (Number.isFinite(pm)) {
+    $('cb-momentum').textContent = `${Math.round(pm * 100)} %`;
+    const ecart = Math.abs(pm - POIDS_MOMENTUM_ATTENDU);
+    $('cb-momentum').className = ecart < 0.02 ? 'ok' : ecart < 0.10 ? 'moyen' : 'mauvais';
+    const autres = Object.entries(poids)
+      .filter(([nom]) => nom !== 'momentumCourt')
+      .map(([nom, v]) => `${nom} ${Math.round(v * 100)} %`);
+    $('cb-momentum-sous').textContent = autres.length ? autres.join(' · ') : 'seul signal du mélange';
+  } else {
+    $('cb-momentum').textContent = 'absent';
+    $('cb-momentum').className = 'mauvais';
+    $('cb-momentum-sous').textContent = 'le momentum court n’est pas dans le mélange';
+  }
+
+  // ── Entropie de diversité ───────────────────────────────────────────────
+  const h = c.entropieDiversite;
+  if (Number.isFinite(h)) {
+    $('cb-entropie').textContent = fmtNum(h, 3);
+    // Sous 0,5, quelques directions dominent : les signaux se répètent.
+    $('cb-entropie').className = h >= 0.75 ? 'ok' : h >= 0.5 ? 'moyen' : 'mauvais';
+    $('cb-entropie-sous').textContent = h >= 0.75
+      ? 'signaux complémentaires'
+      : h >= 0.5
+        ? 'redondance partielle'
+        : 'les signaux redisent la même chose';
+  } else {
+    $('cb-entropie').textContent = 'n/d';
+    $('cb-entropie').className = '';
+    $('cb-entropie-sous').textContent = '—';
+  }
+
+  // ── Régime ──────────────────────────────────────────────────────────────
+  // Il est calculé et publié, mais ne pondère plus rien : décider aujourd'hui
+  // quel signal doit dominer en dislocation serait deviner. Il est affiché
+  // pour que le carnet puisse un jour segmenter les scores par régime.
+  $('cb-regime').textContent = c.regime ?? 'n/d';
+  $('cb-regime').className = '';
+  $('cb-regime-sous').textContent = Number.isFinite(c.stress)
+    ? `dispersion ${fmtNum(c.stress, 2)} — mesuré, ne pondère rien`
+    : 'mesuré, ne pondère rien';
+
+  // ── Imputations ─────────────────────────────────────────────────────────
+  const imp = c.imputations ?? 0;
+  const sans = c.actifsSansSignal ?? 0;
+  $('cb-imputations').textContent = String(imp);
+  $('cb-imputations').className = imp === 0 ? 'ok' : imp < 30 ? 'moyen' : 'mauvais';
+  $('cb-imputations-sous').textContent = sans > 0
+    ? `${sans} actif(s) sans aucun signal, écarté(s)`
+    : 'aucun actif écarté faute de signal';
+
+  // ── La note ─────────────────────────────────────────────────────────────
+  // Deux situations méritent une phrase plutôt qu'un code couleur, parce
+  // qu'elles changent la nature de la décision du jour.
+  if (c.degenere) {
+    $('cb-note').textContent = 'Signaux colinéaires : une direction du système ne porte aucune '
+      + 'information propre. Elle a été neutralisée, la décision reste valide mais repose sur '
+      + 'moins de dimensions indépendantes qu’il n’y paraît.';
+  } else if (!Number.isFinite(poids.llm)) {
+    $('cb-note').textContent = 'Le modèle est absent du mélange ce cycle — son classement n’a pas '
+      + 'été jugé distinguable d’un tirage au sort. Les formules mécaniques décident seules, '
+      + 'c’est le comportement prévu.';
+  } else {
+    $('cb-note').textContent = 'Le momentum 5 séances porte 60 % de la décision. Ce poids vient '
+      + 'de deux périodes de simulation indépendantes ; il reste un a priori que le carnet '
+      + 'fantôme devra confirmer ou corriger sur données réelles.';
+  }
 }
 
 /**
