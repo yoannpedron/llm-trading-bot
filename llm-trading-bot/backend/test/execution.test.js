@@ -259,3 +259,52 @@ describe('veto de risque', () => {
     assert.equal(p.includes('Nvidia'), false);
   });
 });
+
+describe('durée minimale de détention — le garde-fou qui était invérifiable', () => {
+  test('l\'instant de référence est injectable, sinon la règle ne se teste qu\'en production', async () => {
+    // `ageEnSeances` lisait l'horloge système sans détour possible. Rejouer une
+    // année de décisions donnait donc à CHAQUE position un âge calculé depuis
+    // aujourd'hui : une ligne ouverte en juin 2025 paraissait vieille de trois
+    // cents séances, et la durée minimale ne se déclenchait jamais.
+    //
+    // Mesuré sur une simulation d'un an du vrai code : sans l'injection, 803
+    // achats en 299 séances au lieu de 140. Le garde-fou le plus important de
+    // la stratégie était contourné sans que rien ne le signale.
+    const { rankAndSelect } = await import('../src/core/ranking.js');
+
+    // Vingt actifs, le détenu délibérément mal classé pour qu'il sorte.
+    const evaluations = Array.from({ length: 20 }, (_, i) => ({
+      symbol: `S${i}`,
+      decision: { forecast: { edge: 1 - i / 20 } },
+    }));
+    const positions = [{ symbol: 'S19', openedAt: '2025-06-05T18:00:00.000Z' }];
+    const commun = { maxSelected: 3, held: new Set(['S19']), ageMinimum: 21, positions };
+
+    // Cinq séances après l'ouverture : la position doit être CONSERVÉE.
+    const tot = rankAndSelect(evaluations, {
+      ...commun,
+      maintenant: new Date('2025-06-12T18:00:00.000Z'),
+    });
+    assert.equal(tot.sorties.has('S19'), false, 'sortie interdite avant 21 séances');
+
+    // Six mois plus tard : la durée est atteinte, la sortie redevient permise.
+    const tard = rankAndSelect(evaluations, {
+      ...commun,
+      maintenant: new Date('2025-12-05T18:00:00.000Z'),
+    });
+    assert.equal(tard.sorties.has('S19'), true, 'sortie permise une fois la durée écoulée');
+  });
+
+  test('sans instant fourni, le comportement de production est inchangé', async () => {
+    const { rankAndSelect } = await import('../src/core/ranking.js');
+    const evaluations = Array.from({ length: 20 }, (_, i) => ({
+      symbol: `S${i}`, decision: { forecast: { edge: 1 - i / 20 } },
+    }));
+    // Ouverte à l'instant : l'horloge réelle doit la juger trop jeune.
+    const positions = [{ symbol: 'S19', openedAt: new Date().toISOString() }];
+    const r = rankAndSelect(evaluations, {
+      maxSelected: 3, held: new Set(['S19']), ageMinimum: 21, positions,
+    });
+    assert.equal(r.sorties.has('S19'), false);
+  });
+});

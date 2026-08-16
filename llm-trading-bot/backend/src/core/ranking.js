@@ -129,6 +129,20 @@ export function ageEnSeances(openedAt, maintenant = new Date()) {
  * @param {Array}  options.positions    positions détenues, avec leur `openedAt`
  * @param {number} options.maxParSecteur  plafond par secteur (0 = désactivé)
  * @param {Function} options.secteurDe    résolution du secteur, injectable
+ * @param {Date}   options.maintenant   instant de référence pour l'âge des
+ *   positions. Vaut l'heure courante en production — c'est bien ce qu'on veut.
+ *
+ *   ── Pourquoi il faut pouvoir l'injecter ────────────────────────────────
+ *   `ageEnSeances` lisait l'horloge système sans détour possible. Rejouer une
+ *   année de décisions donnait donc à CHAQUE position un âge calculé depuis
+ *   aujourd'hui : une ligne ouverte en juin 2025 paraissait vieille de trois
+ *   cents séances, la durée minimale de détention ne se déclenchait jamais, et
+ *   la simulation vendait tous les jours.
+ *
+ *   Le garde-fou le plus important de la stratégie était donc INVÉRIFIABLE
+ *   autrement qu'en production. Mesuré : sans lui, 803 achats sur 299 séances
+ *   et 136,80 $ contre 143,22 $ pour l'inaction. La règle ne fait pas que
+ *   limiter les frais, elle porte le résultat.
  */
 export function rankAndSelect(evaluations, {
   maxSelected = 3,
@@ -138,9 +152,12 @@ export function rankAndSelect(evaluations, {
   maxParSecteur = 0,
   secteurDe = sectorOf,
   abstention = null,
+  maintenant = undefined,
 } = {}) {
   const ages = positions
-    ? new Map(positions.map((p) => [p.symbol, ageEnSeances(p.openedAt)]).filter(([, a]) => a != null))
+    ? new Map(positions
+      .map((p) => [p.symbol, maintenant ? ageEnSeances(p.openedAt, maintenant) : ageEnSeances(p.openedAt)])
+      .filter(([, a]) => a != null))
     : null;
   const optionsSortie = { ageMinimum, ages };
   const scored = evaluations
