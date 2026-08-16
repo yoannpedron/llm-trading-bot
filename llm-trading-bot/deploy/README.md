@@ -52,8 +52,43 @@ plutôt que facturées si tu dépasses.
 3. Note l'**adresse IP publique** affichée après création.
 4. **Networking → Virtual Cloud Networks → ton VCN → Security Lists → Default**
    → *Add Ingress Rules* : source `0.0.0.0/0`, TCP, ports **80** et **443**.
-   Oracle bloque tout par défaut, y compris ce que `ufw` autorise côté machine —
-   les deux niveaux doivent être ouverts.
+
+> ### Il y a TROIS pare-feu, pas deux
+>
+> C'est le piège le plus coûteux de cette installation, parce qu'il ne produit
+> aucun message d'erreur.
+>
+> 1. la *Security List* du réseau Oracle, ci-dessus ;
+> 2. `ufw`, que `install.sh` configure ;
+> 3. **la chaîne `iptables` livrée avec l'image Ubuntu d'Oracle**, que presque
+>    personne ne regarde.
+>
+> Cette troisième contient un `REJECT` global placé **avant** les chaînes
+> d'ufw :
+>
+> ```
+> 4  ACCEPT  tcp dpt:22
+> 5  REJECT  all  reject-with icmp-host-prohibited   <-- ici
+> 6  ufw-before-input ...
+> ```
+>
+> Tout ce qu'autorise `ufw` se trouve derrière ce `REJECT` et n'est donc jamais
+> évalué. `ufw status` affiche fièrement `443/tcp ALLOW Anywhere`, Caddy écoute
+> bien sur le port, et rien n'entre.
+>
+> Sur cette installation, Caddy a échoué **62 fois en dix jours** à obtenir son
+> certificat, avec pour seul symptôme `Error getting validation data`. Le bot
+> tournait parfaitement, injoignable, et aucun des trois niveaux ne signalait
+> quoi que ce soit.
+>
+> `install.sh` corrige désormais ce cas tout seul. Pour vérifier depuis ta
+> machine, sans rien installer :
+>
+> ```bash
+> for p in 22 80 443; do timeout 5 bash -c "echo > /dev/tcp/<TON-IP>/$p" 2>/dev/null && echo "$p ouvert" || echo "$p fermé"; done
+> ```
+>
+> Si 22 répond et pas les autres, le blocage est réseau — pas applicatif.
 
 ## Installation
 

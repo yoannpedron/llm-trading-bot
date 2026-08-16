@@ -79,6 +79,39 @@ ufw allow 80/tcp >/dev/null  # nécessaire au renouvellement Let's Encrypt
 ufw --force enable >/dev/null
 ufw status | head -8
 
+# ── Le REJECT que les images Oracle placent AVANT ufw ─────────────────────
+# Leurs images Ubuntu arrivent avec une chaîne INPUT déjà peuplée :
+#
+#     4  ACCEPT  tcp dpt:22
+#     5  REJECT  all  reject-with icmp-host-prohibited   <-- ici
+#     6  ufw-before-input ...
+#
+# Tout ce qu'autorise ufw se trouve derrière ce REJECT et n'est donc jamais
+# évalué. `ufw status` affiche « 443/tcp ALLOW Anywhere », Caddy écoute bien
+# sur le port, et pourtant rien n'entre.
+#
+# Constaté sur cette installation : Caddy a échoué 62 fois en dix jours à
+# obtenir son certificat, avec pour seul symptôme « Error getting validation
+# data ». Le bot tournait parfaitement, injoignable, sans qu'aucun des trois
+# niveaux — ufw, Caddy, service — ne signale quoi que ce soit d'anormal.
+#
+# On insère donc les autorisations AVANT ce REJECT, en cherchant sa position
+# plutôt qu'en la codant en dur.
+if iptables -C INPUT -j REJECT --reject-with icmp-host-prohibited 2>/dev/null; then
+  POS_REJECT="$(iptables -L INPUT --line-numbers -n \
+    | awk '$2 == "REJECT" { print $1; exit }')"
+  if [ -n "$POS_REJECT" ]; then
+    for PORT in 443 80; do
+      iptables -C INPUT -p tcp -m state --state NEW --dport "$PORT" -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT "$POS_REJECT" -p tcp -m state --state NEW --dport "$PORT" -j ACCEPT
+    done
+    echo "   REJECT Oracle détecté en position $POS_REJECT — 80 et 443 insérés avant"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables-persistent >/dev/null 2>&1 || true
+    netfilter-persistent save >/dev/null 2>&1 \
+      || iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+  fi
+fi
+
 cat <<'FIN'
 
 ────────────────────────────────────────────────────────────────
