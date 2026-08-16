@@ -362,9 +362,47 @@ export const config = {
      * coupe-circuit de catastrophe : fraude, radiation, effondrement. Il est
      * placé assez loin pour ne jamais intervenir sur du bruit, et existe
      * uniquement pour qu'une ligne ne puisse pas aller à zéro sans réaction.
+     *
+     * ── Il n'était PAS placé assez loin ───────────────────────────────────
+     * Mesuré sur 18 629 périodes de 21 séances, tous titres de l'univers,
+     * 2016-2026 — la baisse la plus profonde traversée pendant une détention :
+     *
+     *     centile   0,5 %   -33,9 %
+     *     centile     1 %   -28,5 %
+     *     centile     2 %   -22,8 %
+     *     centile    50 %    -4,0 %
+     *
+     * -25 % tombe donc au centile 1,5. Ce n'est pas un seuil de catastrophe,
+     * c'est le bord de la distribution ordinaire : 268 déclenchements, et
+     * 270 sur 272 des positions concernées terminent AU-DESSUS de -25 %. Le
+     * coupe-circuit vendait au plus bas, presque à chaque fois.
+     *
+     * Effet mesuré, médiane de l'excédent sur ~430 fenêtres d'un an :
+     *
+     *     seuil    -25 %   -30 %   -35 %   -40 %   -50 %   aucun
+     *     médiane  +0,5    +5,3    +2,3    +3,7    +2,7    +2,7
+     *     bat      54 %    69 %    62 %    65 %    65 %    65 %
+     *
+     * Une valeur isolément mauvaise, puis un plateau. C'est la structure qui
+     * distingue un effet réel d'un pic de hasard — et c'est celle qu'aucun
+     * autre paramètre testé cette semaine n'a produite.
+     *
+     * ── Pourquoi 35 % et pas la suppression, que les chiffres réclament ───
+     * Parce que ces données ne peuvent PAS voir à quoi sert un coupe-circuit.
+     * L'univers est la composition du S&P 500 d'aujourd'hui : toute entreprise
+     * qui s'est effondrée en a été retirée avant le téléchargement. Les cas où
+     * le stop sauve la mise sont absents par construction, et la récupération
+     * mesurée à 90 % au-delà de -40 % en est le symptôme direct.
+     *
+     * Le backtest sait donc dire que -25 % est trop serré. Il ne sait pas dire
+     * qu'aucun seuil n'est nécessaire, et on ne lui fait pas dire.
+     *
+     * 35 % est la plus petite valeur du plateau que la configuration
+     * contemplait déjà — c'est `stopMaxPct`. Plancher et plafond coïncident
+     * désormais : le coupe-circuit est un seuil fixe, franc, hors du bruit.
      */
     stopAtrMultiple: num('STOP_ATR_MULTIPLE', 0),
-    stopMinPct: num('STOP_MIN_PCT', 0.25),
+    stopMinPct: num('STOP_MIN_PCT', 0.35),
     stopMaxPct: num('STOP_MAX_PCT', 0.35),
     // Pas de take-profit fixe : il tronque la queue droite de la distribution
     // et détruit l'espérance des stratégies de suivi de tendance. La sortie
