@@ -446,14 +446,51 @@ export function entropieDiversite(valeursPropres) {
  * meilleure du plateau. La valeur exacte importe peu — c'est le message du
  * plateau, et c'est ce qui rend le choix défendable.
  *
- * ── Ce que ce chiffre vaut, et sa date de péremption ─────────────────────
- * Les 26 fenêtres se recouvrent largement : elles ne valent pas 26 essais
- * indépendants, plutôt deux. Sur trois semestres réellement disjoints,
- * t = 1,74 — NON significatif. Ce poids est un a priori, pas une mesure.
+ * ── VALIDATION HORS ÉCHANTILLON : 2017 → mi-2023 ─────────────────────────
+ * Tout ce qui précède a été arrêté sur 2024-2026. Le réglage a ensuite été
+ * rejoué GELÉ sur six ans et demi antérieurs, jamais vus, en données SIP
+ * ajustées des divisions et des dividendes (149 titres, RTX écarté à cause
+ * de la scission Carrier/Otis d'avril 2020).
  *
- * Il tient tant que le carnet fantôme n'a rien de mieux : c'est lui qui
- * mesure chaque facteur contre les rendements réalisés, et c'est lui qui
- * devra trancher au bout de quelques mois de données réelles.
+ *     année    inaction    le bot     écart
+ *     2017      +29,7 %    +36,6 %   + 6,9 pts
+ *     2018       −2,1 %     +1,9 %   + 4,0 pts
+ *     2019      +32,9 %    +25,4 %   − 7,5 pts
+ *     2020      +25,5 %    +37,0 %   +11,5 pts
+ *     2021      +33,4 %    +37,5 %   + 4,1 pts
+ *     2022       −6,0 %     −5,3 %   + 0,7 pts
+ *     2023      +20,1 %    +30,1 %   +10,0 pts
+ *
+ * Six années sur sept, et 338 $ contre 313 $ en continu. Le réglage SURVIT :
+ * il ne s'effondre pas hors de la période qui l'a produit, ce qui est le sort
+ * ordinaire des stratégies ajustées.
+ *
+ * ── Mais l'avantage n'est PAS démontré, et il ne protège de rien ──────────
+ * +4,23 points par an, écart-type 6,36 : t = 1,76 sur 6 degrés de liberté.
+ * NON significatif. Contre 300 tirages au sort sur la même période, p = 0,15
+ * — le bot reste à l'intérieur du nuage du hasard. À ce rythme il faudrait
+ * une quatorzaine d'années pour trancher.
+ *
+ * Et le comportement en marché baissier, que 2024-2026 ne pouvait pas
+ * montrer, est franchement mauvais :
+ *
+ *     épisode              inaction    le bot
+ *     fin 2018              −18,7 %   −27,6 %   ← amplifie de 9 points
+ *     krach Covid           −33,1 %   −33,2 %
+ *     baisse 2022           −13,8 %   −16,5 %
+ *
+ * Le momentum n'a aucune vertu défensive : il détient les titres qui montaient
+ * jusqu'à la veille, et la détention minimale de 21 séances l'empêche de
+ * sortir vite. Tout l'avantage se construit en marché porteur, et une partie
+ * se rend au premier retournement.
+ *
+ * Aucun réglage n'a été retouché après ce test. Le corriger sur ces
+ * résultats-là détruirait précisément ce qui leur donne de la valeur.
+ *
+ * ── La date de péremption ────────────────────────────────────────────────
+ * Ce poids reste un a priori, pas une mesure. Il tient tant que le carnet
+ * fantôme n'a rien de mieux : c'est lui qui mesure chaque facteur contre les
+ * rendements réalisés, et c'est lui qui devra trancher.
  *
  * Le modèle garde un poids de 1 : rien ne justifie encore de le favoriser ni
  * de le brider, et son classement est déjà écarté d'office quand le test
