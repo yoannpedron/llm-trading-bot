@@ -412,40 +412,54 @@ export function entropieDiversite(valeursPropres) {
  * momentum 12-1 sont des lectures de retour à la moyenne, opposées par
  * construction au momentum court.
  *
- * ── Pourquoi 3, et pas le poids qui maximise le backtest ─────────────────
- * Le balayage donne 134 / 143 / 163 / 145 / 156 / 206 / 179 / 184 / 180 / 208
- * pour des poids de 1 à 50. La courbe est DENTELÉE — elle monte et descend
- * sans optimum stable. Retenir 6 parce qu'il affiche 206 $ serait ajuster un
- * paramètre continu sur deux ans de données, exactement l'erreur que le reste
- * de ce travail s'emploie à éviter.
+ * ── Pourquoi 6, et comment ce chiffre a été choisi ───────────────────────
+ * Jugé sur UNE trajectoire de deux ans, le balayage donne 134 / 143 / 163 /
+ * 145 / 156 / 206 / 179 / 184 / 180 / 208 pour des poids de 1 à 50 : une
+ * courbe dentelée, sans optimum stable. Cette mesure est trompeuse — le point
+ * d'arrivée d'un seul chemin dépend de deux ou trois positions détenues le
+ * dernier jour, ce qui déplace le chiffre de vingt dollars sans rien dire du
+ * réglage.
  *
- * Ce qui résiste, c'est la seule chose non ajustable : le poids égal est la
- * PIRE des dix valeurs testées, battue 9 fois sur 9. La direction est solide,
- * la magnitude ne l'est pas. On prend donc un chiffre rond et modeste, choisi
- * pour n'être pas le sommet local.
+ * La mesure robuste est la MÉDIANE sur 26 fenêtres d'un an, chacune partant
+ * d'une date différente donc d'un tirage différent du portefeuille. Sous
+ * cette lecture la dentelure disparaît et un plateau net apparaît :
  *
- * L'argument décisif est ailleurs, dans le semestre perdant :
+ *     poids   médiane à 1 an   bat l'inaction   pire fenêtre
+ *        1        108,68 $        4/26  (15 %)     89,98 $
+ *        2        118,66 $       16/26  (62 %)    101,97 $
+ *        3        128,14 $       22/26  (85 %)    111,19 $
+ *        4        131,37 $       25/26  (96 %)    110,29 $
+ *        6        133,47 $       24/26  (92 %)    108,91 $
+ *        8        138,46 $       26/26 (100 %)    108,77 $
+ *       15        141,49 $       25/26  (96 %)    100,19 $
+ *       25        134,67 $       25/26  (96 %)    100,44 $
  *
- *     semestre         passif   égalité   poids 3
- *     2024-08 → 2025-01  +8,3 %   +15,8 %   +11,6 %
- *     2025-02 → 2025-08  +2,3 %   −16,3 %    −1,8 %   ← le basculement protège
- *     2025-08 → 2026-02 +13,2 %    +8,0 %   +12,9 %
+ *     (l'inaction donne 116,49 $ en médiane sur les mêmes fenêtres)
  *
- * Le basculement rend un peu du meilleur semestre et récupère l'essentiel du
- * pire. C'est un gain de robustesse, pas une course au rendement.
+ * Tout ce qui dépasse 4 se tient entre 128 $ et 141 $ et bat l'inaction au
+ * moins 85 % du temps. Le poids égal, lui, ne la bat que 4 fois sur 26 : il
+ * n'est pas seulement sous-optimal, il est nuisible.
+ *
+ * On se place au milieu du plateau, pas à son maximum. Retenir 15 parce qu'il
+ * affiche 141 $ serait ajuster un paramètre continu sur deux ans de données ;
+ * 6 est à l'intérieur, loin des deux bords, et sa pire fenêtre reste la
+ * meilleure du plateau. La valeur exacte importe peu — c'est le message du
+ * plateau, et c'est ce qui rend le choix défendable.
  *
  * ── Ce que ce chiffre vaut, et sa date de péremption ─────────────────────
- * Deux ans, trois semestres indépendants, t = 1,74 : NON significatif. Ce
- * poids est un a priori, pas une mesure. Il tient tant que le carnet fantôme
- * n'a rien de mieux — c'est lui qui mesure chaque facteur contre les
- * rendements réalisés, et c'est lui qui devra trancher au bout de quelques
- * mois de données réelles.
+ * Les 26 fenêtres se recouvrent largement : elles ne valent pas 26 essais
+ * indépendants, plutôt deux. Sur trois semestres réellement disjoints,
+ * t = 1,74 — NON significatif. Ce poids est un a priori, pas une mesure.
+ *
+ * Il tient tant que le carnet fantôme n'a rien de mieux : c'est lui qui
+ * mesure chaque facteur contre les rendements réalisés, et c'est lui qui
+ * devra trancher au bout de quelques mois de données réelles.
  *
  * Le modèle garde un poids de 1 : rien ne justifie encore de le favoriser ni
  * de le brider, et son classement est déjà écarté d'office quand le test
  * global le juge indistinguable du hasard.
  */
-export const POIDS_BASE = { momentumCourt: 3 };
+export const POIDS_BASE = { momentumCourt: 6 };
 
 /**
  * Adaptateur : assemble les six signaux du cycle et produit le score combiné.
