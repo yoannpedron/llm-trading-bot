@@ -214,7 +214,22 @@ export const config = {
      * Coût : une dizaine d'appels par cycle, sur les seuls candidats retenus.
      */
     vetoActif: bool('VETO_ACTIF', true),
-    maxPositionPct: num('MAX_POSITION_PCT', 0.35),
+    /**
+     * ── Enveloppe par position ────────────────────────────────────────────
+     * Doit rester cohérente avec `maxPositions`, et ça ne va pas de soi : les
+     * deux réglages sont indépendants alors qu'ils décrivent le même partage.
+     *
+     * Le défaut était à 0,35 quand le bot visait 3 positions. En passant à 10
+     * sans y toucher, la cible devenait 350 % de l'équity : le cash s'épuisait
+     * après la troisième ligne et les sept autres étaient refusées faute de
+     * fonds. Le passage à 10 positions était donc purement décoratif, et rien
+     * ne le signalait — le bot se comportait exactement comme avant.
+     *
+     * À 0,10, dix lignes de 10 $ sur 100 $ d'équity : le poids égal redevient
+     * réellement égal. Un contrôle de cohérence au démarrage refuse désormais
+     * les combinaisons impossibles.
+     */
+    maxPositionPct: num('MAX_POSITION_PCT', 0.10),
     // Plancher d'ordre volontairement bas.
     //
     // Les rapports de recherche justifiaient un plancher élevé (50 € et plus)
@@ -407,6 +422,40 @@ export function validateConfig() {
         + 'détail avec `npm run entities`.',
       );
     }
+  }
+
+  // ── Cohérence entre le nombre de positions et leur taille ────────────────
+  // Ces deux réglages sont indépendants alors qu'ils décrivent le même
+  // partage du capital. Une incohérence ne provoque aucune erreur : le bot
+  // ouvre simplement moins de positions que demandé, faute de cash, et se
+  // comporte comme si le plafond n'avait jamais changé.
+  //
+  // C'est exactement ce qui s'est produit en passant de 3 à 10 positions sans
+  // toucher à l'enveloppe : la cible atteignait 350 % de l'équity et sept
+  // lignes sur dix étaient refusées, sans le moindre message.
+  const exposition = config.risk.maxPositions * config.risk.maxPositionPct;
+  if (exposition > 1.05) {
+    const possible = Math.floor(1 / config.risk.maxPositionPct);
+    warnings.push(
+      `Dimensionnement incohérent : ${config.risk.maxPositions} positions × `
+      + `${(config.risk.maxPositionPct * 100).toFixed(0)} % = ${(exposition * 100).toFixed(0)} % de l'équity. `
+      + `Le cash s'épuisera après ~${possible} ligne(s) et les suivantes seront refusées sans erreur. `
+      + `Fixer MAX_POSITION_PCT à ${(1 / config.risk.maxPositions).toFixed(2)} pour un poids réellement égal.`,
+    );
+  } else if (exposition < 0.5) {
+    warnings.push(
+      `Capital sous-employé : ${config.risk.maxPositions} × `
+      + `${(config.risk.maxPositionPct * 100).toFixed(0)} % = ${(exposition * 100).toFixed(0)} % de l'équity investie au maximum.`,
+    );
+  }
+
+  // Une ligne trop petite pour le plancher d'ordre ne sera jamais exécutée.
+  const ligneTypique = config.risk.initialCapital * config.risk.maxPositionPct;
+  if (ligneTypique < config.risk.minOrderValue) {
+    warnings.push(
+      `Lignes trop petites : ${ligneTypique.toFixed(2)} par position, sous le plancher `
+      + `de ${config.risk.minOrderValue}. Aucun ordre ne passera. Réduire MAX_POSITIONS ou MIN_ORDER_VALUE.`,
+    );
   }
 
   return warnings;
