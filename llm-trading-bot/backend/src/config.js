@@ -92,16 +92,31 @@ export const config = {
    * refaisaient le même travail sur les mêmes chiffres, pour 180 appels par
    * jour au lieu de 60.
    *
-   * Un cycle unique à 19h30 Paris tombe à 13h30 à New York : en plein milieu
-   * de séance, là où le spread est au plus bas, et dans la fenêtre d'achat.
+   * ── ET LE FUSEAU EST CELUI DE NEW YORK, PAS DE PARIS ──────────────────
+   * Le cron était réglé en heure de Paris alors que la contrainte — la fenêtre
+   * 11h-14h où le spread est au plus bas — est new-yorkaise. Les deux
+   * continents ne changent pas d'heure le même jour : les États-Unis passent à
+   * l'heure d'été le deuxième dimanche de mars, l'Europe le dernier.
+   *
+   * Pendant ces trois semaines, Paris est en UTC+1 quand New York est déjà en
+   * UTC−4 : 19h30 Paris tombe à 14h30 à New York, hors fenêtre. Même décalage
+   * inversé fin octobre.
+   *
+   * Vérifié sur les 261 jours ouvrés de 2026 : 20 cycles ne pouvaient PAS
+   * acheter — quinze jours d'affilée en mars, cinq fin octobre. Trois semaines
+   * de blocage complet, sans erreur ni message, sur un bot destiné à tourner
+   * plusieurs mois sans surveillance.
+   *
+   * Exprimer l'horaire dans le fuseau de la contrainte supprime le problème à
+   * la racine : 13h30 à New York reste 13h30 à New York toute l'année.
    *
    * Le risque assumé est qu'une panne ce jour-là fasse sauter le cycle. À 21
    * séances de détention, un jour manqué ne coûte presque rien — le classement
    * du lendemain sera quasi identique.
    */
   schedule: {
-    cron: str('CRON_SCHEDULE', '30 19 * * 1-5'),
-    timezone: str('CRON_TIMEZONE', 'Europe/Paris'),
+    cron: str('CRON_SCHEDULE', '30 13 * * 1-5'),
+    timezone: str('CRON_TIMEZONE', 'America/New_York'),
     runOnStart: bool('RUN_ON_START', true),
     onlyMarketHours: bool('ONLY_MARKET_HOURS', true),
   },

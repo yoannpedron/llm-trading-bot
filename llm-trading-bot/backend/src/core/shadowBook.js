@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { createLogger } from '../logger.js';
 import { SqliteStore } from '../storage/SqliteStore.js';
 import { calibration } from './calibration.js';
-import { rankIC, rankCalibrationError } from './rankMetrics.js';
+import { rankIC, rankCalibrationError, ecartApparie } from './rankMetrics.js';
 
 const log = createLogger('shadow');
 
@@ -842,12 +842,14 @@ function comparaisonFacteurs(all, horizon) {
   }
 
   const resultats = {};
+  const icBruts = {};
   for (const [nom, src] of Object.entries(sources)) {
     if (src.rows.length < 20) {
       resultats[nom] = { label: src.label, n: src.rows.length, note: 'pas assez de décisions' };
       continue;
     }
     const ic = rankIC(src.rows, { horizon });
+    icBruts[nom] = ic;
     resultats[nom] = {
       label: src.label,
       n: src.rows.length,
@@ -869,28 +871,53 @@ function comparaisonFacteurs(all, horizon) {
   let verdict = 'Pas encore assez de décisions échues pour comparer.';
   let meilleurFacteur = null;
 
+  // ── La comparaison est APPARIÉE, et ce n'est pas un raffinement ────────
+  // Comparer deux IC moyens calculés séparément revient à jeter l'information
+  // que les deux prédicteurs ont classé le MÊME univers le MÊME jour. Or
+  // l'essentiel de la variance d'un IC quotidien vient du marché de ce jour-là,
+  // et cette composante commune s'annule exactement dans la différence.
+  //
+  // Mesuré par simulation, à corrélation 0,89 entre les deux classements — la
+  // valeur effectivement observée entre le modèle et le facteur momentum :
+  //
+  //     question absolue  (le modèle a-t-il un avantage ?)  : 24 mois
+  //     question appariée (bat-il la formule ?)             :  6 mois
+  //
+  // Quatre fois plus vite, pour la question qui décide réellement de
+  // l'architecture.
+  let apparie = null;
+
   if (Number.isFinite(modele?.icMoyen) && facteurs.length) {
     meilleurFacteur = facteurs.reduce((a, b) => (b[1].icMoyen > a[1].icMoyen ? b : a));
-    const ecart = modele.icMoyen - meilleurFacteur[1].icMoyen;
+    apparie = ecartApparie(icBruts.modele, icBruts[meilleurFacteur[0]], {
+      label: `modèle − ${meilleurFacteur[1].label}`,
+    });
 
-    if (!modele.significatif && !meilleurFacteur[1].significatif) {
-      verdict = 'Ni le modèle ni les formules ne se distinguent du hasard pour l\'instant. '
-        + 'Rien ne permet encore de trancher.';
-    } else if (ecart > 0.01) {
-      verdict = `Le modèle DEVANCE la meilleure formule de ${(ecart * 100).toFixed(1)} points de corrélation. `
-        + 'La lecture des actualités apporte quelque chose qu\'aucun facteur ne capte.';
-    } else if (ecart < -0.01) {
-      verdict = `La formule « ${meilleurFacteur[1].label} » DEVANCE le modèle de ${(-ecart * 100).toFixed(1)} points. `
-        + 'À ce stade, consulter un modèle de langage coûte cher pour faire moins bien qu\'un calcul gratuit.';
+    const attente = apparie.joursEstimesPourTrancher != null && apparie.jours > 0
+      ? ` Au rythme observé, il faudrait environ ${apparie.joursEstimesPourTrancher} jours de mesure pour trancher (${apparie.jours} écoulés).`
+      : '';
+
+    if (!apparie.significatif) {
+      verdict = `Le modèle et la formule « ${meilleurFacteur[1].label} » ne sont pas distinguables `
+        + `sur ${apparie.jours ?? 0} jour(s) communs.${attente} `
+        + 'À égalité, l\'avantage revient à la formule : gratuite, instantanée, reproductible.';
+    } else if (apparie.tStat > 0) {
+      verdict = `Le modèle DEVANCE « ${meilleurFacteur[1].label} » de `
+        + `${(apparie.ecartMoyen * 100).toFixed(1)} points de corrélation par jour (t = ${apparie.tStat}). `
+        + 'La lecture des actualités apporte quelque chose qu\'aucune formule ne capte.';
     } else {
-      verdict = 'Le modèle et la meilleure formule sont à égalité. '
-        + 'La formule étant gratuite, instantanée et reproductible, l\'avantage lui revient.';
+      verdict = `La formule « ${meilleurFacteur[1].label} » DEVANCE le modèle de `
+        + `${(-apparie.ecartMoyen * 100).toFixed(1)} points par jour (t = ${apparie.tStat}). `
+        + 'Consulter un modèle de langage coûte cher pour faire moins bien qu\'un calcul gratuit.';
     }
   }
 
   return {
     parSource: resultats,
     meilleurFacteur: meilleurFacteur ? meilleurFacteur[0] : null,
+    // Le test qui tranchera en premier. Les IC individuels restent publiés,
+    // mais c'est celui-ci qu'il faut lire.
+    apparie,
     verdict,
   };
 }

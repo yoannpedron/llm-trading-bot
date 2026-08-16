@@ -8,6 +8,7 @@ process.env.LLM_COOLDOWN_MS = '0';
 const { classerUnivers, decisionDepuisRang, ficheActif } = await import('../src/core/listwiseRanking.js');
 const { rankAndSelect } = await import('../src/core/ranking.js');
 const { pseudonymesUniques } = await import('../src/llm/pseudonyms.js');
+const { ecartApparie } = await import('../src/core/rankMetrics.js');
 
 /** Bougies synthétiques amenant le prix à `fin`. */
 function bougies(fin, n = 260) {
@@ -241,5 +242,63 @@ describe('fiche transmise au modèle', () => {
       etiquette: 'Test',
     });
     assert.ok(Number.isFinite(f.rendement5j));
+  });
+});
+
+describe('comparaison appariée modèle / formule', () => {
+
+  const serie = (vals) => ({ quotidien: vals.map((ic, i) => ({ day: `2026-01-${String(i + 1).padStart(2, '0')}`, ic })) });
+
+  test('détecte un écart constant que les moyennes seules noieraient', () => {
+    // Les deux prédicteurs suivent le marché du jour — forte variance commune —
+    // mais l'un devance l'autre de 0,05 chaque jour. Comparer deux moyennes
+    // séparées ne verrait rien ; l'appariement voit tout.
+    const marche = [0.4, -0.3, 0.5, -0.6, 0.2, 0.35, -0.45, 0.1, -0.2, 0.3, 0.15, -0.1];
+    const a = serie(marche.map((m) => m + 0.05));
+    const b = serie(marche);
+
+    const r = ecartApparie(a, b);
+    assert.equal(r.jours, 12);
+    assert.ok(Math.abs(r.ecartMoyen - 0.05) < 1e-9);
+    assert.ok(r.significatif, `écart constant doit être détecté (t = ${r.tStat})`);
+    assert.match(r.verdict, /modèle fait mieux/);
+  });
+
+  test('ne conclut rien quand les deux se valent', () => {
+    const a = serie([0.4, -0.3, 0.5, -0.6, 0.2, 0.35, -0.45, 0.1, -0.2, 0.3]);
+    const b = serie([-0.3, 0.4, -0.5, 0.6, -0.2, 0.3, 0.4, -0.15, 0.25, -0.3]);
+    const r = ecartApparie(a, b);
+    assert.equal(r.significatif, false);
+    assert.match(r.verdict, /indistinguables/);
+  });
+
+  test('détecte aussi le sens INVERSE', () => {
+    // Un facteur qui bat le modèle est une information exploitable, pas un
+    // échec de mesure.
+    const marche = [0.4, -0.3, 0.5, -0.6, 0.2, 0.35, -0.45, 0.1, -0.2, 0.3, 0.15, -0.1];
+    const r = ecartApparie(serie(marche), serie(marche.map((m) => m + 0.08)));
+    assert.ok(r.significatif);
+    assert.ok(r.tStat < 0);
+    assert.match(r.verdict, /facteur fait mieux/);
+  });
+
+  test('n\'apparie que les jours COMMUNS aux deux', () => {
+    const a = { quotidien: [{ day: 'j1', ic: 0.1 }, { day: 'j2', ic: 0.2 }, { day: 'j3', ic: 0.3 }] };
+    const b = { quotidien: [{ day: 'j2', ic: 0.1 }, { day: 'j3', ic: 0.1 }, { day: 'j9', ic: 0.9 }] };
+    assert.equal(ecartApparie(a, b).jours, 2);
+  });
+
+  test('annonce combien de jours il faudrait pour trancher', () => {
+    // « Pas encore significatif » ne dit pas s'il faut attendre deux semaines
+    // ou dix ans. Ce chiffre-là est actionnable.
+    const marche = Array.from({ length: 20 }, (_, i) => Math.sin(i) * 0.4);
+    const r = ecartApparie(serie(marche.map((m) => m + 0.01)), serie(marche));
+    assert.ok(Number.isFinite(r.joursEstimesPourTrancher));
+  });
+
+  test('refuse de conclure sous 5 jours communs', () => {
+    const r = ecartApparie(serie([0.1, 0.2, 0.3]), serie([0.05, 0.1, 0.2]));
+    assert.equal(r.jours, 3);
+    assert.match(r.note, /au moins 5/);
   });
 });
