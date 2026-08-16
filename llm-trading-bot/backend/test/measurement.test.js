@@ -99,6 +99,55 @@ describe('carnet fantôme — règles de scoring', () => {
   });
 });
 
+describe('carnet fantôme — l\'actif et l\'indice mesurés à la même aune', () => {
+  test('deux séries identiques donnent un écart RIGOUREUSEMENT nul', async () => {
+    // ── Ce que ce test empêche de revenir ──────────────────────────────────
+    // L'actif était mesuré depuis son prix au moment de la décision — vers
+    // 13 h 30 à New York — et l'indice depuis l'ouverture du LENDEMAIN. Une
+    // demi-séance et une nuit d'avance offertes à l'actif, dans une
+    // différence dont c'est précisément le sens qui est étudié.
+    //
+    // Le piège est qu'aucun jeu de données réaliste ne le révèle : l'écart
+    // reste petit et se confond avec le signal. On le rend visible en
+    // donnant à l'actif et à l'indice EXACTEMENT la même série. Toute
+    // asymétrie de convention devient alors la totalité du résultat.
+    //
+    // Le prix de décision est délibérément absurde — la moitié de l'ouverture
+    // suivante. Sous l'ancienne convention l'écart valait +100 %.
+    const book = new ShadowBook();
+    await book.init();
+
+    const bars = Array.from({ length: 25 }, (_, i) => {
+      const jour = String(4 + i).padStart(2, '0');
+      const prix = 100 + i;                      // trajectoire quelconque
+      return { time: `2026-08-${jour}T20:00:00Z`, open: prix, high: prix, low: prix, close: prix + 0.5 };
+    });
+
+    await book.replaceAll([{
+      t: '2026-08-03T17:30:00Z',
+      symbol: 'NVDA',
+      action: 'BUY',
+      ruleVersion: RULE_VERSION,
+      hadPosition: false,
+      price: 50,                                  // moitié de l'ouverture suivante
+      outcomes: null,
+    }]);
+
+    // L'actif ET l'indice reçoivent la même série.
+    await book.resolve(async () => bars);
+
+    for (const horizon of [1, 5, 21]) {
+      const serie = await book.scoreSeries({ horizon });
+      assert.equal(serie.length, 1, `horizon ${horizon} : la décision doit être résolue`);
+      // Pour un BUY, le score EST l'écart de rendement.
+      assert.ok(
+        Math.abs(serie[0].score) < 1e-9,
+        `horizon ${horizon} : séries identiques → écart nul, obtenu ${serie[0].score}`,
+      );
+    }
+  });
+});
+
 describe('carnet fantôme — dégroupage des corrélations', () => {
   test('ne retient qu\'une observation par symbole et par jour', async () => {
     const book = new ShadowBook();

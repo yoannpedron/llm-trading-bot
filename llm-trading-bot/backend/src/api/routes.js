@@ -23,7 +23,13 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
   const router = express.Router();
 
   const requireAdmin = (req, res, next) => {
-    const token = req.get('X-Admin-Token') || req.query.token;
+    // ── En-tête seulement, jamais l'URL ────────────────────────────────────
+    // Un `?token=…` en repli paraissait commode. Une URL traverse les journaux
+    // d'accès du serveur, l'historique du navigateur et l'en-tête `Referer`
+    // envoyé aux tiers ; un en-tête ne va nulle part. Le dashboard n'a jamais
+    // utilisé que l'en-tête : ce repli n'ouvrait un risque sans rendre aucun
+    // service.
+    const token = req.get('X-Admin-Token');
     if (!config.server.adminToken) {
       return res.status(503).json({ error: 'ADMIN_TOKEN non configuré : routes d\'écriture désactivées.' });
     }

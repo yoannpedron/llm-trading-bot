@@ -505,24 +505,23 @@ export class TradingEngine {
         }));
       const rangsFacteurs = classerFacteurs(lignesFacteurs);
 
-      // ── COMBINAISON DES SIX SIGNAUX — MESURÉE, PAS EXÉCUTÉE ──────────────
-      // Le bot calcule six classements et n'en utilise qu'un. Les combiner
-      // correctement suppose de les décorréler d'abord : le classement du
-      // modèle corrèle à +0,89 avec le momentum 5 jours, et le retour à la
-      // moyenne est de signe exactement opposé — les additionner tels quels
-      // double une dimension et en annule une autre.
+      // ── COMBINAISON DES CINQ SIGNAUX ─────────────────────────────────────
+      // Les combiner correctement suppose de les décorréler d'abord : le
+      // classement du modèle corrèle à +0,89 avec le momentum 5 jours, et le
+      // retour à la moyenne était de signe exactement opposé — les additionner
+      // tels quels doublait une dimension et en annulait une autre.
       //
-      // L'orthogonalisation symétrique règle les deux, mais elle ne règle PAS
-      // la question de savoir si chaque signal porte de l'information. Mesuré
-      // sur données synthétiques : trois signaux informatifs combinés battent
-      // le meilleur d'entre eux (0,959 contre 0,891), mais y ajouter deux
-      // signaux vides fait retomber à 0,740. Le poids égal ne protège que si
-      // les signaux sont comparables en qualité.
+      // L'orthogonalisation symétrique règle les deux. Le doublon exact,
+      // `reversal`, a lui été retiré de la liste : cinq signaux entrent
+      // aujourd'hui dans le mélange, pas six.
       //
-      // Or on ignore encore lesquels des six prédisent réellement. Le score
-      // combiné est donc CALCULÉ et CONSIGNÉ, sans jamais décider : c'est la
-      // comparaison appariée du carnet fantôme qui tranchera, dans quelques
-      // mois, s'il mérite de prendre la main.
+      // Ce que l'orthogonalisation ne règle PAS, c'est de savoir si chaque
+      // signal porte de l'information. Mesuré sur données synthétiques : trois
+      // signaux informatifs combinés battent le meilleur d'entre eux (0,959
+      // contre 0,891), mais y ajouter deux signaux vides fait retomber à
+      // 0,740. Le poids égal ne protège que si les signaux se valent — c'est
+      // précisément ce qui a justifié de porter le momentum court à 6 contre
+      // 1 aux autres (voir POIDS_BASE).
       const melange = melangerSignaux(exploitables, rangsFacteurs, listwise);
 
       // ── LE SCORE COMBINÉ DEVIENT LA DÉCISION ─────────────────────────────
@@ -618,7 +617,7 @@ export class TradingEngine {
         ageMinimum: config.risk.minHoldingDays,
         positions: positionsOuvertes,
         maxParSecteur: config.risk.maxPerSector,
-        // ── Quand s'abstenir, maintenant que six signaux décident ─────────
+        // ── Quand s'abstenir, maintenant que le mélange décide ────────────
         // La garde testait si le classement du MODÈLE se distinguait d'un
         // tirage au sort, et bloquait tout le cycle sinon. Ça n'a plus de sens
         // depuis que le mélange décide : quand le modèle défaille, il est
@@ -720,9 +719,11 @@ export class TradingEngine {
         // `valeursDistinctes` est le chiffre à surveiller : c'est celui qui
         // valait 3 sur 150 avec la notation individuelle. S'il retombe, tout
         // le reste est décoratif.
-        // Combinaison des six signaux — mesurée, jamais exécutée. L'entropie
-        // de diversité dit si les signaux sont complémentaires ou redondants ;
-        // le taux d'imputation, si les données se dégradent.
+        // Combinaison des cinq signaux — c'est ELLE qui décide, depuis le
+        // basculement plus haut. L'entropie de diversité dit si les signaux
+        // sont complémentaires ou redondants ; le taux d'imputation, si les
+        // données se dégradent ; `poids`, quelle part revient réellement au
+        // momentum court, qui pèse aujourd'hui 60 % du score.
         combinaison: melange?.scores?.size ? {
           entropieDiversite: melange.entropieDiversite,
           regime: melange.regime?.regime ?? null,

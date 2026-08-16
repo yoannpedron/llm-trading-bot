@@ -278,8 +278,11 @@ export class ShadowBook {
       let complete = true;
 
       for (const horizon of HORIZONS) {
-        const assetReturn = forwardReturn(bars, entry.t, entry.price, horizon);
-        const benchReturn = forwardReturn(benchBars, entry.t, null, horizon);
+        // Même convention des deux côtés : ouverture de la séance suivante
+        // vers la clôture à l'horizon. Toute asymétrie ici se retrouverait
+        // intégralement dans l'écart, qui est la grandeur mesurée.
+        const assetReturn = forwardReturn(bars, entry.t, horizon);
+        const benchReturn = forwardReturn(benchBars, entry.t, horizon);
 
         // Horizon pas encore échu : on réessaiera au prochain cycle.
         if (assetReturn == null || benchReturn == null) {
@@ -776,12 +779,36 @@ function advisorySummary(all) {
 }
 
 /**
- * Rendement entre la barre qui suit la décision et celle située `horizon`
- * jours de bourse plus tard. On part de la barre SUIVANTE, jamais de celle en
- * cours : décider sur la clôture du jour puis mesurer depuis ce même jour
+ * Rendement entre l'ouverture de la barre qui suit la décision et la clôture
+ * située `horizon` séances plus tard.
+ *
+ * ── Pourquoi la barre SUIVANTE ───────────────────────────────────────────
+ * Décider sur la clôture du jour puis mesurer depuis ce même jour
  * introduirait un biais d'anticipation.
+ *
+ * ── Pourquoi la MÊME convention pour l'actif et pour l'indice ────────────
+ * Cette fonction acceptait un `decisionPrice` optionnel. L'actif était donc
+ * mesuré depuis son prix au moment de la décision — vers 13 h 30 à New York —
+ * tandis que l'indice, appelé sans ce paramètre, partait de l'ouverture du
+ * LENDEMAIN. L'actif encaissait ainsi une demi-séance et une nuit de plus que
+ * sa référence.
+ *
+ * Ce n'était pas un biais d'anticipation : le prix de décision est connu à
+ * l'instant de la décision. C'était pire pour l'usage qu'on en fait — une
+ * asymétrie SYSTÉMATIQUE entre les deux termes d'une différence. Et elle
+ * penchait toujours du même côté : mesuré sur trois ans, la nuit porte 26,3 %
+ * de rendement contre 1,2 % pour la séance. Offrir une nuit de plus à l'actif
+ * qu'à l'indice gonflait l'écart d'environ 0,035 % par décision, toujours vers
+ * le haut.
+ *
+ * L'enjeu n'est pas l'ampleur, c'est le SENS. Ce carnet est l'instrument censé
+ * dire, dans quelques mois, si la stratégie vaut quelque chose. Un instrument
+ * qui la flatte systématiquement confirmerait n'importe quoi.
+ *
+ * Le prix de décision reste enregistré et publié — il documente l'exécution.
+ * Il ne sert simplement plus de base au calcul du rendement.
  */
-function forwardReturn(bars, decisionIso, decisionPrice, horizon) {
+function forwardReturn(bars, decisionIso, horizon) {
   const decisionTime = Date.parse(decisionIso);
   const index = bars.findIndex((b) => Date.parse(b.time) > decisionTime);
   if (index === -1) return null;
@@ -789,7 +816,7 @@ function forwardReturn(bars, decisionIso, decisionPrice, horizon) {
   const targetIndex = index + horizon - 1;
   if (targetIndex >= bars.length) return null; // horizon pas encore échu
 
-  const from = decisionPrice ?? bars[index].open;
+  const from = bars[index].open;
   const to = bars[targetIndex].close;
   if (!(from > 0) || !(to > 0)) return null;
 

@@ -200,7 +200,7 @@ export function lowdinOrthogonalise(colonnes, { plancherValeurPropre = 1e-8 } = 
 
   // ── X_ortho = X · T, avec imputation des manquants à zéro ───────────────
   // Une première version rejetait toute ligne où un seul signal manquait. Sur
-  // six signaux et 150 actifs, un titre sans RSI exploitable disparaissait
+  // cinq signaux et 150 actifs, un titre sans RSI exploitable disparaissait
   // entièrement du classement — écarté non pour sa qualité mais pour un trou
   // de données.
   //
@@ -499,7 +499,7 @@ export function entropieDiversite(valeursPropres) {
 export const POIDS_BASE = { momentumCourt: 6 };
 
 /**
- * Adaptateur : assemble les six signaux du cycle et produit le score combiné.
+ * Adaptateur : assemble les cinq signaux du cycle et produit le score combiné.
  *
  * ── Pourquoi il ressort déguisé en « facteur » ────────────────────────────
  * Le résultat est injecté dans la table des facteurs de référence, sous le nom
