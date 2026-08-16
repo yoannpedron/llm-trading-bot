@@ -6,8 +6,28 @@
 
 const STORAGE_KEY = 'llm-trading-bot:settings';
 
-/** URL du back-end injectable au build (Netlify) ou éditable dans l'UI. */
-const DEFAULT_API_URL = window.__API_URL__ || '';
+/**
+ * URL du back-end par défaut.
+ *
+ * ── Pourquoi elle est écrite en dur ───────────────────────────────────────
+ * Le point d'injection `window.__API_URL__` existait déjà, mais rien ne le
+ * renseignait : le champ arrivait vide, le panneau de réglages s'ouvrait tout
+ * seul, et il fallait recopier l'adresse à la main sur chaque navigateur — et
+ * de nouveau après chaque vidage du stockage local.
+ *
+ * Il n'y a qu'un seul serveur, son adresse est publique et le dépôt l'est
+ * aussi : rien ne justifiait de la traiter comme une inconnue.
+ *
+ * Le JETON ADMIN, lui, reste à saisir. Il ouvre les routes d'écriture — lancer
+ * un cycle, gérer les clés, réinitialiser — et n'a rien à faire dans un
+ * fichier servi publiquement.
+ *
+ * L'ordre de priorité reste : réglage enregistré > injection au build >
+ * cette valeur. Pointer vers un autre back-end, ou vers localhost pendant le
+ * développement, se fait toujours depuis le panneau de réglages.
+ */
+const API_URL_PRODUCTION = 'https://pop-trading-bot.duckdns.org';
+const DEFAULT_API_URL = window.__API_URL__ || API_URL_PRODUCTION;
 
 const state = {
   apiUrl: '',
@@ -177,6 +197,18 @@ const isAdmin = () => Boolean(state.adminToken);
 
 /** Appel authentifié vers une route d'écriture du back-end. */
 async function adminFetch(path, options = {}) {
+  // ── Échouer ici plutôt qu'au retour du serveur ──────────────────────────
+  // Sans jeton, l'appel partait quand même et revenait en 401 « Jeton
+  // administrateur invalide » — exact, mais muet sur l'endroit à corriger.
+  //
+  // Tant que l'URL du back-end manquait, le panneau de réglages s'ouvrait de
+  // lui-même et la question ne se posait pas. Maintenant que l'adresse a une
+  // valeur par défaut, le tableau de bord s'affiche directement et le jeton
+  // reste la seule chose à saisir : c'est précisément là qu'il faut le dire.
+  if (!state.adminToken) {
+    throw new Error('Jeton administrateur non renseigné — ouvre Réglages pour le saisir.');
+  }
+
   const res = await fetch(`${state.apiUrl}${path}`, {
     ...options,
     headers: {
