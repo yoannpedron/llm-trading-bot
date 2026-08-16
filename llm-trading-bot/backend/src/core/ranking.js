@@ -1,4 +1,5 @@
 import { createLogger } from '../logger.js';
+import { sectorOf } from '../data/universe.js';
 
 const log = createLogger('rank');
 
@@ -126,12 +127,16 @@ export function ageEnSeances(openedAt, maintenant = new Date()) {
  * @param {Set<string>} options.held    actifs déjà détenus
  * @param {number} options.ageMinimum   séances minimales avant sortie par rang
  * @param {Array}  options.positions    positions détenues, avec leur `openedAt`
+ * @param {number} options.maxParSecteur  plafond par secteur (0 = désactivé)
+ * @param {Function} options.secteurDe    résolution du secteur, injectable
  */
 export function rankAndSelect(evaluations, {
   maxSelected = 3,
   held = new Set(),
   ageMinimum = 0,
   positions = null,
+  maxParSecteur = 0,
+  secteurDe = sectorOf,
 } = {}) {
   const ages = positions
     ? new Map(positions.map((p) => [p.symbol, ageEnSeances(p.openedAt)]).filter(([, a]) => a != null))
@@ -195,11 +200,47 @@ export function rankAndSelect(evaluations, {
   const sortedEdges = [...edges].sort((a, b) => a - b);
   const median = sortedEdges[Math.floor(sortedEdges.length / 2)];
 
+  // ── Neutralité sectorielle ──────────────────────────────────────────────
+  // Prendre les K meilleurs tous secteurs confondus paraît neutre. Ça ne
+  // l'est pas : quand un secteur entier surperforme, il rafle tout le haut du
+  // classement et le portefeuille devient un pari sur ce secteur, pas une
+  // sélection de titres. On croit exploiter une prime transversale, on achète
+  // en réalité un facteur macroéconomique qui n'est rémunéré par personne.
+  //
+  // Le classement absolu est d'ailleurs largement absorbé par sa composante
+  // sectorielle : l'essentiel de ce qu'on croit être un choix d'entreprise est
+  // un choix d'industrie. Ce qui reste — la comparaison entre pairs du même
+  // secteur — est la partie qui porte réellement de l'information.
+  //
+  // Le plafond ne réordonne rien : il parcourt le classement dans l'ordre et
+  // saute simplement les actifs dont le secteur est déjà servi. Le meilleur
+  // reste le meilleur.
   const selected = new Set();
+  const parSecteur = new Map();
+  const ecartesParSecteur = [];
+
   for (const s of scored) {
     if (selected.size >= maxSelected) break;
     if (s.edge <= median) break; // le tri est décroissant : tout le reste suit
+
+    if (maxParSecteur > 0) {
+      const secteur = secteurDe(s.symbol) || 'inconnu';
+      const dejaPris = parSecteur.get(secteur) ?? 0;
+      if (dejaPris >= maxParSecteur) {
+        ecartesParSecteur.push(`${s.symbol} (${secteur})`);
+        continue;
+      }
+      parSecteur.set(secteur, dejaPris + 1);
+    }
+
     selected.add(s.symbol);
+  }
+
+  if (ecartesParSecteur.length) {
+    log.info(
+      `Plafond sectoriel (${maxParSecteur} par secteur) — écartés malgré un bon rang : `
+      + ecartesParSecteur.slice(0, 8).join(', ') + (ecartesParSecteur.length > 8 ? '…' : ''),
+    );
   }
 
   // Les positions déjà tenues ne comptent pas contre le quota d'ouverture :

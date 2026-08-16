@@ -144,6 +144,76 @@ export const config = {
      * la mesure — l'arbitrage se tranche donc de ce côté.
      */
     minHoldingDays: num('MIN_HOLDING_DAYS', 21),
+
+    /**
+     * ── Plafond par secteur ───────────────────────────────────────────────
+     * Prendre les dix meilleurs sans contrainte paraît neutre et ne l'est pas.
+     * Quand un secteur entier surperforme, il occupe tout le haut du
+     * classement et le portefeuille devient un pari sur ce secteur — un
+     * risque macroéconomique qu'aucune prime ne rémunère, déguisé en
+     * sélection de titres.
+     *
+     * L'élan non contraint est d'ailleurs presque entièrement absorbé par sa
+     * composante sectorielle : la part qui porte réellement de l'information
+     * est la comparaison entre pairs d'une même industrie.
+     *
+     * 2 sur 9 secteurs : de quoi laisser un secteur fort être surreprésenté,
+     * pas de quoi lui laisser le portefeuille.
+     */
+    maxPerSector: num('MAX_PER_SECTOR', 2),
+
+    /**
+     * ── Fenêtre d'exécution, en heure de New York ─────────────────────────
+     * Le spread suit une courbe en U sur la séance. À l'ouverture, les teneurs
+     * de marché élargissent leurs fourchettes pour se protéger de l'asymétrie
+     * d'information accumulée pendant la nuit : le coût y est deux à quatre
+     * fois celui du milieu de séance. En clôture, les enchères ramènent du
+     * volume mais aussi de la volatilité directionnelle.
+     *
+     * Entre 11 h et 14 h, l'absence de flux nouveau et la concurrence des
+     * algorithmes compriment le spread à son minimum. L'économie mesurée est
+     * de 1 à 3 points de base par transaction — sur un budget de 6,25, c'est
+     * 15 à 45 % du coût, pour la seule peine d'attendre.
+     *
+     * ── Et pourquoi ça ne s'applique qu'aux ACHATS ────────────────────────
+     * Une entrée est patiente : on détient 21 séances, rien n'oblige à ouvrir
+     * ce matin plutôt que cet après-midi. Une sortie ne l'est pas : elle peut
+     * répondre à un coupe-circuit, et faire attendre un ordre de protection
+     * pour économiser deux points de base serait une inversion des priorités.
+     */
+    executionStartHourET: num('EXECUTION_START_HOUR_ET', 11),
+    executionEndHourET: num('EXECUTION_END_HOUR_ET', 14),
+
+    /**
+     * ── Plafond de spread, en points de base ──────────────────────────────
+     * L'homogénéité du spread à l'intérieur des grandes capitalisations est
+     * une illusion. La moyenne tourne autour de 6 bps, mais la dispersion est
+     * large : certains titres importants en affichent le double, et en période
+     * de tension l'ensemble peut tripler.
+     *
+     * Un titre à 12 bps coûte 24 bps l'aller-retour — quatre fois notre coût
+     * mesuré. Aucun signal de cette force ne justifie de le payer alors que
+     * 149 autres candidats attendent. Le filtre sacrifie ponctuellement des
+     * signaux valides ; c'est le prix d'une friction qu'on maîtrise.
+     */
+    maxSpreadBps: num('MAX_SPREAD_BPS', 7),
+
+    /**
+     * ── Veto de risque ────────────────────────────────────────────────────
+     * Le modèle relit les actualités des seuls finalistes et peut refuser un
+     * achat. C'est le seul emploi du LLM dont la valeur économique soit
+     * chiffrée : le taux de réussite bouge à peine (51 % → 54 %), mais
+     * l'amplitude moyenne des pertes baisse d'environ 36 %. Le gain vient de
+     * la queue gauche.
+     *
+     * Et il est asymétrique par construction : un veto ne peut que refuser. Il
+     * ne peut ni désigner un actif, ni inverser le classement, ni pousser à
+     * l'action. Au pire il fait manquer une occasion — il ne peut pas
+     * fabriquer une perte.
+     *
+     * Coût : une dizaine d'appels par cycle, sur les seuls candidats retenus.
+     */
+    vetoActif: bool('VETO_ACTIF', true),
     maxPositionPct: num('MAX_POSITION_PCT', 0.35),
     // Plancher d'ordre volontairement bas.
     //

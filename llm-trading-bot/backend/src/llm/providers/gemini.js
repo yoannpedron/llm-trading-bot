@@ -29,15 +29,21 @@ function toGeminiSchema(schema) {
   return map(schema);
 }
 
-function buildPayload(userPrompt) {
+/**
+ * Le schéma et la consigne système sont paramétrables : le fournisseur sert
+ * désormais deux tâches distinctes — la prévision et le veto de risque — qui
+ * n'ont ni la même sortie ni le même rôle. Les figer ici obligerait à dupliquer
+ * toute la rotation de clés pour la seconde.
+ */
+function buildPayload(userPrompt, { schema = DECISION_SCHEMA, systemPrompt = SYSTEM_PROMPT } = {}) {
   return {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     generationConfig: {
       temperature: config.llm.temperature,
       maxOutputTokens: config.llm.maxOutputTokens,
       responseMimeType: 'application/json',
-      responseSchema: toGeminiSchema(DECISION_SCHEMA),
+      responseSchema: toGeminiSchema(schema),
       // Les modèles récents « pensent » par défaut et consomment
       // maxOutputTokens avant d'écrire la moindre ligne de JSON — d'où des
       // réponses tronquées si on les laisse faire.
@@ -85,8 +91,8 @@ export const geminiProvider = {
    * épuisée et l'appel est immédiatement retenté avec la suivante. Le cycle
    * n'est perdu que si TOUTES les clés du pool sont à sec.
    */
-  async decide(userPrompt) {
-    const payload = buildPayload(userPrompt);
+  async decide(userPrompt, options = {}) {
+    const payload = buildPayload(userPrompt, options);
     const attempted = [];
 
     // Au pire on essaie chaque clé une fois.

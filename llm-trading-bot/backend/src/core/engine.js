@@ -4,12 +4,14 @@ import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js'
 import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
 import { filtrerResultats } from '../data/earnings.js';
+import { filtrerParSpread, fenetreExecution } from './execution.js';
+import { filtrerParVeto } from '../llm/veto.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
 import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
-import { decide } from '../llm/agent.js';
+import { decide, providerActif } from '../llm/agent.js';
 
 const log = createLogger('engine');
 
@@ -521,11 +523,62 @@ export class TradingEngine {
         held,
         ageMinimum: config.risk.minHoldingDays,
         positions: positionsOuvertes,
+        maxParSecteur: config.risk.maxPerSector,
       });
 
       // Un actif exclu pour cause de résultats ne peut pas être acheté, même
       // s'il sort premier du classement.
       for (const symbol of exclusResultats.keys()) ranking.selected.delete(symbol);
+
+      // ── Trois filtres d'exécution, appliqués aux seules OUVERTURES ────────
+      // Aucun ne cherche de signal : ils réduisent une friction payée à coup
+      // sûr. C'est le seul rendement du bot qui ne dépende d'aucune prévision.
+      //
+      // Les sorties ne passent par aucun d'eux. Retarder une vente pour
+      // économiser deux points de base inverserait les priorités.
+      const filtresExecution = { spread: null, fenetre: null, veto: null };
+      const ouvertures = [...ranking.selected].filter((s) => !held.has(s));
+
+      if (ouvertures.length) {
+        // 1. Le spread. Un titre à 12 bps coûte 24 bps l'aller-retour, quatre
+        //    fois notre coût mesuré — aucun signal ne le justifie quand 149
+        //    autres candidats attendent.
+        const spreads = new Map(ouvertures.map((s) => [s, quotes[s]?.spreadBps]));
+        const { ecartes } = filtrerParSpread(ouvertures, spreads, config.risk);
+        for (const symbol of ecartes.keys()) ranking.selected.delete(symbol);
+        filtresExecution.spread = [...ecartes.entries()].map(([symbol, r]) => ({
+          symbol, spreadBps: r.spreadBps, raison: r.raison,
+        }));
+
+        // 2. L'heure. Hors de la fenêtre de milieu de séance, on n'ouvre pas —
+        //    on détient 21 séances, rien n'oblige à entrer ce matin.
+        const fenetre = fenetreExecution(new Date(), config.risk);
+        filtresExecution.fenetre = fenetre;
+        if (!fenetre.ouverte) {
+          const reportees = [...ranking.selected].filter((s) => !held.has(s));
+          for (const symbol of reportees) ranking.selected.delete(symbol);
+          if (reportees.length) {
+            log.info(
+              `${reportees.length} ouverture(s) reportée(s) : ${fenetre.raison} `
+              + `(il est ${fenetre.heureET} à New York, fenêtre ${fenetre.fenetre}).`,
+            );
+          }
+        }
+
+        // 3. Le veto. Dernier maillon, et le seul qui consulte le modèle une
+        //    seconde fois — sur une dizaine de candidats, pas cent cinquante.
+        const restants = [...ranking.selected].filter((s) => !held.has(s));
+        if (restants.length && config.risk.vetoActif) {
+          const { refuses } = await filtrerParVeto(restants, {
+            provider: providerActif(),
+            newsPour: (symbol) => getNews(symbol),
+          });
+          for (const symbol of refuses.keys()) ranking.selected.delete(symbol);
+          filtresExecution.veto = [...refuses.entries()].map(([symbol, r]) => ({
+            symbol, motif: r.motif, gravite: r.gravite, constat: r.constat, erreur: r.erreur ?? null,
+          }));
+        }
+      }
 
       // ── Le classement, conservé pour affichage ────────────────────────────
       // C'est la décision réelle du bot depuis le passage au rang, et elle
@@ -548,6 +601,11 @@ export class TradingEngine {
         // Une abstention doit toujours pouvoir s'expliquer. Sans ce détail, un
         // actif bien classé mais jamais acheté ressemble à un bug.
         dureeMinimale: config.risk.minHoldingDays,
+        maxParSecteur: config.risk.maxPerSector,
+        // Chaque filtre d'exécution consigne ce qu'il a écarté et pourquoi. Une
+        // ouverture qui n'a pas eu lieu doit être explicable ; sinon un bon
+        // classement suivi d'aucun achat ressemble à une panne.
+        filtresExecution,
         resultats: {
           calendrierDisponible,
           exclus: [...exclusResultats.entries()].map(([symbol, r]) => ({

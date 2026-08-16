@@ -9,6 +9,17 @@ const log = createLogger('agent');
 
 const PROVIDERS = { gemini: geminiProvider, heuristic: heuristicProvider };
 
+/**
+ * Le fournisseur configuré, sans passer par `decide()`.
+ *
+ * Le veto de risque a son propre schéma et sa propre consigne système : il a
+ * besoin du transport — rotation de clés, gestion des 429, délais — mais pas
+ * de la normalisation d'une prévision qu'il ne produit pas.
+ */
+export function providerActif() {
+  return PROVIDERS[config.llm.provider] ?? heuristicProvider;
+}
+
 const ACTIONS = new Set(['BUY', 'SELL', 'HOLD']);
 const SENTIMENTS = new Set(['POSITIF', 'NEUTRE', 'NEGATIF', 'INDISPONIBLE']);
 
