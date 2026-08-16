@@ -57,10 +57,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * chiffre qu'on vient de supprimer, et le carnet de calibration mesurerait
  * alors nos conversions au lieu des convictions du modèle.
  *
- * ── Ce que « confiance » veut dire ici ───────────────────────────────────
- * Le rang fractionnaire, borné dans [0, 1] : 1 pour le premier, 0 pour le
- * dernier. C'est une position relative, pas une probabilité, et les seuils qui
- * la consomment en aval sont eux-mêmes des seuils de rang.
+ * ── Et pourquoi `confidence` reste NULLE ─────────────────────────────────
+ * La tentation était d'y mettre le rang fractionnaire — il vit dans [0, 1] et
+ * remplit le champ sans effort. C'est précisément le piège.
+ *
+ * Ce champ alimente le module de calibration, dont le rôle est de vérifier
+ * qu'« annoncer 0,8 » correspond bien à « avoir raison 80 % du temps ». Lui
+ * donner un rang produirait une courbe de calibration parfaitement lisible et
+ * entièrement fausse : on mesurerait la position d'un actif dans une liste
+ * comme si c'était une probabilité annoncée. Une mesure absente se voit ; une
+ * mesure fausse mais crédible se propage.
+ *
+ * Le modèle n'annonce plus aucune probabilité depuis qu'il ordonne. Le champ
+ * reste donc vide, et la calibration le signalera comme indisponible plutôt
+ * que d'inventer un résultat. Le rang est publié à part, sous son vrai nom.
  *
  * Le poids reste égal quel que soit le rang. Dimensionner à proportion de la
  * force latente reviendrait à croire à un ordre que la précision du signal ne
@@ -70,7 +80,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function decisionDepuisRang(info, { test = null } = {}) {
   if (!info) {
     return {
-      action: 'HOLD', confidence: 0, sizePct: 0,
+      action: 'HOLD', confidence: null, sizePct: 0, rankFractional: null,
       justification: 'absent du classement transversal de ce cycle.',
       newsSentiment: 'INDISPONIBLE', forecast: { edge: 0 },
     };
@@ -83,7 +93,9 @@ export function decisionDepuisRang(info, { test = null } = {}) {
     // L'action réelle est décidée par la sélection transversale en aval ; ce
     // champ n'est qu'un avis de départ.
     action: 'HOLD',
-    confidence: info.fractional,
+    confidence: null,
+    // Nom aligné sur la colonne déjà persistée par le carnet fantôme.
+    rankFractional: info.fractional,
     sizePct: 1,
     justification:
       `Rang ${info.rank} sur ${info.total} (force ${info.lambda.toFixed(3)}${marge})`

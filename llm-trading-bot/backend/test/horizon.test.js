@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 process.env.DATA_DIR = process.env.DATA_DIR || `${process.cwd()}/data`;
 process.env.GEMINI_API_KEY = '';
 
-const { rankAndSelect, ageEnSeances, exitRank } = await import('../src/core/ranking.js');
+const { rankAndSelect, ageEnSeances, exitRank, actionEffective } = await import('../src/core/ranking.js');
 const { fenetreResultats, SEANCES_AVANT, SEANCES_APRES, _resetCache } = await import('../src/data/earnings.js');
 const { momentumCourtTerme, reversalCourtTerme, FACTEURS } = await import('../src/core/baselines.js');
 const { RiskManager } = await import('../src/core/riskManager.js');
@@ -216,5 +216,92 @@ describe('cohérence de la bande de non-transaction', () => {
     for (const u of [10, 50, 150]) {
       assert.ok(exitRank({ universe: u, maxSelected: 10 }) > 10);
     }
+  });
+});
+
+describe('la sélection déclenche-t-elle vraiment un achat ?', () => {
+  // Ces tests n'existaient pas, et c'est exactement pour ça que le moteur a
+  // pu passer une journée entière incapable d'acheter : la décision
+  // synthétisée valait toujours HOLD, et l'exécution ne savait que
+  // rétrograder BUY en HOLD.
+  const decisionRang = { action: 'HOLD', sizePct: 1, confidence: 0.98 };
+
+  test('un actif retenu produit un ACHAT', () => {
+    const r = actionEffective({
+      decision: decisionRang, symbol: 'NVDA',
+      selected: new Set(['NVDA']), sorties: new Set(), position: null,
+    });
+    assert.equal(r.action, 'BUY');
+    assert.ok(r.sizePct > 0, 'un achat de taille nulle n\'est pas un achat');
+  });
+
+  test('un actif NON retenu ne produit aucun achat', () => {
+    const r = actionEffective({
+      decision: { ...decisionRang, action: 'BUY' }, symbol: 'AAPL',
+      selected: new Set(['NVDA']), sorties: new Set(), position: null,
+    });
+    assert.equal(r.action, 'HOLD');
+    assert.equal(r.sizePct, 0);
+  });
+
+  test('une position en sortie produit une VENTE totale', () => {
+    const r = actionEffective({
+      decision: decisionRang, symbol: 'NVDA',
+      selected: new Set(), sorties: new Set(['NVDA']), position: { quantity: 3 },
+    });
+    assert.equal(r.action, 'SELL');
+    assert.equal(r.sizePct, 1);
+  });
+
+  test('la sortie prime sur la sélection en cas de contradiction', () => {
+    // Un actif à la fois retenu et marqué en sortie est une incohérence du
+    // classement. Vendre à tort coûte un aller-retour ; acheter à tort engage
+    // du capital sur un signal qu'on vient de juger caduc.
+    const r = actionEffective({
+      decision: decisionRang, symbol: 'NVDA',
+      selected: new Set(['NVDA']), sorties: new Set(['NVDA']), position: { quantity: 3 },
+    });
+    assert.equal(r.action, 'SELL');
+  });
+
+  test('une sortie sans position ne vend rien', () => {
+    const r = actionEffective({
+      decision: decisionRang, symbol: 'NVDA',
+      selected: new Set(), sorties: new Set(['NVDA']), position: { quantity: 0 },
+    });
+    assert.notEqual(r.action, 'SELL');
+  });
+
+  test('le poids ne dépend jamais du rang', () => {
+    const premier = actionEffective({
+      decision: { ...decisionRang, confidence: 1 }, symbol: 'A',
+      selected: new Set(['A']), sorties: new Set(), position: null,
+    });
+    const dixieme = actionEffective({
+      decision: { ...decisionRang, confidence: 0.94 }, symbol: 'B',
+      selected: new Set(['B']), sorties: new Set(), position: null,
+    });
+    assert.equal(premier.sizePct, dixieme.sizePct);
+  });
+
+  test('bout en bout : classement -> sélection -> achat', () => {
+    // Le chemin complet, celui qui était rompu.
+    const univers = Array.from({ length: 30 }, (_, i) => `S${i}`);
+    const evals = univers.map((symbol, i) => ({
+      symbol, evaluated: true,
+      decision: { ...decisionRang, forecast: { edge: 3 - i * 0.1 } },
+    }));
+
+    const sel = rankAndSelect(evals, { maxSelected: 10 });
+    assert.ok(sel.selected.size > 0, 'le classement doit retenir des actifs');
+
+    const achats = univers
+      .map((symbol) => actionEffective({
+        decision: evals.find((e) => e.symbol === symbol).decision,
+        symbol, selected: sel.selected, sorties: sel.sorties, position: null,
+      }))
+      .filter((r) => r.action === 'BUY');
+
+    assert.equal(achats.length, sel.selected.size, 'chaque actif retenu doit devenir un achat');
   });
 });

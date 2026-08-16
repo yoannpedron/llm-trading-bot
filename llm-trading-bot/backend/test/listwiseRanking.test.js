@@ -196,7 +196,22 @@ describe('décision dérivée du rang', () => {
     const d = decisionDepuisRang(null);
     assert.equal(d.action, 'HOLD');
     assert.equal(d.sizePct, 0);
-    assert.equal(d.confidence, 0);
+  });
+
+  test('la confiance reste NULLE, jamais zéro', () => {
+    // Écrire 0 ferait croire à une confiance nulle MESURÉE là où il n'y a rien
+    // à mesurer — le modèle n'annonce plus de probabilité depuis qu'il ordonne.
+    // Le module de calibration lirait ce zéro comme une annonce et produirait
+    // une courbe fausse mais parfaitement lisible.
+    for (const d of [decisionDepuisRang(null),
+      decisionDepuisRang({ rank: 3, total: 150, fractional: 0.98, lambda: 1.2, se: 0.3 })]) {
+      assert.equal(d.confidence, null, 'confidence doit être null, pas 0');
+    }
+  });
+
+  test('le rang est publié sous son vrai nom', () => {
+    const d = decisionDepuisRang({ rank: 3, total: 150, fractional: 0.98, lambda: 1.2, se: 0.3 });
+    assert.equal(d.rankFractional, 0.98);
   });
 
   test('la justification cite le rang et l\'incertitude', () => {

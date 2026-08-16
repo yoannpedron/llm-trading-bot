@@ -152,7 +152,12 @@ export class ShadowBook {
       day: t.slice(0, 10),
       symbol: decision.symbol,
       action: decision.action,
-      confidence: decision.confidence ?? 0,
+      // ── `confidence` est NULLE depuis que le modèle ordonne ─────────────
+      // Il n'annonce plus de probabilité : il produit un ordre. Y écrire 0 par
+      // défaut ferait croire à une confiance nulle mesurée, là où il n'y a
+      // simplement rien à mesurer. On garde la distinction entre « le modèle
+      // a annoncé 0 » et « le modèle n'a rien annoncé ».
+      confidence: decision.confidence ?? null,
       price: decision.price,
       // Contexte pour segmenter l'analyse a posteriori : est-ce que les
       // actualités servent ? le calendrier ? la confiance est-elle calibrée ?
@@ -456,10 +461,18 @@ export class ShadowBook {
         SELL: segment('SELL', all.filter((s) => s.action === 'SELL')),
         HOLD: segment('HOLD', all.filter((s) => s.action === 'HOLD')),
       },
-      // Est-ce que la confiance auto-déclarée veut dire quelque chose ?
-      byConfidence: {
-        haute: segment('confiance ≥ 0,6', all.filter((s) => s.confidence >= 0.6)),
-        basse: segment('confiance < 0,6', all.filter((s) => s.confidence < 0.6)),
+      // ── Le haut du classement fait-il mieux que le bas ? ────────────────
+      // Segmentait sur la confiance auto-déclarée, qui n'existe plus depuis
+      // que le modèle ordonne. Segmenter quand même sur ce champ aurait
+      // rangé toutes les décisions du même côté sans que rien ne le signale.
+      //
+      // On segmente désormais sur le RANG, ce qui pose une question mieux
+      // définie : le premier tiers du classement bat-il le dernier ? C'est le
+      // test le plus direct de l'utilité de l'ordre produit.
+      byRang: {
+        haut: segment('tiers supérieur', all.filter((s) => s.rankFractional >= 0.67)),
+        milieu: segment('tiers médian', all.filter((s) => s.rankFractional >= 0.33 && s.rankFractional < 0.67)),
+        bas: segment('tiers inférieur', all.filter((s) => s.rankFractional != null && s.rankFractional < 0.33)),
       },
       // Les actualités servent-elles à quelque chose ? Si les deux segments se
       // valent, le module news peut être supprimé et le cycle divisé par deux.

@@ -7,12 +7,12 @@ import { filtrerResultats } from '../data/earnings.js';
 import { filtrerParSpread, fenetreExecution } from './execution.js';
 import { filtrerParVeto } from '../llm/veto.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
-import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
+import { rankAndSelect, actionEffective } from './ranking.js';
 import { classerUnivers, decisionDepuisRang } from './listwiseRanking.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
 import { sectorOf } from '../data/universe.js';
 import { getNews } from '../news/newsService.js';
-import { decide, providerActif } from '../llm/agent.js';
+import { providerActif } from '../llm/agent.js';
 
 const log = createLogger('engine');
 
@@ -151,7 +151,7 @@ export class TradingEngine {
    * simplement les premiers de la liste à franchir la barre — l'ordre du
    * fichier de configuration décidait du portefeuille.
    */
-  async #evaluateSymbol(symbol, { quotes, circuitBreaker, sansLlm = false }) {
+  async #evaluateSymbol(symbol, { quotes, circuitBreaker }) {
     const outcome = { symbol, action: 'HOLD', executed: false, reason: null };
 
     try {
@@ -197,50 +197,23 @@ export class TradingEngine {
       const news = await getNews(symbol);
       const phase = calendarPhase();
 
-      // Budget présenté au modèle : arithmétique seule, sans nos verrous de
-      // politique. Sinon la prévision dépendrait de l'état du portefeuille et
-      // les observations cesseraient d'être comparables d'un cycle à l'autre.
-      const promptBudget = this.risk.computeBudget({
-        account, position, price, fxRate, circuitBreaker, ignorePolicyGates: true,
-      });
-
-      // ── Mode classement : aucun appel au modèle ici ───────────────────────
-      // Le modèle n'est plus interrogé actif par actif. Il l'est par LOTS,
-      // après cette phase, et il ORDONNE au lieu de noter. La raison tient en
-      // un chiffre : mesuré sur l'API, la notation individuelle produisait
-      // trois valeurs distinctes sur vingt réponses, soit une cinquantaine
-      // d'ex æquo au sommet sur 150 actifs — et le tri les départageait par
-      // ordre alphabétique.
+      // ── Le modèle n'est PAS interrogé ici ─────────────────────────────
+      // Il l'est par LOTS après cette phase, et il ORDONNE au lieu de noter.
+      // La raison tient en un chiffre : mesuré sur l'API, la notation
+      // individuelle produisait trois valeurs distinctes sur vingt réponses,
+      // soit une cinquantaine d'ex æquo au sommet sur 150 actifs — que le tri
+      // départageait par ordre alphabétique.
       //
-      // Cette phase ne fait donc plus que RASSEMBLER le contexte. La décision
-      // est injectée ensuite, à partir de la force latente reconstruite.
-      if (sansLlm) {
-        return {
-          ...outcome,
-          evaluated: true,
-          decision: null,
-          snapshot, news, phase, price, fxRate, position, account, budget,
-        };
-      }
-
-      const decision = await decide({
-        snapshot,
-        news,
-        account,
-        position,
-        budget: promptBudget,
-        calendar: phase,
-        constraints: config.risk,
-      });
-
-      outcome.action = decision.action;
-
-      // L'évaluation s'arrête ici : le classement transversal, la sélection et
-      // l'exécution appartiennent à la phase 2.
+      // La branche qui appelait le modèle actif par actif a été retirée plutôt
+      // que laissée en repli : plus rien ne l'atteignait, et du code mort qui
+      // a l'air vivant est un piège — celui-ci aurait déclenché 150 appels.
+      // Si le classement échoue, aucun rang n'est produit et le bot
+      // s'abstient : c'est la bonne défaillance.
       return {
         ...outcome,
         evaluated: true,
-        decision, snapshot, news, phase, price, fxRate, position, account, budget,
+        decision: null,
+        snapshot, news, phase, price, fxRate, position, account, budget,
       };
     } catch (err) {
       log.error(`Échec de l'évaluation de ${symbol} : ${err.message}`);
@@ -255,30 +228,26 @@ export class TradingEngine {
     const outcome = { symbol, action: decision.action, executed: false, reason: null };
 
     try {
-      // La sélection transversale prime : un actif hors du top K ne s'achète
-      // pas, même si sa prévision est bonne dans l'absolu.
-      const effective = { ...decision };
-      if (decision.action === 'BUY' && !selected.has(symbol)) {
-        effective.action = 'HOLD';
-        effective.sizePct = 0;
-      }
-
-      // ── Sortie par classement ──────────────────────────────────────────
-      // Symétrique de la règle d'entrée, et c'est tout l'objet du correctif.
-      // L'entrée était RELATIVE — être dans les trois meilleurs — quand la
-      // sortie restait ABSOLUE : ne vendre qu'un actif devenu franchement
-      // mauvais, ce qui correspond à une chute sous la médiane. Trois positions
-      // simplement devenues médiocres n'étaient donc jamais vendues, les trois
-      // emplacements restaient occupés, et le classement transversal — la
-      // raison d'être de toute la refonte — devenait inerte après le premier
-      // jour de trading.
+      // ── La sélection EST la décision ──────────────────────────────────
+      // Ce bloc ne faisait que rétrograder BUY en HOLD, ce qui suffisait tant
+      // que le modèle proposait lui-même une action. Depuis qu'il ORDONNE au
+      // lieu de noter, il n'en propose plus : la décision synthétisée vaut
+      // toujours HOLD et c'est le rang qui décide. Sans promotion explicite,
+      // aucun achat n'était plus possible — le bot classait parfaitement puis
+      // ne faisait rien.
       //
-      // La condition absolue est CONSERVÉE en plus : un actif qui s'effondre se
-      // vend même s'il reste bien classé, parce qu'un bon rang dans un univers
-      // qui baisse ne protège de rien.
-      if (position?.quantity > 0 && sorties?.has(symbol) && effective.action !== 'SELL') {
-        effective.action = 'SELL';
-        effective.sizePct = 1;
+      // Un actif déjà détenu peut rester sélectionné sans que cela déclenche
+      // quoi que ce soit : la validation calcule l'écart entre l'exposition
+      // cible et l'exposition en cours, qui vaut zéro, et l'ordre tombe sous
+      // le plancher. Le renforcement d'une ligne existante n'est donc pas un
+      // cas particulier à traiter ici.
+      // Entrée comme sortie relèvent du classement, et la règle est isolée
+      // dans `actionEffective` pour être testable — c'est son absence de test
+      // qui avait laissé passer un moteur incapable d'acheter.
+      const choix = actionEffective({ decision, symbol, selected, sorties, position });
+      const effective = { ...decision, action: choix.action, sizePct: choix.sizePct };
+
+      if (choix.action === 'SELL' && choix.raison === 'sortie par classement') {
         outcome.reason = `sortie par classement : rang ${rankInfo?.rank ?? '?'} au-delà du seuil de tolérance`;
       }
 
@@ -490,7 +459,7 @@ export class TradingEngine {
       const evaluations = [];
       for (const symbol of config.universe.symbols) {
         this.progress = { ...this.progress, phase: 'analyse', symbol, done: evaluations.length };
-        evaluations.push(await this.#evaluateSymbol(symbol, { quotes, circuitBreaker, sansLlm: true }));
+        evaluations.push(await this.#evaluateSymbol(symbol, { quotes, circuitBreaker }));
       }
 
       // ── LE MODÈLE ENTRE EN JEU ICI, ET IL ORDONNE ────────────────────────
@@ -620,7 +589,9 @@ export class TradingEngine {
         if (restants.length && config.risk.vetoActif) {
           const { refuses } = await filtrerParVeto(restants, {
             provider: providerActif(),
-            newsPour: (symbol) => getNews(symbol),
+            // Les actualités ont déjà été récupérées en phase 1 : les redemander
+            // rechargerait les flux RSS pour rien. On sert la mémoire.
+            newsPour: async (symbol) => exploitables.find((e) => e.symbol === symbol)?.news ?? { articles: [] },
           });
           for (const symbol of refuses.keys()) ranking.selected.delete(symbol);
           filtresExecution.veto = [...refuses.entries()].map(([symbol, r]) => ({
@@ -638,7 +609,6 @@ export class TradingEngine {
       this.lastRanking = {
         at: new Date().toISOString(),
         dispersion: ranking.dispersion ?? null,
-        seuilDispersion: MIN_DISPERSION,
         mediane: ranking.median ?? null,
         // Renseigné quand aucune sélection n'a eu lieu : dispersion trop faible,
         // ou moins de deux prévisions exploitables. Sans ça, un cycle sans achat

@@ -288,6 +288,51 @@ export function rankAndSelect(evaluations, {
 }
 
 /**
+ * Traduit un classement en action à exécuter.
+ *
+ * ── Pourquoi cette fonction existe séparément ─────────────────────────────
+ * Elle vivait dans une méthode privée du moteur, sans test. Le jour où le
+ * modèle a cessé de proposer une action pour se contenter d'ORDONNER, le bloc
+ * n'a pas suivi : il savait rétrograder un BUY en HOLD mais pas promouvoir un
+ * actif sélectionné. La décision synthétisée valant toujours HOLD, plus aucun
+ * achat n'était possible. Le bot classait parfaitement, puis ne faisait rien.
+ *
+ * Rien ne l'a signalé — ni les tests, qui ne couvraient pas le chemin, ni
+ * l'exécution, qui n'a pas d'opinion sur ce qu'elle n'exécute pas. Isolée
+ * ici, la règle devient vérifiable.
+ *
+ * ── L'ordre des priorités ────────────────────────────────────────────────
+ * La sortie prime sur l'entrée. Un actif à la fois sélectionné et marqué en
+ * sortie est une contradiction du classement ; dans le doute on solde, parce
+ * qu'une vente à tort coûte un aller-retour quand un achat à tort engage du
+ * capital sur un signal qu'on vient de juger caduc.
+ */
+export function actionEffective({ decision, symbol, selected, sorties, position }) {
+  const detenu = position?.quantity > 0;
+
+  if (detenu && sorties?.has(symbol)) {
+    return { action: 'SELL', sizePct: 1, raison: 'sortie par classement' };
+  }
+
+  if (selected?.has(symbol)) {
+    return {
+      action: 'BUY',
+      // Poids égal : le rang décide de QUI, jamais de COMBIEN.
+      sizePct: decision?.sizePct > 0 ? decision.sizePct : 1,
+      raison: 'retenu par le classement transversal',
+    };
+  }
+
+  // Un actif non retenu ne s'achète pas, même si sa prévision est bonne dans
+  // l'absolu — c'est toute la différence entre un seuil et un classement.
+  if (decision?.action === 'BUY') {
+    return { action: 'HOLD', sizePct: 0, raison: 'hors des retenus' };
+  }
+
+  return { action: decision?.action ?? 'HOLD', sizePct: decision?.sizePct ?? 0, raison: null };
+}
+
+/**
  * Poids égal sur les K retenus.
  *
  * `sizePct` s'exprime en fraction de l'enveloppe autorisée par actif, donc un
