@@ -102,14 +102,41 @@ export function exitRank({ universe, maxSelected = 3, cost = COUT_ALLER_RETOUR, 
 }
 
 /**
+ * Âge d'une position, en séances approximatives.
+ *
+ * L'approximation par 5/7 est assumée : reconstruire un calendrier boursier
+ * complet — jours fériés compris — pour départager 20 séances de 21 serait un
+ * raffinement sans effet. La durée minimale est un garde-fou contre la
+ * suractivité, pas une date d'échéance contractuelle.
+ */
+export function ageEnSeances(openedAt, maintenant = new Date()) {
+  if (!openedAt) return null;
+  const t = new Date(openedAt).getTime();
+  if (Number.isNaN(t)) return null;
+  const joursCalendaires = (maintenant.getTime() - t) / 86_400_000;
+  return Math.max(0, Math.floor(joursCalendaires * (5 / 7)));
+}
+
+/**
  * Classe les évaluations et désigne celles à exécuter.
  *
  * @param {Array} evaluations  objets contenant au moins { symbol, decision }
  * @param {object} options
  * @param {number} options.maxSelected  nombre de positions visées (K)
  * @param {Set<string>} options.held    actifs déjà détenus
+ * @param {number} options.ageMinimum   séances minimales avant sortie par rang
+ * @param {Array}  options.positions    positions détenues, avec leur `openedAt`
  */
-export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() } = {}) {
+export function rankAndSelect(evaluations, {
+  maxSelected = 3,
+  held = new Set(),
+  ageMinimum = 0,
+  positions = null,
+} = {}) {
+  const ages = positions
+    ? new Map(positions.map((p) => [p.symbol, ageEnSeances(p.openedAt)]).filter(([, a]) => a != null))
+    : null;
+  const optionsSortie = { ageMinimum, ages };
   const scored = evaluations
     .filter((e) => e?.decision?.forecast)
     .map((e) => ({ symbol: e.symbol, edge: e.decision.forecast.edge }));
@@ -155,7 +182,7 @@ export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() }
     // Confondre les deux ferait du bot un acheteur qui ne vend jamais.
     return {
       selected: new Set(),
-      sorties: sortiesParRang(ranks, held, scored.length, maxSelected),
+      sorties: sortiesParRang(ranks, held, scored.length, maxSelected, optionsSortie),
       ranks,
       dispersion,
       reason: `dispersion transversale trop faible (${(dispersion * 100).toFixed(1)} pts) — le classement ne porte aucune information`,
@@ -188,7 +215,7 @@ export function rankAndSelect(evaluations, { maxSelected = 3, held = new Set() }
 
   return {
     selected,
-    sorties: sortiesParRang(ranks, held, scored.length, maxSelected),
+    sorties: sortiesParRang(ranks, held, scored.length, maxSelected, optionsSortie),
     ranks,
     dispersion,
     median,
@@ -227,14 +254,41 @@ export { MIN_DISPERSION };
  * information sur sa qualité. Vendre sur une absence de données serait la pire
  * des raisons d'agir.
  */
-function sortiesParRang(ranks, held, universe, maxSelected) {
+function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ages = null } = {}) {
   const seuil = exitRank({ universe, maxSelected });
   const sorties = new Set();
+  const retenuesParAge = new Map();
 
   for (const symbol of held) {
     const info = ranks.get(symbol);
     if (!info) continue;
-    if (info.rank > seuil) sorties.add(symbol);
+    if (info.rank <= seuil) continue;
+
+    // ── La durée minimale de détention prime sur le rang ──────────────────
+    // Sans elle, la rotation n'est bornée par rien : une position ouverte le
+    // matin peut être soldée l'après-midi parce que trois actifs l'ont
+    // dépassée d'un rang. À trois cycles par jour, cela produisait 84
+    // rotations annuelles, soit 5,25 % de frais garantis.
+    //
+    // Le signal qu'on exploite met 2 à 6 semaines à se dissiper. Sortir avant
+    // qu'il ait produit revient à payer l'aller-retour complet pour une
+    // fraction du mouvement. On laisse donc la position vivre, même quand son
+    // rang décroche — le rang décroche constamment sur du bruit transversal.
+    const age = ages?.get(symbol);
+    if (ageMinimum > 0 && age != null && age < ageMinimum) {
+      retenuesParAge.set(symbol, age);
+      continue;
+    }
+
+    sorties.add(symbol);
+  }
+
+  if (retenuesParAge.size) {
+    log.info(
+      `${retenuesParAge.size} position(s) conservée(s) malgré un rang décroché, `
+      + `durée minimale de ${ageMinimum} séances non atteinte : `
+      + [...retenuesParAge.entries()].map(([s, a]) => `${s} (${a} j)`).join(', '),
+    );
   }
 
   if (sorties.size) {

@@ -90,7 +90,60 @@ export const config = {
     // Le compte Alpaca est libellé en dollars : aucune conversion de devise.
     baseCurrency: str('BASE_CURRENCY', 'USD'),
     initialCapital: num('INITIAL_CAPITAL', 100),
-    maxPositions: num('MAX_POSITIONS', 3),
+
+    /**
+     * ── Pourquoi 10 positions et non 3 ────────────────────────────────────
+     * Deux résultats s'opposent frontalement et il a fallu trancher.
+     *
+     * La loi fondamentale de la gestion active dit que concentrer maximise
+     * l'exposition au meilleur signal : à corrélation transversale élevée,
+     * diversifier n'abaisse presque plus la variance (elle bute sur
+     * l'asymptote de covariance) tout en diluant l'alpha vers des titres de
+     * rang inférieur. Ce raisonnement défend 3.
+     *
+     * L'analyse du risque idiosyncratique dit l'inverse : à 3 lignes, le
+     * terme σ²/M reste énorme et les mouvements du portefeuille sont dictés
+     * par les aléas propres de trois entreprises — un procès, un dirigeant
+     * qui part — et non par le signal qui les a désignées. Espérer capturer
+     * la tendance d'une population en n'interrogeant que trois de ses membres
+     * n'est pas de la gestion factorielle, c'est un pari directionnel.
+     *
+     * 10 est le compromis assumé : assez pour que la loi des grands nombres
+     * commence à jouer, pas assez pour diluer le signal dans le rang 25. À
+     * 100 $ cela fait des lignes de 10 $, très au-dessus du plancher
+     * technique — l'argument des commissions fixes qui condamnerait la
+     * fragmentation ne s'applique pas chez un courtier sans commission.
+     */
+    maxPositions: num('MAX_POSITIONS', 10),
+
+    /**
+     * ── Durée minimale de détention ───────────────────────────────────────
+     * C'est le paramètre le plus rentable de tout le fichier, et il n'existait
+     * pas.
+     *
+     * La rotation n'était bornée par rien : les positions sortaient dès que
+     * leur rang décrochait, à trois cycles par jour. Sur un horizon visé de
+     * 3 séances, cela fait 84 rotations complètes par an :
+     *
+     *     84 × 6,25 bps = 5,25 % du capital, brûlés chaque année, garantis,
+     *     avant même de savoir si le signal vaut quelque chose.
+     *
+     * Deux résultats imposent d'allonger. D'abord la durée de vie du signal :
+     * sur les grandes capitalisations très liquides, le momentum court terme
+     * se dissipe en 2 à 6 SEMAINES. Vendre au troisième jour coupait le signal
+     * au moment précis où il commençait à produire — on payait le plein tarif
+     * pour un dixième du mouvement. Ensuite l'horizon optimal sous frictions :
+     * il s'allonge toujours AU-DELÀ de la demi-vie du signal, le temps que
+     * l'espérance accumulée amortisse le coût d'entrée.
+     *
+     * À 21 séances : 12 rotations par an, soit 0,75 % de frais. Quatre points
+     * et demi de rendement annuel récupérés sans avoir rien à prédire.
+     *
+     * La contrepartie est réelle et assumée : moins de transactions, donc une
+     * validation statistique encore plus lente. Le but est le rendement, pas
+     * la mesure — l'arbitrage se tranche donc de ce côté.
+     */
+    minHoldingDays: num('MIN_HOLDING_DAYS', 21),
     maxPositionPct: num('MAX_POSITION_PCT', 0.35),
     // Plancher d'ordre volontairement bas.
     //
@@ -105,14 +158,38 @@ export const config = {
     // On garde 5 $ comme marge au-dessus du plancher technique d'Alpaca (1 $).
     minOrderValue: num('MIN_ORDER_VALUE', 5),
 
-    // ── Stops ─────────────────────────────────────────────────────────────
-    // La recherche est nette : un stop serré (5 %) est SOUS le bruit
-    // quotidien d'une valeur comme TSLA (ATR journalier 3-5 %) et coupe des
-    // positions gagnantes au hasard. On dimensionne donc sur l'ATR, avec un
-    // plancher et un plafond pour éviter les valeurs aberrantes.
-    stopAtrMultiple: num('STOP_ATR_MULTIPLE', 4),
-    stopMinPct: num('STOP_MIN_PCT', 0.08),
-    stopMaxPct: num('STOP_MAX_PCT', 0.2),
+    /**
+     * ── Le stop ne protège de rien, et on a fini par le mesurer ───────────
+     * Il était dimensionné à 4 × ATR, ce qui paraissait prudent. Converti en
+     * écarts-types, 4 × ATR vaut environ 5 σ : sous une marche aléatoire, la
+     * probabilité qu'il se déclenche sur 3 séances est de 0,20 %. Deux fois
+     * sur mille. Il ne faisait donc littéralement rien — et sur 21 séances il
+     * reste marginal.
+     *
+     * Pire, quand il se déclenche, c'est sur le seul événement contre lequel
+     * il est inopérant. La totalité du rendement des actions américaines se
+     * construit HORS séance : une position détenue trois semaines traverse une
+     * vingtaine d'ouvertures, et c'est là qu'est le risque. Or un stop ne
+     * s'exécute pas dans un trou de cotation. Une action qui clôture à 100 $
+     * et ouvre à 85 $ ne traverse jamais le seuil de 98 $ : l'ordre devient un
+     * ordre au marché exécuté à 85 $. Le stop n'a pas borné la perte, il a
+     * forcé la vente au pire prix de la journée.
+     *
+     * Les travaux sur l'efficacité des stops en système court terme sont
+     * convergents : hors d'un régime de tendance baissière persistante, un
+     * stop ne fait que retirer le portefeuille d'un actif à espérance
+     * positive. Sur trois semaines, la sortie par le TEMPS et par le rang est
+     * le mécanisme pertinent ; le risque de saut se gère à l'entrée, par la
+     * taille de position et par l'exclusion des événements programmés.
+     *
+     * Ce qui reste ici n'est donc plus un stop de gestion mais un
+     * coupe-circuit de catastrophe : fraude, radiation, effondrement. Il est
+     * placé assez loin pour ne jamais intervenir sur du bruit, et existe
+     * uniquement pour qu'une ligne ne puisse pas aller à zéro sans réaction.
+     */
+    stopAtrMultiple: num('STOP_ATR_MULTIPLE', 0),
+    stopMinPct: num('STOP_MIN_PCT', 0.25),
+    stopMaxPct: num('STOP_MAX_PCT', 0.35),
     // Pas de take-profit fixe : il tronque la queue droite de la distribution
     // et détruit l'espérance des stratégies de suivi de tendance. La sortie
     // se fait sur signal du LLM ou sur stop.

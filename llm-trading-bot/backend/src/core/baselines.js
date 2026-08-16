@@ -43,19 +43,62 @@ function rendement(candles, n) {
 /**
  * ── RETOUR À LA MOYENNE COURT TERME ──────────────────────────────────────
  *
- * C'est LE facteur dont l'horizon correspond au nôtre. Les actions qui ont
- * chuté sur la semaine écoulée rebondissent en moyenne sur les jours suivants,
- * et l'inverse pour celles qui ont bondi. L'anomalie est documentée avec une
- * corrélation de rang journalière de 0,030 à 0,040 et une demi-vie de 1 à
- * 5 jours — précisément notre horizon de 3 séances.
+ * Les actions qui ont chuté sur la semaine écoulée rebondissent en moyenne sur
+ * les jours suivants. Le signe est INVERSÉ : un rendement récent élevé donne
+ * un score BAS.
  *
- * Le signe est INVERSÉ : un rendement récent élevé donne un score BAS. C'est
- * la définition même du retour à la moyenne, et c'est ce qui le distingue du
- * momentum, avec lequel on le confondrait sinon.
+ * ── CE FACTEUR A LE MAUVAIS SIGNE POUR NOTRE UNIVERS ─────────────────────
+ * Il était présenté ici comme « LE facteur dont l'horizon correspond au
+ * nôtre ». C'était faux, et l'erreur a failli coûter cher : le classement du
+ * LLM corrèle à −0,89 avec lui, et j'ai un moment conclu qu'il fallait
+ * inverser le modèle.
+ *
+ * Ce qui manquait est la condition de LIQUIDITÉ. Le retour à la moyenne n'est
+ * pas une propriété des actions, c'est la rémunération du risque d'inventaire
+ * des teneurs de marché : ils absorbent un déséquilibre, exigent une décote,
+ * et le prix revient quand ils se sont délestés. Sur un titre très échangé,
+ * ce délestage est quasi instantané — la décote n'a pas le temps d'exister.
+ *
+ * Mesuré sur le décile de plus fort taux de rotation, l'effet ne s'affaiblit
+ * pas : il S'INVERSE. Le retour à la moyenne y est nul et c'est le momentum
+ * court terme qui domine. Or notre univers de 150 grandes capitalisations
+ * américaines EST ce décile, par construction.
+ *
+ * Le facteur reste ici, mais comme TÉMOIN NÉGATIF : on l'attend perdant. S'il
+ * gagnait, c'est notre compréhension de l'univers qu'il faudrait revoir.
  */
 export function reversalCourtTerme(candles) {
   const r5 = rendement(candles, 5);
   return r5 == null ? null : -r5;
+}
+
+/**
+ * ── MOMENTUM COURT TERME ─────────────────────────────────────────────────
+ *
+ * Le même rendement à 5 séances, sans inversion de signe. C'est le facteur
+ * dont l'horizon correspond réellement au nôtre.
+ *
+ * Sur les titres à fort taux de rotation — les plus grandes capitalisations,
+ * les plus suivies, les plus liquides — acheter les gagnants récents et vendre
+ * les perdants dégage une performance robuste, tandis que la stratégie inverse
+ * en perd autant. L'explication tient à deux mécanismes : la sous-réaction à
+ * l'information sur des titres complexes, et l'inertie des flux
+ * institutionnels, qui fractionnent leurs ordres sur plusieurs séances pour
+ * limiter leur impact et prolongent ainsi mécaniquement la tendance.
+ *
+ * ── Pourquoi c'est le témoin le plus important du carnet ─────────────────
+ * Le LLM produit essentiellement ce facteur : son classement corrèle à +0,89
+ * avec le rendement 5 séances brut. La comparaison n'est donc plus « le
+ * modèle bat-il une formule ? » mais la seule question qui compte
+ * économiquement : le modèle apporte-t-il quelque chose EN PLUS de ce que
+ * cette ligne de code produit gratuitement ?
+ *
+ * Si les deux courbes se superposent, l'appel d'API ne sert à rien et il faut
+ * garder la formule. C'est cette confrontation-là qui décidera du sort du LLM,
+ * et elle ne coûte rien à instrumenter.
+ */
+export function momentumCourtTerme(candles) {
+  return rendement(candles, 5);
 }
 
 /**
@@ -111,9 +154,18 @@ export function surventeRsi(indicators) {
 
 /** Les facteurs disponibles, avec leur mode de calcul. */
 export const FACTEURS = {
+  // Le concurrent sérieux du LLM : c'est lui qu'il doit battre pour justifier
+  // son coût, puisque c'est essentiellement lui qu'il reproduit.
+  momentumCourt: {
+    label: 'Momentum 5 j',
+    horizonAdapte: true,
+    calc: ({ candles }) => momentumCourtTerme(candles),
+  },
+  // Témoin NÉGATIF : attendu perdant sur un univers aussi liquide. S'il gagne,
+  // c'est la lecture de l'univers qu'il faut réviser, pas le facteur.
   reversal: {
     label: 'Retour à la moyenne 5 j',
-    horizonAdapte: true,
+    horizonAdapte: false,
     calc: ({ candles }) => reversalCourtTerme(candles),
   },
   momentum: {

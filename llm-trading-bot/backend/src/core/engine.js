@@ -3,6 +3,7 @@ import { createLogger } from '../logger.js';
 import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js';
 import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
+import { filtrerResultats } from '../data/earnings.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
 import { rankAndSelect, MIN_DISPERSION } from './ranking.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
@@ -495,11 +496,36 @@ export class TradingEngine {
       // ── PHASE 2 : classer, sélectionner, puis exécuter ────────────────────
       // On ne peut pas choisir les meilleurs sans les avoir tous vus. C'est
       // toute la raison d'être de la séparation en deux phases.
-      const held = new Set((await this.broker.getPositions()).map((p) => p.symbol));
-      const ranking = rankAndSelect(evaluations.filter((e) => e.evaluated), {
+      const positionsOuvertes = await this.broker.getPositions();
+      const held = new Set(positionsOuvertes.map((p) => p.symbol));
+
+      // ── Écarter les actifs en fenêtre de publication de résultats ─────────
+      // Le filtre ne porte que sur l'ACHAT. Une position déjà ouverte n'est pas
+      // liquidée parce que ses résultats approchent : la sortie coûterait un
+      // aller-retour certain contre un risque incertain, et la durée minimale
+      // de détention existe précisément pour ne pas céder à ce réflexe.
+      const { exclus: exclusResultats, calendrierDisponible } = await filtrerResultats(
+        evaluations.filter((e) => e.evaluated).map((e) => e.symbol),
+      );
+
+      const eligibles = evaluations
+        .filter((e) => e.evaluated)
+        // On garde les actifs détenus dans le classement même exclus à l'achat :
+        // les retirer les priverait de rang, et un actif sans rang n'est jamais
+        // vendu — la fenêtre de résultats gèlerait la position au lieu de la
+        // protéger.
+        .filter((e) => !exclusResultats.has(e.symbol) || held.has(e.symbol));
+
+      const ranking = rankAndSelect(eligibles, {
         maxSelected: config.risk.maxPositions,
         held,
+        ageMinimum: config.risk.minHoldingDays,
+        positions: positionsOuvertes,
       });
+
+      // Un actif exclu pour cause de résultats ne peut pas être acheté, même
+      // s'il sort premier du classement.
+      for (const symbol of exclusResultats.keys()) ranking.selected.delete(symbol);
 
       // ── Le classement, conservé pour affichage ────────────────────────────
       // C'est la décision réelle du bot depuis le passage au rang, et elle
@@ -519,6 +545,15 @@ export class TradingEngine {
         maxRetenus: config.risk.maxPositions,
         seuilSortie: ranking.seuilSortie ?? null,
         sorties: [...(ranking.sorties ?? [])],
+        // Une abstention doit toujours pouvoir s'expliquer. Sans ce détail, un
+        // actif bien classé mais jamais acheté ressemble à un bug.
+        dureeMinimale: config.risk.minHoldingDays,
+        resultats: {
+          calendrierDisponible,
+          exclus: [...exclusResultats.entries()].map(([symbol, r]) => ({
+            symbol, date: r.date ?? null, raison: r.raison,
+          })),
+        },
         // Résolution comparée : combien de valeurs DISTINCTES chaque classement
         // produit-il ? Observé en production, le modèle n'en donnait que trois
         // sur vingt réponses. Un facteur numérique en donne autant qu'il y a

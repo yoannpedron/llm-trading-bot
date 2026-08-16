@@ -74,7 +74,7 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
    * et phase calendaire, pour savoir ce qui sert réellement à quelque chose.
    */
   router.get('/shadow', asyncRoute(async (req, res) => {
-    const horizon = intParam(req.query.horizon, 3, 7);
+    const horizon = intParam(req.query.horizon, 21, 21);
     res.json(await shadowBook.stats({ horizon }));
   }));
 
@@ -83,7 +83,7 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
    * manque-t-il encore des données ? C'est l'instrument de décision du projet.
    */
   router.get('/sprt', asyncRoute(async (req, res) => {
-    const horizon = intParam(req.query.horizon, 3, 7);
+    const horizon = intParam(req.query.horizon, 21, 21);
     res.json(await runSprt(shadowBook, { horizon }));
   }));
 
@@ -144,8 +144,8 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
       broker.getAccount().catch((e) => ({ error: e.message })),
       broker.getPositions().catch(() => []),
       keyPool.capacity().catch((e) => ({ error: e.message })),
-      runSprt(shadowBook, { horizon: 3 }).catch((e) => ({ error: e.message })),
-      shadowBook.stats({ horizon: 3 }).catch((e) => ({ error: e.message })),
+      runSprt(shadowBook, { horizon: 21 }).catch((e) => ({ error: e.message })),
+      shadowBook.stats({ horizon: 21 }).catch((e) => ({ error: e.message })),
       spreadLog.summary().catch((e) => ({ error: e.message })),
       executionQuality.summary().catch((e) => ({ error: e.message })),
     ]);
@@ -282,8 +282,8 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
       broker.getTrades(25),
       broker.getEquityCurve(500),
       safe(keyPool.capacity()),
-      safe(runSprt(shadowBook, { horizon: 3 })),
-      safe(shadowBook.stats({ horizon: 3 })),
+      safe(runSprt(shadowBook, { horizon: 21 })),
+      safe(shadowBook.stats({ horizon: 21 })),
       safe(spreadLog.summary()),
       safe(executionQuality.summary()),
       safe(getMarketClock(), { is_open: null }),

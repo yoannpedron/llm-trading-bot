@@ -37,8 +37,18 @@ const log = createLogger('shadow');
  * du bêta de marché, pas de la sélection.
  */
 
-/** Horizons d'évaluation, en jours de bourse. */
-const HORIZONS = [1, 3, 7];
+/**
+ * Horizons d'évaluation, en jours de bourse.
+ *
+ * 21 séances est devenu l'horizon de DÉCISION — celui sur lequel le bot
+ * détient réellement. Les deux autres restent mesurés, et pas par nostalgie :
+ * comparer le score à 1, 5 et 21 séances est ce qui permettra d'estimer la
+ * vitesse de décroissance du signal, donc de recalibrer l'horizon sur des
+ * données au lieu d'une conviction. Si le pouvoir prédictif s'effondre entre
+ * 5 et 21, c'est qu'on détient trop longtemps ; s'il tient, c'est qu'on
+ * pourrait détenir davantage encore.
+ */
+const HORIZONS = [1, 5, 21];
 
 /** Symbole servant de référence pour neutraliser le bêta de marché. */
 const BENCHMARK = 'SPY';
@@ -100,7 +110,11 @@ const BENCHMARK = 'SPY';
  * racine cubique du coût de transaction : 13 rangs à 6,25 bps sur 150 actifs,
  * contre 73 auparavant. La condition absolue est conservée en plus.
  */
-const RULE_VERSION = 'classement-transversal-v3';
+// v4 : horizon porté à 21 séances, sortie par le temps plutôt que par le stop,
+// 10 positions au lieu de 3. Le changement est assez profond pour que mélanger
+// les décisions d'avant et d'après fausserait toute mesure — d'où la nouvelle
+// version de règle, qui les sépare dans le carnet.
+const RULE_VERSION = 'classement-transversal-v4';
 
 /** Étiquette des décisions antérieures à l'introduction du champ. */
 const LEGACY_RULE = 'action-choisie-par-le-modele';
