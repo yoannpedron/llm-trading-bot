@@ -1569,16 +1569,11 @@ function renderRanking(ranking) {
   if (!ranking || !ranking.classement?.length) {
     $('ranking-meta').textContent = 'aucun classement';
     $('ranking-abstention').hidden = true;
-    $('disp-value').textContent = '—';
-    $('disp-fill').style.width = '0%';
-    // Sans cette ligne le marqueur reste à gauche à 0 %, et son étiquette —
-    // centrée par translateX(-50%) — sortait de la carte : on lisait « uil ».
-    $('disp-threshold').style.left = '25%';
-    $('disp-fill').classList.remove('below');
-    // La note aussi doit repartir à zéro : elle affirmait « le modèle
-    // différencie les actifs » sous un panneau qui annonce « aucun classement ».
-    $('disp-note').textContent = 'La dispersion sera mesurée au premier classement : c’est elle '
-      + 'qui décide si le bot a le droit d’agir.';
+    $('filtres-execution').hidden = true;
+    for (const id of ['rk-distinctes', 'rk-test', 'rk-lots', 'rk-biais']) $(id).textContent = '—';
+    for (const id of ['rk-distinctes-sous', 'rk-test-sous', 'rk-lots-sous']) $(id).textContent = '—';
+    for (const id of ['rk-distinctes', 'rk-test', 'rk-lots']) $(id).className = '';
+    $('rk-note').textContent = 'Le premier classement arrivera au prochain cycle en séance.';
     // Sans classement, les boutons de vue restaient cliquables sans rien
     // produire — une commande qui ne répond pas fait croire à une panne. On
     // les masque tant qu'il n'y a rien à trier.
@@ -1595,20 +1590,8 @@ function renderRanking(ranking) {
   const retenus = rows.filter((r) => r.retenu).length;
   $('ranking-meta').textContent = `${rows.length} actifs classés · ${retenus} retenu(s) · ${fmtDate(ranking.at)}`;
 
-  // ── Dispersion ────────────────────────────────────────────────────────
-  // L'échelle va jusqu'à 4× le seuil : au-delà, la valeur exacte n'importe
-  // plus, seul compte le fait d'être largement au-dessus.
-  const seuil = ranking.seuilDispersion ?? 0.03;
-  const disp = ranking.dispersion ?? 0;
-  const echelle = seuil * 4;
-  $('disp-value').textContent = `${fmtNum(disp * 100, 1)} pts`;
-  const fill = $('disp-fill');
-  fill.style.width = `${Math.min(100, (disp / echelle) * 100)}%`;
-  fill.classList.toggle('below', disp < seuil);
-  $('disp-threshold').style.left = `${(seuil / echelle) * 100}%`;
-  $('disp-note').textContent = disp < seuil
-    ? `Sous le seuil de ${(seuil * 100).toFixed(0)} points : le modèle note tout le monde pareil, le classement ne porte aucune information.`
-    : `Au-dessus du seuil de ${(seuil * 100).toFixed(0)} points : le modèle différencie les actifs, le classement est exploitable.`;
+  renderSanteClassement(ranking, rows.length);
+  renderFiltresExecution(ranking);
 
   // ── Abstention expliquée ──────────────────────────────────────────────
   // Un cycle sans achat et un cycle bloqué se ressemblaient à l'écran.
@@ -1624,6 +1607,173 @@ function renderRanking(ranking) {
   }
 
   renderRankingBody(rows, ranking);
+}
+
+/**
+ * Santé du classement.
+ *
+ * Deux chiffres décident si tout le reste vaut quelque chose.
+ *
+ * `valeursDistinctes` d'abord : c'est celui qui valait 3 sur 150 avec
+ * l'ancienne notation. Cinquante actifs partageaient alors la meilleure note
+ * et le tri les départageait par ordre alphabétique — le bot n'achetait pas
+ * les dix meilleurs, il achetait les dix premiers du fichier. S'il retombe,
+ * les filtres en aval ne font qu'affiner une décision arbitraire.
+ *
+ * Le test global ensuite : le classement est-il distinguable d'un tirage au
+ * sort ? Calculé en simulant des classements aléatoires sur la structure
+ * réelle des lots, sans consommer le moindre appel.
+ */
+function renderSanteClassement(ranking, total) {
+  const lw = ranking.listwise;
+
+  if (!lw) {
+    // Classement produit par l'ancienne notation : les diagnostics n'existent
+    // pas. Le dire plutôt que d'afficher des tirets muets.
+    $('rk-distinctes').textContent = 'n/d';
+    $('rk-test').textContent = 'n/d';
+    $('rk-lots').textContent = 'n/d';
+    $('rk-biais').textContent = 'n/d';
+    $('rk-note').textContent = 'Classement produit avant le passage à la comparaison par lots : '
+      + 'les diagnostics ne sont pas disponibles pour ce cycle.';
+    return;
+  }
+
+  // ── Valeurs distinctes ──────────────────────────────────────────────────
+  const dist = lw.valeursDistinctes ?? 0;
+  const part = total > 0 ? dist / total : 0;
+  $('rk-distinctes').textContent = `${dist} / ${total}`;
+  $('rk-distinctes').className = part >= 0.99 ? 'ok' : part >= 0.5 ? 'moyen' : 'mauvais';
+  $('rk-distinctes-sous').textContent = part >= 0.99
+    ? 'aucun ex æquo'
+    : `${total - dist} ex æquo — départagés par l’ordre de la liste`;
+
+  // ── Test global ─────────────────────────────────────────────────────────
+  const t = lw.test;
+  if (t?.p != null) {
+    $('rk-test').textContent = t.significatif ? 'oui' : 'non';
+    $('rk-test').className = t.significatif ? 'ok' : 'mauvais';
+    $('rk-test-sous').textContent = `p = ${fmtNum(t.p, 3)} · ${t.methode === 'bootstrap' ? 'calibré par simulation' : 'approximation χ²'}`;
+  } else {
+    $('rk-test').textContent = 'n/d';
+    $('rk-test').className = '';
+    $('rk-test-sous').textContent = 'test indisponible';
+  }
+
+  // ── Lots ────────────────────────────────────────────────────────────────
+  $('rk-lots').textContent = `${lw.reussis ?? 0} / ${lw.lots ?? 0}`;
+  $('rk-lots').className = (lw.reussis === lw.lots) ? 'ok' : (lw.reussis > lw.lots * 0.6 ? 'moyen' : 'mauvais');
+  $('rk-lots-sous').textContent = `${lw.appels ?? 0} appels`
+    + (lw.connexe === false ? ' · graphe NON connexe' : '');
+
+  // ── Biais de position ───────────────────────────────────────────────────
+  const b = lw.biaisDePosition;
+  if (b == null) {
+    $('rk-biais').textContent = 'n/d';
+    $('rk-biais').className = '';
+  } else {
+    $('rk-biais').textContent = fmtNum(b, 3);
+    // Au-delà de 0,3 le classement mesure en partie l'ordre dans lequel on a
+    // posé la question, pas la qualité des actifs.
+    $('rk-biais').className = Math.abs(b) < 0.15 ? 'ok' : Math.abs(b) < 0.3 ? 'moyen' : 'mauvais';
+    $('rk-biais-sous').textContent = Math.abs(b) < 0.15
+      ? 'aucun effet de primauté'
+      : 'le modèle favorise ce qu’on lui montre en premier';
+  }
+
+  // La part de lots où le modèle a lui-même déclaré ne rien distinguer est le
+  // signal le plus honnête dont on dispose : c'est son propre aveu.
+  const aveugle = lw.partAveugle;
+  $('rk-note').textContent = aveugle != null && aveugle > 0
+    ? `Sur ${Math.round(aveugle * 100)} % des lots, le modèle a déclaré lui-même ne rien distinguer entre les actifs.`
+    : 'Le modèle ordonne des lots de dix ; un calcul recolle les morceaux en un classement complet, chaque actif avec sa marge d’erreur.';
+}
+
+/**
+ * Libellés des motifs de veto.
+ *
+ * Dérivés de l'énumération du backend, ils perdaient leurs accents et se
+ * lisaient « enquete reglementaire ». La table est explicite pour que le
+ * français reste correct sans contraindre le nommage côté serveur.
+ */
+const MOTIFS_VETO = {
+  AUCUN: 'aucun motif',
+  LITIGE: 'litige en cours',
+  ENQUETE_REGLEMENTAIRE: 'enquête réglementaire',
+  FRAUDE_COMPTABLE: 'soupçon de fraude comptable',
+  AVERTISSEMENT_RESULTATS: 'avertissement sur résultats',
+  DEPART_DIRIGEANT: 'départ d’un dirigeant',
+  RUMEUR_SPECULATION: 'rumeur non confirmée',
+  CHOC_SECTORIEL: 'choc sectoriel',
+};
+
+/**
+ * Pourquoi une ouverture n'a pas eu lieu.
+ *
+ * Cinq filtres peuvent bloquer un achat après le classement. Sans ce panneau,
+ * un bon classement suivi d'aucun ordre ressemble à une panne — et le bot en
+ * produira souvent, c'est le comportement voulu.
+ */
+function renderFiltresExecution(ranking) {
+  const bloc = $('filtres-execution');
+  const f = ranking.filtresExecution ?? {};
+  const morceaux = [];
+
+  // Résultats à venir : le filtre le plus fréquent, et le seul qui s'applique
+  // avant même le classement.
+  const res = ranking.resultats;
+  if (res?.exclus?.length) {
+    morceaux.push(ligneFiltre(
+      'Publication de résultats',
+      res.exclus.map((e) => `${e.symbol}${e.date ? ` (${e.date})` : ''}`),
+      'Écartés dans la fenêtre [−5, +1] séances : la probabilité d’un saut de prix y est dix fois la normale.',
+    ));
+  }
+  if (res && res.calendrierDisponible === false) {
+    morceaux.push(`<p class="filtre-alerte">Filtre résultats <strong>inactif</strong> — aucune source configurée. `
+      + `Les positions peuvent être ouvertes à la veille d’une publication.</p>`);
+  }
+
+  if (f.spread?.length) {
+    morceaux.push(ligneFiltre(
+      'Spread trop large',
+      f.spread.map((s) => `${s.symbol} (${fmtNum(s.spreadBps, 1)} bps)`),
+      'Au-delà de 7 points de base, l’aller-retour coûte plus de 14 bps — deux fois le coût mesuré.',
+    ));
+  }
+
+  if (f.fenetre && f.fenetre.ouverte === false) {
+    morceaux.push(`<div class="filtre-ligne"><span class="filtre-nom">Hors fenêtre d’exécution</span>`
+      + `<p class="filtre-detail">Il est ${esc(f.fenetre.heureET)} à New York — ${esc(f.fenetre.raison)}. `
+      + `Les achats sont reportés, pas annulés : on détient 21 séances, rien ne presse.</p></div>`);
+  }
+
+  if (f.veto?.length) {
+    morceaux.push(ligneFiltre(
+      'Veto de risque',
+      f.veto.map((v) => `${v.symbol} — ${v.erreur ? 'contrôle impossible' : MOTIFS_VETO[v.motif] ?? 'motif inconnu'}`),
+      'Le modèle a relu les actualités des finalistes et refusé ces achats. Un veto ne peut que '
+      + 'bloquer : il ne désigne aucun actif et ne peut pas inverser le classement.',
+    ));
+  }
+
+  if (!morceaux.length) {
+    bloc.hidden = true;
+    return;
+  }
+
+  bloc.hidden = false;
+  $('filtres-liste').innerHTML = morceaux.join('');
+}
+
+function ligneFiltre(nom, items, explication) {
+  const visibles = items.slice(0, 10);
+  const reste = items.length - visibles.length;
+  return `<div class="filtre-ligne">`
+    + `<span class="filtre-nom">${esc(nom)} <em>· ${items.length}</em></span>`
+    + `<p class="filtre-items">${visibles.map(esc).join(' · ')}${reste > 0 ? ` … et ${reste} autre(s)` : ''}</p>`
+    + `<p class="filtre-detail">${esc(explication)}</p>`
+    + `</div>`;
 }
 
 function renderRankingBody(rows, ranking) {

@@ -285,23 +285,60 @@
         <span id="ranking-meta" class="card-meta">—</span>
       </div>
 
-      <!-- Dispersion : la mesure qui décide si le bot a le droit d'agir. -->
-      <div class="dispersion">
-        <div class="dispersion-head">
-          <span>Dispersion transversale</span>
-          <strong id="disp-value">—</strong>
+      <!--
+        Santé du classement.
+
+        Remplace la jauge de dispersion, qui surveillait la largeur de la
+        distribution des notes alors que le défaut réel était le nombre
+        d'actifs COLLÉS sur chacune. Trois valeurs distinctes réparties sur
+        150 actifs lui donnaient 0,07 pour un seuil de 0,03 : elle ne s'est
+        jamais déclenchée pendant que le bot achetait par ordre alphabétique.
+
+        Les deux chiffres qui comptent désormais : combien de valeurs
+        distinctes le classement produit (s'il retombe, tout le reste est
+        décoratif), et si l'ordre est distinguable d'un tirage au sort.
+      -->
+      <div class="sante-classement">
+        <div class="sante-grille">
+          <div class="sante-item">
+            <span class="sante-label">Valeurs distinctes</span>
+            <strong id="rk-distinctes">—</strong>
+            <span class="sante-sous" id="rk-distinctes-sous">—</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Distinguable du hasard</span>
+            <strong id="rk-test">—</strong>
+            <span class="sante-sous" id="rk-test-sous">—</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Lots exploités</span>
+            <strong id="rk-lots">—</strong>
+            <span class="sante-sous" id="rk-lots-sous">—</span>
+          </div>
+          <div class="sante-item">
+            <span class="sante-label">Biais de position</span>
+            <strong id="rk-biais">—</strong>
+            <span class="sante-sous" id="rk-biais-sous">attendu nul</span>
+          </div>
         </div>
-        <div class="dispersion-track">
-          <div id="disp-fill" class="dispersion-fill"></div>
-          <div id="disp-threshold" class="dispersion-threshold" title="Seuil d'abstention"></div>
-        </div>
-        <p class="dispersion-note" id="disp-note">
-          En dessous du seuil, le modèle note tout le monde pareil : le classement
-          ne porte aucune information et le bot s'abstient.
+        <p class="sante-note" id="rk-note">
+          Le modèle ordonne des lots de dix ; un calcul recolle les morceaux en
+          un classement complet, chaque actif avec sa marge d'erreur.
         </p>
       </div>
 
       <div id="ranking-abstention" class="abstention" hidden role="status"></div>
+
+      <!--
+        Pourquoi rien n'a été acheté.
+
+        Cinq filtres peuvent bloquer une ouverture, et sans ce panneau un bon
+        classement suivi d'aucun ordre ressemble à une panne.
+      -->
+      <div id="filtres-execution" class="filtres-exec" hidden>
+        <h3 class="filtres-titre">Ouvertures bloquées</h3>
+        <div id="filtres-liste"></div>
+      </div>
 
       <div class="filters" id="ranking-views">
         <button class="chip chip-active" data-view="top">Podium</button>

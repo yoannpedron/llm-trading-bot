@@ -1625,3 +1625,108 @@ details.rank-item + details.rank-item { margin-top: 4px; }
 /* Le bouton Réglages est un déclencheur de dialogue : il n'a plus d'état
    « déplié » à annoncer, mais garde son focus visible. */
 #btn-close-settings { font-size: 16px; line-height: 1; padding: 6px 10px; }
+
+/* ── Santé du classement ─────────────────────────────────────────────────
+   Remplace la jauge de dispersion. Quatre chiffres plutôt qu'une barre :
+   une barre suggère un continuum alors que les questions sont binaires —
+   y a-t-il des ex æquo, le classement est-il distinguable du hasard. */
+.sante-classement {
+  margin: 1.25rem 0 1.5rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.sante-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1.1rem 1.5rem;
+}
+
+.sante-item { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+
+.sante-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.sante-item strong {
+  font-size: 1.35rem;
+  font-family: var(--mono);
+  line-height: 1.2;
+}
+
+/* Le code couleur porte le jugement, pas le chiffre : « 3 / 150 » ne dit
+   rien à qui ne connaît pas l'historique du défaut. */
+.sante-item strong.ok      { color: var(--up); }
+.sante-item strong.moyen   { color: var(--warn); }
+.sante-item strong.mauvais { color: var(--down); }
+
+.sante-sous {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.sante-note {
+  margin: 0.9rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ── Ouvertures bloquées ─────────────────────────────────────────────────
+   Le bot passera des semaines sans acheter. Sans ce panneau, l'inaction est
+   indiscernable d'une panne. */
+.filtres-exec {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: 10px;
+}
+
+.filtres-titre {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.filtre-ligne { margin-bottom: 1.1rem; }
+.filtre-ligne:last-child { margin-bottom: 0; }
+
+.filtre-nom { font-size: 0.9rem; font-weight: 600; display: block; margin-bottom: 0.3rem; }
+.filtre-nom em { color: var(--text-dim); font-style: normal; font-weight: 400; }
+
+.filtre-items {
+  margin: 0 0 0.3rem;
+  font-size: 0.84rem;
+  font-family: var(--mono);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.filtre-detail {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.filtre-alerte {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--down-soft);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
