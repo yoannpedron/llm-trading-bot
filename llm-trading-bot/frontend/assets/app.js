@@ -1329,7 +1329,23 @@ async function writeToClipboard(text) {
   if (!ok) throw new Error('le navigateur a refusé la copie');
 }
 
-const SENTIMENT_CLASS = { POSITIF: 'pill-pos', NEGATIF: 'pill-neg', NEUTRE: 'pill-neu', INDISPONIBLE: 'pill-skip' };
+const SENTIMENT_CLASS = { POSITIF: 'pill-pos', NEGATIF: 'pill-neg', NEUTRE: 'pill-neu', INDISPONIBLE: 'pill-skip', NON_EVALUE: 'pill-skip' };
+
+/**
+ * Libelles lisibles du sentiment de presse.
+ *
+ * `INDISPONIBLE` s'affichait au-dessus de huit articles correctement recuperes,
+ * ce qui se lisait comme une panne du flux d'actualites. Le flux marchait : le
+ * modele CLASSE desormais au lieu de noter, il ne rend plus de sentiment par
+ * titre. Les deux situations doivent se distinguer.
+ */
+const SENTIMENT_LABEL = {
+  POSITIF: 'positif',
+  NEGATIF: 'negatif',
+  NEUTRE: 'neutre',
+  NON_EVALUE: 'collectee, non notee par titre',
+  INDISPONIBLE: 'aucun article recupere',
+};
 
 let lastJournal = null;
 
@@ -1408,10 +1424,25 @@ function journalBodyHtml(e) {
            </div>`
         : '';
 
-      // ── La répartition, plutôt qu'une confiance sortie de nulle part ─────
+      // ── Deux régimes d'affichage, parce qu'il y a deux natures de prévision
+      //
+      // L'ancienne notation rendait une répartition de probabilités — 48 % de
+      // hausse, 42 % de baisse, 10 % d'indécis — et un écart en points sur 100.
+      // Le modèle CLASSE désormais : il ne rend plus de probabilité mais une
+      // force de Plackett-Luce, sans unité et sans borne.
+      //
+      // Le code affichait la seconde avec les formules de la première. Les
+      // trois segments valaient `Math.round(undefined * 100)`, soit « NaN NaN
+      // NaN », et l'écart de 1,8448 était rendu « +184 pts » — comme si une
+      // probabilité pouvait dépasser 100.
+      //
+      // On distingue donc les deux, et l'échelle est annoncée par le back-end
+      // plutôt que devinée ici.
       const f = e.forecast;
-      const forecastBar = f
-        ? `<div class="forecast">
+      const estProbabiliste = f && [f.pUp, f.pFlat, f.pDown].every(Number.isFinite);
+      let forecastBar = '';
+      if (estProbabiliste) {
+        forecastBar = `<div class="forecast">
              <span class="forecast-seg forecast-up" style="width:${Math.round(f.pUp * 100)}%"
                    title="${Math.round(f.pUp * 100)} scénarios sur 100 : surperformance">${Math.round(f.pUp * 100)}</span>
              <span class="forecast-seg forecast-flat" style="width:${Math.round(f.pFlat * 100)}%"
@@ -1419,8 +1450,17 @@ function journalBodyHtml(e) {
              <span class="forecast-seg forecast-down" style="width:${Math.round(f.pDown * 100)}%"
                    title="${Math.round(f.pDown * 100)} sur 100 : sous-performance">${Math.round(f.pDown * 100)}</span>
            </div>
-           <span class="forecast-edge ${signClass(f.edge)}">écart ${f.edge >= 0 ? '+' : ''}${Math.round(f.edge * 100)} pts</span>`
-        : '';
+           <span class="forecast-edge ${signClass(f.edge)}">écart ${f.edge >= 0 ? '+' : ''}${Math.round(f.edge * 100)} pts</span>`;
+      } else if (e.rang != null && e.total != null) {
+        // Ce qui décide vraiment : la place dans le classement.
+        forecastBar = `<span class="forecast-edge ${signClass((e.total / 2) - e.rang)}"
+              title="Position dans le classement transversal du cycle — c'est elle qui décide, pas un seuil">`
+          + `rang ${e.rang} sur ${e.total}</span>`;
+      } else if (f && Number.isFinite(f.edge)) {
+        forecastBar = `<span class="forecast-edge ${signClass(f.edge)}"
+              title="Force du classement (Plackett-Luce), sans unité">`
+          + `force ${f.edge >= 0 ? '+' : ''}${f.edge.toFixed(2)}</span>`;
+      }
 
       // Divergence entre l'avis du modèle et ce que le seuil a décidé.
       const conflict = e.advisoryConflict && e.advisedAction
@@ -1433,16 +1473,21 @@ function journalBodyHtml(e) {
       // elle en fait 40 et tient la ligne : symbole, action, écart, résumé.
       // Rien n'est perdu, tout est à un clic.
       const gist = (e.justification || e.technicalRationale || '').slice(0, 120);
-      const ecart = e.forecast?.edge != null
-        ? `${e.forecast.edge >= 0 ? '+' : ''}${Math.round(e.forecast.edge * 100)} pts`
-        : `${confidence} %`;
+      // Même distinction que ci-dessus : le rang quand il existe, la force
+      // sinon, et l'écart en points seulement pour les anciennes entrées
+      // réellement probabilistes.
+      let ecart;
+      if (e.rang != null && e.total != null) ecart = `${e.rang}/${e.total}`;
+      else if (estProbabiliste) ecart = `${e.forecast.edge >= 0 ? '+' : ''}${Math.round(e.forecast.edge * 100)} pts`;
+      else if (Number.isFinite(e.forecast?.edge)) ecart = `force ${e.forecast.edge.toFixed(2)}`;
+      else ecart = `${confidence} %`;
 
 
   return `        <div class="entry-head">
           <span class="entry-sym">${esc(e.symbol)}</span>
           <span class="tag ${tag}">${esc(e.action)}</span>
           <span class="pill ${e.executed ? 'pill-exec' : 'pill-skip'}">${e.executed ? 'Exécuté' : 'Non exécuté'}</span>
-          <span class="pill ${sentimentClass}">Presse : ${esc(e.newsSentiment || 'n/d')}</span>
+          <span class="pill ${sentimentClass}" title="${esc(e.newsCount ?? 0)} article(s) collecte(s) et envoye(s) au modele">Presse : ${esc(SENTIMENT_LABEL[e.newsSentiment] || e.newsSentiment || 'n/d')}${e.newsCount ? ` (${e.newsCount})` : ''}</span>
           ${e.source === 'risk-manager' ? '<span class="pill pill-risk">Gestion du risque</span>' : ''}
           ${conflict}
           ${forecastBar || `<span class="confidence">Confiance

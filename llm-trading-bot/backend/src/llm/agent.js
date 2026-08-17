@@ -21,7 +21,7 @@ export function providerActif() {
 }
 
 const ACTIONS = new Set(['BUY', 'SELL', 'HOLD']);
-const SENTIMENTS = new Set(['POSITIF', 'NEUTRE', 'NEGATIF', 'INDISPONIBLE']);
+const SENTIMENTS = new Set(['POSITIF', 'NEUTRE', 'NEGATIF', 'INDISPONIBLE', 'NON_EVALUE']);
 
 /** Extrait un objet JSON même si le modèle l'a entouré de texte ou de ```json. */
 // Exporté pour le test contrefactuel (src/scripts/entitySwap.js), qui appelle

@@ -77,12 +77,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * soutient pas — l'écart-type d'un λ est du même ordre que l'écart entre deux
  * actifs voisins.
  */
-export function decisionDepuisRang(info, { test = null } = {}) {
+/**
+ * ── Pourquoi le sentiment de presse n'est plus « INDISPONIBLE » ───────────
+ * Ce champ valait `INDISPONIBLE` en dur, et le dashboard affichait donc
+ * « Presse : INDISPONIBLE » juste au-dessus de huit articles correctement
+ * récupérés. Le lecteur en concluait que le flux d'actualités avait échoué.
+ *
+ * Il n'avait pas échoué. Ce qui a changé, c'est que le modèle CLASSE au lieu
+ * de noter : il ne rend plus de sentiment par actif, il rend un ordre. La
+ * presse est donc collectée, envoyée dans le prompt, et prise en compte dans
+ * le classement — mais elle n'est plus résumée en un mot par titre.
+ *
+ * `NON_EVALUE` dit cela. `INDISPONIBLE` reste réservé au vrai cas où aucun
+ * article n'a pu être récupéré, ce qui est une information différente et qui
+ * mérite d'être distinguable.
+ */
+export function decisionDepuisRang(info, { test = null, articles = null } = {}) {
+  const sentiment = articles == null
+    ? 'NON_EVALUE'
+    : (articles.length > 0 ? 'NON_EVALUE' : 'INDISPONIBLE');
+
   if (!info) {
     return {
       action: 'HOLD', confidence: null, sizePct: 0, rankFractional: null,
       justification: 'absent du classement transversal de ce cycle.',
-      newsSentiment: 'INDISPONIBLE', forecast: { edge: 0 },
+      newsSentiment: sentiment, forecast: { edge: 0 },
     };
   }
 
@@ -100,11 +119,16 @@ export function decisionDepuisRang(info, { test = null } = {}) {
     justification:
       `Rang ${info.rank} sur ${info.total} (force ${info.lambda.toFixed(3)}${marge})`
       + (significatif ? '.' : ", classement non significatif à ce cycle."),
-    newsSentiment: 'INDISPONIBLE',
-    forecast: { edge: info.lambda },
+    newsSentiment: sentiment,
+    // `edge` porte désormais la FORCE du classement, pas un écart de
+    // probabilité. Les deux champs `rang` et `total` sont publiés à côté pour
+    // que l'affichage n'ait plus à deviner l'échelle : un écart de probabilité
+    // se lisait en points sur 100, une force de Plackett-Luce n'a pas d'unité.
+    forecast: { edge: info.lambda, echelle: 'force' },
     lambda: info.lambda,
     se: info.se,
     rang: info.rank,
+    total: info.total,
   };
 }
 
@@ -303,7 +327,10 @@ export async function classerUnivers(donnees, {
   // probabilité que personne n'a annoncée.
   for (const e of evaluations) {
     const info = classement.ranks.get(e.symbol);
-    e.decision = { ...e.decision, ...decisionDepuisRang(info, { test }) };
+    // Les articles servent à distinguer « presse non résumée par actif » de
+    // « aucune presse récupérée » — deux situations que le champ confondait.
+    const articles = donnees.get(e.symbol)?.news?.articles ?? null;
+    e.decision = { ...e.decision, ...decisionDepuisRang(info, { test, articles }) };
   }
 
   log.info(

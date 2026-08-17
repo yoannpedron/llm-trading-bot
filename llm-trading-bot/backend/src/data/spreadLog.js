@@ -207,13 +207,27 @@ class SpreadLog {
     };
   }
 
-  /** Trace un récapitulatif dans les logs, une fois par cycle. */
+  /**
+   * Trace un récapitulatif dans les logs, une fois par cycle.
+   *
+   * ── La formulation compte ────────────────────────────────────────────────
+   * Ce message disait « Spread médian sur 67 actifs : 4,03 bps ». Lu vite, on
+   * y voit « 67 actifs [écartés] », alors que 67 est le nombre d'actifs
+   * MESURÉS et 4,03 bps la médiane calculée sur eux — donc très en dessous du
+   * plafond de 7. Le même cycle n'avait écarté que deux titres.
+   *
+   * On nomme donc explicitement ce que compte chaque chiffre, et on rappelle
+   * le plafond pour que la comparaison soit immédiate.
+   */
   async logSummary() {
     const s = await this.summary();
     if (!s.overall) return;
+    const plafond = config.risk.maxSpreadBps;
+    const mediane = s.overall.medianOfMedians;
     log.info(
-      `Spread médian sur ${s.overall.symbolsMeasured} actifs : ${s.overall.medianOfMedians} bps ` +
-        `(${s.overall.totalSamples} mesures en séance, flux ${s.feed})`,
+      `Spreads : médiane ${mediane} bps, mesurée sur ${s.overall.symbolsMeasured} actif(s) `
+      + `(${s.overall.totalSamples} relevés en séance, flux ${s.feed}) — `
+      + `plafond d'achat ${plafond} bps, ${mediane <= plafond ? 'médiane en dessous' : 'MÉDIANE AU-DESSUS'}`,
     );
   }
 }

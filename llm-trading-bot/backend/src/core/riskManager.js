@@ -141,7 +141,20 @@ export class RiskManager {
       blockReason = `nombre maximum de positions atteint (${this.limits.maxPositions})`;
     } else if (maxNotionalBase < this.limits.minOrderValue) {
       canBuy = false;
-      blockReason = `budget disponible ${maxNotionalBase.toFixed(2)} ${account.currency} < minimum ${this.limits.minOrderValue}`;
+      // ── Deux causes très différentes, un seul message jusqu'ici ──────────
+      // « budget disponible 0.00 USD < minimum 5 » s'affichait aussi bien quand
+      // le compte n'avait plus de liquidités que quand la ligne était DÉJÀ à
+      // son plafond. Le second cas n'est pas un échec : c'est le
+      // dimensionnement qui fonctionne.
+      //
+      // Observé le 17 août sur MPC, classé premier des 150 : le dashboard
+      // annonçait « achat bloqué » alors que la position était pleine depuis le
+      // cycle précédent. Rien n'avait échoué, tout avait marché.
+      blockReason = alreadyInvested >= maxByEquity - 1e-9
+        ? `exposition déjà au plafond sur cet actif (${alreadyInvested.toFixed(2)} ${account.currency} `
+          + `pour ${maxByEquity.toFixed(2)} autorisés) — rien à ajouter`
+        : `liquidités insuffisantes : ${maxNotionalBase.toFixed(2)} ${account.currency} `
+          + `disponibles, minimum ${this.limits.minOrderValue}`;
     }
 
     return {
