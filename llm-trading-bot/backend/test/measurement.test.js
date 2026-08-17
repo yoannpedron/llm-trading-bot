@@ -1214,3 +1214,50 @@ describe('séquence de confiance — valide à tout instant', () => {
     assert.doesNotMatch(faible.verdict, /ÉTABLI et supérieur/);
   });
 });
+
+describe('classement du jour — il doit survivre à un redémarrage', () => {
+  test('rechargé depuis le disque, il revient identique', async () => {
+    // Le classement ne vivait qu'en mémoire. Or c'est l'artefact le plus
+    // informatif d'un cycle — l'ordre des 150 titres, les forces, ce que chaque
+    // filtre a écarté — et le bot n'en produit qu'UN par jour.
+    //
+    // Le 17 août, huit redémarrages ont eu lieu ; le dernier a effacé le
+    // classement des dix achats du jour, et le dashboard est resté vide
+    // jusqu'au lendemain. Le journal, les positions et le carnet fantôme
+    // étaient déjà persistés. Celui-là ne l'était pas, sans raison.
+    const { JsonStore } = await import('../src/storage/JsonStore.js');
+
+    const attendu = {
+      at: '2026-08-17T17:42:43.000Z',
+      maxRetenus: 10,
+      seuilSortie: 23,
+      classement: [
+        { symbol: 'MPC', rang: 1, total: 150, ecart: 1.8448, retenu: true },
+        { symbol: 'MU', rang: 2, total: 150, ecart: 1.5102, retenu: true },
+      ],
+      filtresExecution: { spread: [{ symbol: 'VLO', spreadBps: 16.1 }] },
+    };
+
+    const ecrivain = new JsonStore(TMP_DIR, 'test-ranking.json', { ranking: null });
+    await ecrivain.load();
+    ecrivain.data.ranking = attendu;
+    await ecrivain.save();
+
+    // Nouvelle instance : c'est ce que fait un redémarrage.
+    const lecteur = new JsonStore(TMP_DIR, 'test-ranking.json', { ranking: null });
+    await lecteur.load();
+
+    assert.deepEqual(lecteur.data.ranking, attendu);
+    assert.equal(lecteur.data.ranking.classement[0].symbol, 'MPC',
+      'l\'ordre du classement doit être préservé');
+    assert.equal(lecteur.data.ranking.filtresExecution.spread[0].spreadBps, 16.1,
+      'le détail des filtres doit survivre aussi — c\'est lui qui explique une non-exécution');
+  });
+
+  test('sans fichier, le classement vaut null plutôt que de planter', async () => {
+    const { JsonStore } = await import('../src/storage/JsonStore.js');
+    const vierge = new JsonStore(TMP_DIR, 'jamais-ecrit.json', { ranking: null });
+    await vierge.load();
+    assert.equal(vierge.data.ranking, null);
+  });
+});

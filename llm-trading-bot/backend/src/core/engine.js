@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
+import { JsonStore } from '../storage/JsonStore.js';
 import { getMarketSnapshot, getQuote, isTradeable } from '../data/marketData.js';
 import { spreadLog } from '../data/spreadLog.js';
 import { calendarPhase } from '../data/calendar.js';
@@ -42,6 +43,34 @@ export class TradingEngine {
     this.cycleCount = 0;
     this.progress = null;
     this.lastRanking = null;
+
+    /**
+     * ── Le classement doit survivre à un redémarrage ────────────────────────
+     * `lastRanking` ne vivait qu'en mémoire. Or c'est l'artefact le plus
+     * informatif d'un cycle — l'ordre des 150 titres, les forces, ce que
+     * chaque filtre a écarté et pourquoi — et le bot ne produit qu'UN cycle
+     * par jour.
+     *
+     * Conséquence : tout redémarrage effaçait le classement du jour, et le
+     * dashboard affichait une section vide jusqu'au lendemain 13 h 30. Un
+     * simple déploiement suffisait à perdre l'information ; il y a eu huit
+     * redémarrages le 17 août, dont celui qui a fait disparaître le classement
+     * des dix achats du jour.
+     *
+     * Le journal, les positions et le carnet fantôme étaient déjà persistés.
+     * Celui-là ne l'était pas, sans raison.
+     */
+    this.rankingStore = new JsonStore(config.storage.dir, 'last-ranking.json', { ranking: null });
+  }
+
+  /** Recharge le dernier classement connu. Appelé une fois au démarrage. */
+  async init() {
+    await this.rankingStore.load();
+    this.lastRanking = this.rankingStore.data.ranking ?? null;
+    if (this.lastRanking?.at) {
+      log.info(`Dernier classement rechargé (${this.lastRanking.at}).`);
+    }
+    return this;
   }
 
   get status() {
@@ -785,6 +814,13 @@ export class TradingEngine {
           }))
           .sort((a, b) => a.rang - b.rang),
       };
+
+      // Sur disque immédiatement : un redémarrage ne doit pas effacer le
+      // classement du jour, et le bot n'en produit qu'un.
+      this.rankingStore.data.ranking = this.lastRanking;
+      await this.rankingStore.save().catch((err) => {
+        log.warn(`Classement non persisté (${err.message}) — il sera perdu au prochain redémarrage.`);
+      });
 
       const results = [];
       for (const evaluation of evaluations) {

@@ -21,7 +21,7 @@ for (const warning of validateConfig()) log.warn(warning);
 
 const journal = await new Journal().init();
 const risk = await new RiskManager().init(await broker.getAccount());
-const engine = new TradingEngine({ broker, risk, journal });
+const engine = await new TradingEngine({ broker, risk, journal }).init();
 
 const summary = await engine.runCycle({ trigger: 'cli' });
 console.log('\n=== RÉSUMÉ DU CYCLE ===');

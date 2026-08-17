@@ -27,7 +27,7 @@ async function bootstrap() {
   }
 
   const risk = await new RiskManager().init(await broker.getAccount());
-  const engine = new TradingEngine({ broker, risk, journal });
+  const engine = await new TradingEngine({ broker, risk, journal }).init();
 
   const app = express();
   app.disable('x-powered-by');
