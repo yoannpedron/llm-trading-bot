@@ -80,8 +80,35 @@ export function zscoreWinsorise(valeurs, { centile = CENTILE_ECRETAGE } = {}) {
  * Choisie plutôt qu'une méthode plus rapide parce qu'elle est inconditionnellement
  * stable sur les matrices symétriques et que la nôtre fait six lignes. La
  * précision prime largement sur la vitesse à cette taille.
+ *
+ * ── Le seuil porte sur une SOMME DE CARRÉS, et il valait 1e-12 ───────────
+ * L'arrêt se déclenche quand la somme des carrés des termes hors diagonale
+ * tombe sous `tolerance`. À 1e-12, chaque terme individuel peut donc encore
+ * valoir 1e-6 : le seuil paraissait serré, il l'était à la racine près.
+ *
+ * Conséquence observée en testant l'invariance à l'ordre de Löwdin — la
+ * propriété qui justifie tout le choix de cette orthogonalisation. Permuter
+ * les colonnes doit rendre EXACTEMENT le même résultat permuté. L'écart
+ * mesuré variait de 1e-13 à 1e-7 d'un jeu de données à l'autre, sans lien
+ * avec le conditionnement (6 dans tous les cas) ni avec un quelconque
+ * rapprochement des valeurs propres (écart minimal 2,7e-2 partout).
+ *
+ * C'était bien le critère d'arrêt : Jacobi converge quadratiquement en fin de
+ * course, il passe donc parfois très loin sous le seuil et parfois tout juste.
+ *
+ * Mesuré sur la même matrice, plus grand terme hors diagonale résiduel :
+ *
+ *     tolerance 1e-12  ->  4,9e-8
+ *     tolerance 1e-18  ->  4,0e-16   (précision machine)
+ *     tolerance 1e-24  ->  4,0e-16   (aucun gain supplémentaire)
+ *
+ * On retient 1e-18, qui atteint la limite de la double précision sans coûter
+ * de balayage notable. Aucune décision du bot ne changeait à 1e-7 près — les
+ * scores de classement diffèrent de 1e-2 — mais une transformation censée
+ * être invariante par permutation doit l'être de façon vérifiable, sinon la
+ * propriété n'est plus qu'une intention.
  */
-export function jacobiEigen(A, { maxIterations = 100, tolerance = 1e-12 } = {}) {
+export function jacobiEigen(A, { maxIterations = 100, tolerance = 1e-18 } = {}) {
   const n = A.length;
   const a = A.map((r) => Float64Array.from(r));
   // Vecteurs propres accumulés, initialisés à l'identité.
