@@ -68,7 +68,25 @@ if ! sudo -u "$APP_USER" npm --prefix "$BACKEND_DIR" test >/tmp/bot-tests.log 2>
   sudo -u "$APP_USER" git -C "$REPO_DIR" reset --hard --quiet "$AVANT"
   exit 1
 fi
-grep -E '^ℹ (tests|pass|fail)' /tmp/bot-tests.log | sed 's/^/   /'
+# ── Ce grep faisait échouer le déploiement entier ────────────────────────────
+# Le reporter de node:test n'écrit « ℹ tests » que sur un terminal. Redirigé
+# vers un fichier il produit du TAP, où la même ligne s'écrit « # tests ».
+# Le motif ne correspondait donc à rien, grep rendait 1, et `set -o pipefail`
+# arrêtait le script AVANT le redémarrage. Le code était déployé, les tests
+# passaient, la sortie s'arrêtait net après « Tests » — et le bot continuait de
+# tourner sur l'ancienne version sans que rien ne le signale.
+#
+# Deux corrections : accepter les deux formats, et ne jamais faire dépendre la
+# suite d'un affichage.
+grep -E '^(ℹ|#) (tests|pass|fail) ' /tmp/bot-tests.log | sed 's/^/   /' || true
+
+# Un test échoué se voit dans le code de sortie de npm, mais un reporter TAP
+# peut très bien rendre 0 en signalant des échecs. On relit donc le compte.
+if grep -qE '^(ℹ|#) fail [1-9]' /tmp/bot-tests.log; then
+  echo "!! Des tests ont échoué — retour à ${AVANT}, le bot n'est pas touché."
+  sudo -u "$APP_USER" git -C "$REPO_DIR" reset --hard --quiet "$AVANT"
+  exit 1
+fi
 
 log "Redémarrage"
 systemctl restart llm-trading-bot
