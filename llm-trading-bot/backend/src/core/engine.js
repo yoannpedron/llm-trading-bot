@@ -297,10 +297,17 @@ export class TradingEngine {
 
       // La phrase publiée : le rang décisif d'abord, la lecture du modèle
       // ensuite et nommée comme telle.
+      //
+      // Le nom de la source compte. Quand la combinaison est indisponible —
+      // aucun signal exploitable — c'est le classement du modèle seul qui
+      // reprend la décision, et annoncer « score combiné » serait alors
+      // faux. `signauxCombines` distingue les deux cas.
+      const source = decision.signauxCombines
+        ? `au score combiné de ${decision.signauxCombines} signaux`
+        : 'au classement du modèle seul, faute de combinaison disponible';
       const justification = rangDecision != null
-        ? `Rang ${rangDecision} sur ${totalDecision} au score combiné`
-          + (decision.signauxCombines ? ` de ${decision.signauxCombines} signaux` : '')
-          + (decision.justificationModele
+        ? `Rang ${rangDecision} sur ${totalDecision} ${source}`
+          + (decision.signauxCombines && decision.justificationModele
             ? ` — le modèle seul : ${decision.justificationModele}`
             : '.')
         : (decision.justificationModele ?? decision.justification);
