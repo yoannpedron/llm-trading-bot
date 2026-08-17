@@ -218,6 +218,39 @@ describe('RiskManager', () => {
     assert.match(validation.reason, /sous le seuil/);
   });
 
+  // ── L'explication d'une inaction doit rester lisible ─────────────────────
+  // Ces trois tests naissent d'un vrai message de journal, relevé le 17 août :
+  //   « ANET (rang 6) : aucune action (NaN hausse / NaN baisse / NaN indécis) »
+  // Le texte décrivait une répartition de probabilités que le modèle ne produit
+  // plus depuis qu'il classe. `Math.round(undefined * 100)` donne NaN, et rien
+  // dans le code ne le signalait : trois titres bien classés se voyaient refuser
+  // l'achat avec un motif dépourvu de sens.
+  test('une inaction sous régime de classement cite le rang, jamais NaN', () => {
+    const v = risk.validate({
+      decision: { action: 'HOLD', forecast: { edge: 1.84 }, rangDecision: 6, totalDecision: 150 },
+      account, position: null, price: 10, fxRate: 1, budget: { canBuy: true, maxNotionalBase: 35 },
+    });
+    assert.doesNotMatch(v.reason, /NaN/, 'aucun NaN ne doit atteindre le journal');
+    assert.match(v.reason, /rang 6 sur 150/);
+  });
+
+  test('sans rang ni probabilités, le motif reste une phrase valide', () => {
+    const v = risk.validate({
+      decision: { action: 'HOLD', forecast: { edge: -0.42 } },
+      account, position: null, price: 10, fxRate: 1, budget: { canBuy: true, maxNotionalBase: 35 },
+    });
+    assert.doesNotMatch(v.reason, /NaN/);
+    assert.match(v.reason, /-0\.42/, 'la force doit au moins être citée');
+  });
+
+  test('le motif probabiliste des anciennes entrées reste produit tel quel', () => {
+    const v = risk.validate({
+      decision: { action: 'HOLD', forecast: { pUp: 0.4, pDown: 0.35, pFlat: 0.25, edge: 0.05 } },
+      account, position: null, price: 10, fxRate: 1, budget: { canBuy: true, maxNotionalBase: 35 },
+    });
+    assert.match(v.reason, /40 hausse \/ 35 baisse \/ 25 indécis/);
+  });
+
   test('le seuil de probabilité reste actif même si limits est incomplet', () => {
     // `confiance < undefined` vaut toujours faux : sans repli explicite, un
     // objet de limites partiel désactiverait ce garde-fou en silence.

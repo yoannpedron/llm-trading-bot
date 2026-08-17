@@ -420,12 +420,21 @@ export class RiskManager {
  *
  * Le bot ne fait rien dans la grande majorité des cycles : c'est le
  * comportement attendu, pas une panne. Mais un journal qui répète « décision
- * HOLD » dix fois par cycle est inexploitable — on ne sait pas si le modèle
- * hésitait, si le seuil a mordu de peu, ni ce qu'il aurait fallu pour agir.
+ * HOLD » dix fois par cycle est inexploitable — on ne sait pas ce qu'il aurait
+ * fallu pour agir.
  *
- * Le message dit donc trois choses : la répartition annoncée, l'écart obtenu,
- * et l'écart qu'il aurait fallu — dans le sens pertinent selon qu'une position
- * est détenue ou non.
+ * ── Deux régimes, parce qu'il y a deux façons de décider ──────────────────
+ * Ce message décrivait une répartition de probabilités et un seuil à franchir.
+ * C'était juste du temps où le modèle notait chaque actif isolément.
+ *
+ * Il CLASSE désormais, et rien de tout ça n'existe plus : `pUp`, `pDown` et
+ * `pFlat` sont absents, si bien que `Math.round(undefined * 100)` produisait
+ * « aucune action (NaN hausse / NaN baisse / NaN indécis) ». Constaté sur
+ * ANET, DELL et CVX le 17 août — trois titres pourtant classés 6e, 7e et 8e.
+ *
+ * Ce qui décide maintenant est le RANG : on est retenu ou non selon sa place,
+ * pas selon un seuil absolu. Le message le dit, et le seuil n'y figure plus
+ * puisqu'il n'y en a pas.
  */
 function explainHold(decision, position, limits) {
   const f = decision.forecast;
@@ -435,6 +444,24 @@ function explainHold(decision, position, limits) {
     return held
       ? 'position conservée : aucune prévision exploitable, on ne touche à rien par défaut'
       : 'aucune action : aucune prévision exploitable';
+  }
+
+  // Régime CLASSEMENT : le rang est publié, aucune probabilité ne l'est.
+  const rangConnu = Number.isFinite(decision.rangDecision) && Number.isFinite(decision.totalDecision);
+  if (rangConnu) {
+    const place = `rang ${decision.rangDecision} sur ${decision.totalDecision}`;
+    return held
+      ? `position conservée : ${place}, encore dans la bande de non-négociation`
+      : `aucune action : ${place}, hors des dix retenus`;
+  }
+
+  // Régime PROBABILISTE, conservé pour les entrées antérieures du journal.
+  const probabiliste = [f.pUp, f.pDown, f.pFlat].every(Number.isFinite);
+  if (!probabiliste) {
+    const force = Number.isFinite(f.edge) ? ` (force ${f.edge.toFixed(2)})` : '';
+    return held
+      ? `position conservée${force} : classement encore favorable`
+      : `aucune action${force} : hors des dix retenus`;
   }
 
   const pct = (v) => Math.round(v * 100);

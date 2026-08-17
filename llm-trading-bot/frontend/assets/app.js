@@ -1451,11 +1451,18 @@ function journalBodyHtml(e) {
                    title="${Math.round(f.pDown * 100)} sur 100 : sous-performance">${Math.round(f.pDown * 100)}</span>
            </div>
            <span class="forecast-edge ${signClass(f.edge)}">écart ${f.edge >= 0 ? '+' : ''}${Math.round(f.edge * 100)} pts</span>`;
-      } else if (e.rang != null && e.total != null) {
+      } else if (e.rangDecision != null && e.totalDecision != null) {
         // Ce qui décide vraiment : la place dans le classement.
-        forecastBar = `<span class="forecast-edge ${signClass((e.total / 2) - e.rang)}"
-              title="Position dans le classement transversal du cycle — c'est elle qui décide, pas un seuil">`
-          + `rang ${e.rang} sur ${e.total}</span>`;
+        // `rangDecision` vient du score combine : c'est lui qui achete.
+        // `rangModele` est le classement du modele seul, gardé comme
+        // diagnostic — les deux divergent largement, et afficher le second
+        // laissait croire à des achats venus du fond du classement.
+        const ecartModele = e.rangModele != null && e.rangModele !== e.rangDecision
+          ? ` — modèle seul : ${e.rangModele}e`
+          : '';
+        forecastBar = `<span class="forecast-edge ${signClass((e.totalDecision / 2) - e.rangDecision)}"
+              title="Rang au score combiné des cinq signaux — c'est lui qui décide${esc(ecartModele)}">`
+          + `rang ${e.rangDecision} sur ${e.totalDecision}${esc(ecartModele)}</span>`;
       } else if (f && Number.isFinite(f.edge)) {
         forecastBar = `<span class="forecast-edge ${signClass(f.edge)}"
               title="Force du classement (Plackett-Luce), sans unité">`
@@ -1477,7 +1484,7 @@ function journalBodyHtml(e) {
       // sinon, et l'écart en points seulement pour les anciennes entrées
       // réellement probabilistes.
       let ecart;
-      if (e.rang != null && e.total != null) ecart = `${e.rang}/${e.total}`;
+      if (e.rangDecision != null && e.totalDecision != null) ecart = `${e.rangDecision}/${e.totalDecision}`;
       else if (estProbabiliste) ecart = `${e.forecast.edge >= 0 ? '+' : ''}${Math.round(e.forecast.edge * 100)} pts`;
       else if (Number.isFinite(e.forecast?.edge)) ecart = `force ${e.forecast.edge.toFixed(2)}`;
       else ecart = `${confidence} %`;

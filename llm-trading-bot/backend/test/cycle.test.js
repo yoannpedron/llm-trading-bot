@@ -233,6 +233,55 @@ describe('cycle complet — les pièces sont-elles branchées dans le bon ordre 
     assert.ok(journalFactice.entrees.length > 0, 'le journal doit contenir des entrées');
   });
 
+  // ── Le rang publié doit être celui qui a décidé ──────────────────────────
+  // Le journal citait le rang du MODÈLE SEUL alors que la décision vient du
+  // score combiné, où le modèle ne pèse qu'un dixième. Les deux classements
+  // divergent largement : le 17 août, les dix positions ouvertes affichaient
+  // les rangs 1, 2, 3, 4, 5, 11, 59, 101, 102 et 110 sur 150. Trois achats
+  // paraissaient venir du fond du classement sans raison lisible ; ils étaient
+  // en réalité dans les dix premiers du score combiné.
+  test('le journal publie le rang qui a décidé, pas celui du modèle seul', () => {
+    const attendu = new Map(moteur.lastRanking.classement.map((r) => [r.symbol, r]));
+    const avecRang = journalFactice.entrees.filter((e) => Number.isFinite(e.rangDecision));
+    assert.ok(avecRang.length > 0, 'aucun rang de décision publié');
+
+    for (const e of avecRang) {
+      const ref = attendu.get(e.symbol);
+      if (!ref) continue;
+      // Le tableau du dashboard et la ligne de journal doivent porter LE MÊME
+      // nombre : deux rangs différents pour un même titre au même cycle est
+      // précisément ce qui rendait les décisions illisibles.
+      assert.equal(e.rangDecision, ref.rang, `${e.symbol} : rang de journal ≠ rang du classement`);
+      assert.equal(e.totalDecision, ref.total, `${e.symbol} : total incohérent`);
+      assert.match(e.justification, new RegExp(`Rang ${ref.rang} sur ${ref.total} au score combiné`));
+    }
+  });
+
+  test('les titres achetés sont bien en tête du classement de décision', () => {
+    const rang = new Map(moteur.lastRanking.classement.map((r) => [r.symbol, r.rang]));
+    const achetes = [...new Set(broker.ordres.filter((o) => o.side === 'buy').map((o) => o.symbol))];
+    assert.ok(achetes.length > 0, 'aucun achat à vérifier');
+    for (const s of achetes) {
+      const r = rang.get(s);
+      assert.ok(
+        r != null && r <= config.risk.maxPositions,
+        `${s} acheté au rang ${r} : un achat ne peut pas venir du fond du classement`,
+      );
+    }
+  });
+
+  test('aucun motif de refus ne contient de NaN', () => {
+    // « aucune action (NaN hausse / NaN baisse / NaN indécis) » : le message
+    // décrivait une répartition de probabilités que le modèle ne produit plus.
+    for (const e of journalFactice.entrees) {
+      for (const champ of ['justification', 'riskDecision']) {
+        if (typeof e[champ] === 'string') {
+          assert.doesNotMatch(e[champ], /NaN|undefined/, `${e.symbol} — ${champ} : ${e[champ]}`);
+        }
+      }
+    }
+  });
+
   test('le cycle est rejouable sans effet de bord', async () => {
     const second = await moteur.runCycle({ trigger: 'test' });
     assert.equal(second?.error, undefined, `le second cycle a échoué : ${second?.error}`);

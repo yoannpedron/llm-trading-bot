@@ -275,7 +275,35 @@ export class TradingEngine {
       // dans `actionEffective` pour être testable — c'est son absence de test
       // qui avait laissé passer un moteur incapable d'acheter.
       const choix = actionEffective({ decision, symbol, selected, sorties, position });
-      const effective = { ...decision, action: choix.action, sizePct: choix.sizePct };
+
+      // ── Le rang qui a décidé, attaché à la décision ───────────────────────
+      // `rankInfo` vient de `rankAndSelect` : c'est le classement au score
+      // combiné, sur les seuls actifs éligibles, et c'est littéralement celui
+      // qui a choisi les dix. C'est aussi celui qu'affiche le tableau du
+      // dashboard — le journal doit donc citer le même nombre, sinon la même
+      // ligne porte deux rangs différents selon l'endroit où on la lit.
+      const rangDecision = Number.isFinite(rankInfo?.rank) ? rankInfo.rank : null;
+      const totalDecision = Number.isFinite(rankInfo?.total) ? rankInfo.total : null;
+      const effective = {
+        ...decision,
+        action: choix.action,
+        sizePct: choix.sizePct,
+        // Le gestionnaire de risque en a besoin pour expliquer une inaction :
+        // sans rang il décrivait une répartition de probabilités abandonnée, et
+        // écrivait « NaN hausse / NaN baisse / NaN indécis ».
+        rangDecision,
+        totalDecision,
+      };
+
+      // La phrase publiée : le rang décisif d'abord, la lecture du modèle
+      // ensuite et nommée comme telle.
+      const justification = rangDecision != null
+        ? `Rang ${rangDecision} sur ${totalDecision} au score combiné`
+          + (decision.signauxCombines ? ` de ${decision.signauxCombines} signaux` : '')
+          + (decision.justificationModele
+            ? ` — le modèle seul : ${decision.justificationModele}`
+            : '.')
+        : (decision.justificationModele ?? decision.justification);
 
       if (choix.action === 'SELL' && choix.raison === 'sortie par classement') {
         outcome.reason = `sortie par classement : rang ${rankInfo?.rank ?? '?'} au-delà du seuil de tolérance`;
@@ -296,7 +324,7 @@ export class TradingEngine {
           price,
           currency: snapshot.currency,
           fxRate,
-          meta: { source: 'llm', reason: decision.justification.slice(0, 200), confidence: decision.confidence },
+          meta: { source: 'llm', reason: justification.slice(0, 200), confidence: decision.confidence },
         });
         if (tradeResult.status === 'filled') {
           // Le stop est dimensionné sur l'ATR courant de l'actif, pas sur un
@@ -322,7 +350,7 @@ export class TradingEngine {
           quantity: validation.quantity,
           price,
           fxRate,
-          meta: { source: 'llm', reason: decision.justification.slice(0, 200), confidence: decision.confidence },
+          meta: { source: 'llm', reason: justification.slice(0, 200), confidence: decision.confidence },
         });
       }
 
@@ -336,11 +364,18 @@ export class TradingEngine {
         executed: outcome.executed,
         confidence: decision.confidence,
         sizePct: decision.sizePct,
-        justification: decision.justification,
+        justification,
         newsSentiment: decision.newsSentiment,
         // La répartition annoncée : sans elle, le journal affiche une confiance
         // de 55 % sans dire d'où elle sort ni de quel côté elle penche.
         forecast: decision.forecast,
+        // Le rang qui a tranché, et celui du modèle seul à côté. Le journal ne
+        // les portait pas du tout : il fallait les extraire à la main du texte
+        // de justification, et on y lisait alors le rang du modèle en croyant
+        // lire celui de la décision.
+        rangDecision,
+        totalDecision,
+        rangModele: decision.rangModele ?? null,
         // Le pré-mortem était produit par le modèle à chaque décision et jeté.
         // C'est pourtant la partie la plus instructive : ce que le modèle
         // considère lui-même comme le point faible de sa lecture.
@@ -609,11 +644,41 @@ export class TradingEngine {
         // On remplace l'écart utilisé par le classement. Tout l'aval — tri,
         // médiane, plafond sectoriel, bande de sortie — continue de
         // fonctionner à l'identique, il ne connaît que « edge ».
+        //
+        // ── Le rang du modèle ne doit plus passer pour celui de la décision ──
+        // `decisionDepuisRang` remplit `rang`, `total` et la justification
+        // depuis le classement du MODÈLE. Or ce n'est pas lui qui achète : le
+        // score combiné le fait, et le modèle n'y pèse qu'un dixième.
+        //
+        // Les deux classements divergent largement, et c'est le mauvais qui
+        // était publié. Vérifié sur le cycle du 17 août : les dix positions
+        // ouvertes affichaient les rangs 1, 2, 3, 4, 5, 11, 59, 101, 102 et 110
+        // — trois d'entre elles paraissaient achetées depuis le fond du
+        // classement, sans raison lisible. Elles étaient en réalité dans les dix
+        // premières du score combiné, ce qui est exactement ce qu'on veut.
+        //
+        // Le rang réellement décisif est celui de `rankAndSelect`, calculé plus
+        // bas sur les seuls actifs éligibles : c'est lui qui remplit le tableau
+        // du dashboard, et c'est donc lui qui doit remplir le journal. Il est
+        // rattaché à la décision dans `#executeEvaluation`, là où il existe.
+        //
+        // Ici on se contente de déplacer la phrase du modèle sous un nom qui
+        // dit ce qu'elle est, et de garder son rang comme diagnostic : c'est lui
+        // qui dira, dans quelques mois, si consulter un modèle valait son coût.
         for (const e of exploitables) {
           const s = scoreDecision.get(e.symbol);
-          if (Number.isFinite(s)) {
-            e.decision = { ...e.decision, forecast: { edge: s }, scoreCombine: s };
-          }
+          if (!Number.isFinite(s)) continue;
+          e.decision = {
+            ...e.decision,
+            forecast: { edge: s, echelle: 'score combiné' },
+            scoreCombine: s,
+            rangModele: rangsFacteurs.get(e.symbol)?.llmSeul?.rang ?? e.decision.rang ?? null,
+            // Conservée en entier — force, marge d'incertitude, éventuelle
+            // non-significativité — mais étiquetée. Deux nombres qui gouvernent
+            // deux choses différentes ne doivent pas se ressembler.
+            justificationModele: e.decision.justification ?? null,
+            signauxCombines: melange.signauxUtilises.length,
+          };
         }
         log.info(
           `Décision pilotée par la combinaison de ${melange.signauxUtilises.length} signaux `
