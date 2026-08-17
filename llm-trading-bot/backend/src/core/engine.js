@@ -437,6 +437,12 @@ export class TradingEngine {
       const quotes = await this.#collectQuotes(symbols);
       await this.broker.markToMarket(quotes);
 
+      // Purge des protections qui ne correspondent plus à aucune position.
+      // Sans elle, l'état local décrit des lignes fermées et faussait la date
+      // d'ouverture d'un rachat ultérieur — donc la durée minimale de
+      // détention, qui est le garde-fou le plus rentable de la stratégie.
+      await this.broker.reconcilierProtections?.();
+
       const accountBefore = await this.broker.getAccount();
       const circuitBreaker = await this.risk.checkCircuitBreaker(accountBefore);
 

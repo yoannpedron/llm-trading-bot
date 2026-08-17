@@ -702,3 +702,54 @@ describe('univers par défaut — le piège qui a tourné en production', () => 
     assert.equal(universeAvec({ SYMBOLS: 'AAPL,MSFT,NVDA' }), 3);
   });
 });
+
+describe('date d\'ouverture — l\'héritage qui contournait les 21 séances', () => {
+  /**
+   * Faux adaptateur reproduisant la logique de `buy()` d'Alpaca, sans réseau.
+   * On ne teste pas l'appel HTTP mais la RÈGLE : d'où vient `openedAt`.
+   */
+  const fabrique = ({ positionVivante }) => {
+    const protections = {};
+    return {
+      protections,
+      async acheter(symbole, maintenant) {
+        const dejaDetenu = positionVivante ? { quantity: 1 } : null;
+        const ancienne = protections[symbole];
+        const herite = dejaDetenu?.quantity > 0 && ancienne?.openedAt;
+        protections[symbole] = {
+          ...(herite ? ancienne : {}),
+          openedAt: herite ? ancienne.openedAt : maintenant,
+        };
+      },
+    };
+  };
+
+  test('un rachat après clôture repart d\'une date NEUVE', () => {
+    // Le cas observé en production : quatre protections datées du 6 août
+    // subsistaient alors que le compte ne détenait aucune position. Racheter
+    // aurait donné à la nouvelle ligne onze séances qu'elle n'avait pas, et la
+    // sortie par rang — interdite avant 21 séances — se serait débloquée.
+    const a = fabrique({ positionVivante: false });
+    a.protections.AVGO = { openedAt: '2026-08-06T14:00:00.000Z', stopPrice: 100 };
+    a.acheter('AVGO', '2026-08-17T17:30:00.000Z');
+    assert.equal(a.protections.AVGO.openedAt, '2026-08-17T17:30:00.000Z');
+    assert.equal(a.protections.AVGO.stopPrice, undefined,
+      'les niveaux de l\'ancienne ligne ne doivent pas survivre non plus');
+  });
+
+  test('un renforcement de position CONSERVE la date d\'origine', () => {
+    // L'intention initiale, et elle reste juste : ajouter à une ligne ouverte
+    // ne doit pas la rajeunir, sinon un achat complémentaire relancerait le
+    // compteur des 21 séances à zéro.
+    const a = fabrique({ positionVivante: true });
+    a.protections.MSFT = { openedAt: '2026-08-06T14:00:00.000Z' };
+    a.acheter('MSFT', '2026-08-17T17:30:00.000Z');
+    assert.equal(a.protections.MSFT.openedAt, '2026-08-06T14:00:00.000Z');
+  });
+
+  test('un premier achat sans historique prend la date du jour', () => {
+    const a = fabrique({ positionVivante: false });
+    a.acheter('NVDA', '2026-08-17T17:30:00.000Z');
+    assert.equal(a.protections.NVDA.openedAt, '2026-08-17T17:30:00.000Z');
+  });
+});

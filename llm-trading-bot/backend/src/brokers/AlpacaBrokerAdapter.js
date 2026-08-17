@@ -270,17 +270,69 @@ export class AlpacaBrokerAdapter extends BrokerAdapter {
       return { status: 'rejected', reason: `liquidités insuffisantes (besoin ${notional.toFixed(2)} $, dispo ${account.cash} $)` };
     }
 
+    // ── La date d'ouverture ne s'hérite que d'une position VIVANTE ─────────
+    // Cette ligne conservait `openedAt` dès qu'une entrée existait dans l'état
+    // local, sans vérifier qu'une position lui correspondait encore chez le
+    // courtier. L'intention était bonne — renforcer une ligne ne doit pas
+    // rajeunir sa date d'ouverture — mais la condition était fausse.
+    //
+    // Constaté en production le 17 août : quatre entrées subsistaient pour
+    // AVGO, MSFT, AMZN et NVDA, datées du 6 et du 11 août, alors que le compte
+    // ne détenait AUCUNE position. Racheter AVGO aurait donné à la nouvelle
+    // ligne un âge de onze séances qu'elle n'avait pas.
+    //
+    // La conséquence est sournoise. `sortiesParRang` interdit de vendre avant
+    // 21 séances, et c'est le garde-fou le plus rentable de la stratégie :
+    // mesuré sur dix ans, le désactiver fait passer de 140 à 803 achats et
+    // détruit le résultat. Un âge surévalué le contourne — silencieusement,
+    // et de plus en plus souvent à mesure que les entrées orphelines
+    // s'accumulent pour chaque titre déjà négocié.
+    //
+    // On interroge donc le courtier, qui est la seule source de vérité sur ce
+    // qui est réellement détenu. Un appel de plus par achat, dix par jour au
+    // maximum.
+    const dejaDetenu = await this.getPosition(symbol);
+    const ancienne = this.store.data.protections[symbol];
+    const heriteLaDate = dejaDetenu?.quantity > 0 && ancienne?.openedAt;
+
     const result = await this.#submitOrder({ symbol, notional, side: 'buy' });
     if (result.status === 'filled') {
       Object.assign(result.trade, meta);
       this.store.data.protections[symbol] = {
-        ...(this.store.data.protections[symbol] || {}),
-        openedAt: this.store.data.protections[symbol]?.openedAt ?? new Date().toISOString(),
+        ...(heriteLaDate ? ancienne : {}),
+        openedAt: heriteLaDate ? ancienne.openedAt : new Date().toISOString(),
       };
       await this.store.save();
       await this.#snapshotEquity();
     }
     return result;
+  }
+
+  /**
+   * Écarte les protections qui ne correspondent à aucune position détenue.
+   *
+   * Ces entrées orphelines apparaissent quand une ligne se ferme sans passer
+   * par `sell()` — sortie partielle dont le résidu disparaît ensuite, clôture
+   * manuelle chez le courtier, ou incident. Elles ne gênent pas la lecture des
+   * positions, qui part toujours de ce que dit Alpaca ; elles faussaient en
+   * revanche la date d'ouverture d'un rachat ultérieur.
+   *
+   * `buy()` ne s'y fie plus, mais on les retire quand même : un état local qui
+   * décrit des positions inexistantes finit toujours par tromper quelqu'un.
+   */
+  async reconcilierProtections() {
+    const vivantes = new Set((await this.getPositions()).map((p) => p.symbol));
+    const orphelines = Object.keys(this.store.data.protections ?? {})
+      .filter((s) => !vivantes.has(s));
+    if (!orphelines.length) return { retirees: [] };
+
+    for (const s of orphelines) delete this.store.data.protections[s];
+    await this.store.save();
+    log.info(
+      `${orphelines.length} protection(s) orpheline(s) retirée(s) — aucune position correspondante : `
+      + orphelines.join(', '),
+    );
+    return { retirees: orphelines };
   }
 
   async sell({ symbol, quantity, meta = {} }) {
