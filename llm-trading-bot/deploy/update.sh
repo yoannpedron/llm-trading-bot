@@ -24,6 +24,27 @@ log() { printf '\n\033[1;34m==>\033[0m %s\n' "$1"; }
 
 [[ $EUID -eq 0 ]] || { echo "À lancer en root."; exit 1; }
 
+# ── Ce script se réécrivait lui-même en cours d'exécution ────────────────────
+# Il vit DANS le dépôt qu'il met à jour : le `git reset --hard` de la ligne 60
+# remplace donc son propre fichier pendant que bash le lit. Or bash ne charge pas
+# le script en mémoire, il suit un décalage d'octets dans le fichier ouvert. Dès
+# que le contenu change de longueur, la lecture reprend au milieu d'une ligne et
+# l'exécution s'arrête — sans message, sans code d'erreur.
+#
+# Le symptôme observé le 17 août : la sortie s'interrompait net après « Tests »,
+# le service restait « active » sur l'ANCIENNE version, et trois déploiements
+# consécutifs ont ainsi été perdus en croyant l'inverse.
+#
+# On se relance donc depuis une copie hors du dépôt, que le pull ne peut pas
+# atteindre.
+if [[ "${BOT_UPDATE_DETACHED:-}" != "1" ]]; then
+  rm -f /tmp/bot-update-*.sh
+  COPIE="$(mktemp /tmp/bot-update-XXXXXX.sh)"
+  cat "${BASH_SOURCE[0]}" > "$COPIE"
+  export BOT_UPDATE_DETACHED=1
+  exec bash "$COPIE" "$@"
+fi
+
 log "Sauvegarde de l'état avant toute modification"
 BACKUP="/opt/llm-trading-bot/backups/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP"
