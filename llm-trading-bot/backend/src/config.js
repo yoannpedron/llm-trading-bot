@@ -480,7 +480,50 @@ export const config = {
     // détaillée dans `RiskManager.protectionLevels` : l'effet est cohérent sur
     // les trois régimes testés, le niveau exact ne l'est pas — 0,13 est le
     // milieu de la bande 10-16 %, pas son maximum.
-    takeProfitPct: num('TAKE_PROFIT_PCT', 0.14) || null,
+    /**
+     * ── L'OBJECTIF DE GAIN EST DÉSACTIVÉ, ET C'EST UN REVIREMENT ──────────
+     *
+     * Je l'avais fixé à +14 %, milieu d'un plateau mesuré entre 12 % et 16 %,
+     * après avoir écarté 13 % qui n'était qu'un sommet isolé. Le raisonnement
+     * était bon ; les données ne l'étaient pas.
+     *
+     * Ce plateau a été mesuré sur un banc d'essai qui flattait de deux façons :
+     * l'univers était le top 150 D'AUJOURD'HUI rejoué depuis 2016 — on
+     * choisissait les gagnants en connaissant la fin — et le simulateur ne
+     * posait ni objectif ni stop, si bien que je réglais un paramètre sur un
+     * moteur qui ne l'utilisait pas de la même façon que la production.
+     *
+     * Rejoué sur l'univers reconstitué à la date, avec les 40 sociétés depuis
+     * rachetées ou radiées, et avec les protections réellement appliquées :
+     *
+     *     protections                    médiane   écart au marché   bat le marché
+     *     aucune                         119,73 $      +3,10 $           63 %
+     *     stop -35 % seul                119,90 $      +3,26 $           62 %
+     *     objectif +14 % seul            117,46 $      +0,83 $           52 %
+     *     les deux (ce qui tournait)     118,33 $      +1,69 $           53 %
+     *     objectif +20 % et stop         118,43 $      +1,79 $           60 %
+     *     objectif +30 % et stop         119,81 $      +3,18 $           62 %
+     *
+     * La relation est MONOTONE : plus l'objectif se relâche, meilleur est le
+     * résultat. Ce n'est pas une dentelure de grille, c'est un mécanisme.
+     *
+     * ── Et le mécanisme était prévisible ──────────────────────────────────
+     * Un objectif de gain coupe les gagnants. Une stratégie de momentum vit
+     * exactement de l'inverse : elle perd souvent un peu et gagne rarement
+     * beaucoup, et tout son résultat tient dans la queue droite. Plafonner
+     * chaque ligne à +14 % supprime la queue et laisse les pertes intactes.
+     *
+     * J'avais écrit le contraire dans ce fichier — que sortir avant le
+     * retournement du momentum devait payer. C'était une histoire cohérente
+     * ajustée sur des chiffres biaisés ; la mesure honnête dit non.
+     *
+     * Le stop à -35 %, lui, reste : seul, il est légèrement POSITIF (+3,26 $
+     * contre +3,10 $ sans rien). Il ne coupe pas de gagnant, il borne une
+     * catastrophe.
+     *
+     * Mettre une valeur non nulle réactive l'objectif.
+     */
+    takeProfitPct: num('TAKE_PROFIT_PCT', 0) || null,
 
     // Coupe-circuit MENSUEL et non journalier : 10 % de 100 $ = 10 $, très
     // en dessous du bruit stochastique normal du portefeuille.
