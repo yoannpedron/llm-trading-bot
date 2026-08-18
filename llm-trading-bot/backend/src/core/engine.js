@@ -8,7 +8,7 @@ import { filtrerResultats } from '../data/earnings.js';
 import { filtrerParSpread, fenetreExecution } from './execution.js';
 import { filtrerParVeto } from '../llm/veto.js';
 import { shadowBook, BENCHMARK } from './shadowBook.js';
-import { rankAndSelect, actionEffective } from './ranking.js';
+import { rankAndSelect, actionEffective, classementAConserver } from './ranking.js';
 import { classerUnivers, decisionDepuisRang } from './listwiseRanking.js';
 import { melangerSignaux } from './signalBlend.js';
 import { facteursPour, classerFacteurs, resolutionFacteur, FACTEURS } from './baselines.js';
@@ -899,22 +899,17 @@ export class TradingEngine {
       // persistait qui était faux.
       //
       // On ne remplace donc que par du contenu, jamais par du vide.
-      const utile = this.lastRanking.classement?.length > 0;
-      if (utile) {
+      const garde = classementAConserver(this.lastRanking, this.rankingStore.data.ranking);
+      if (garde.conserver) {
+        // Le dashboard doit continuer d'afficher la dernière décision réelle,
+        // pas un vide.
+        this.lastRanking = garde.retenu;
+        log.info(garde.raison);
+      } else {
         this.rankingStore.data.ranking = this.lastRanking;
         await this.rankingStore.save().catch((err) => {
           log.warn(`Classement non persisté (${err.message}) — il sera perdu au prochain redémarrage.`);
         });
-      } else {
-        // On garde en mémoire le classement précédent : le dashboard doit
-        // continuer d'afficher la dernière décision réelle, pas un vide.
-        const precedent = this.rankingStore.data.ranking;
-        if (precedent?.classement?.length) {
-          this.lastRanking = precedent;
-          log.info(
-            `Cycle sans actif évaluable : le classement du ${precedent.at?.slice(0, 16) ?? '?'} est conservé.`,
-          );
-        }
       }
 
       const results = [];

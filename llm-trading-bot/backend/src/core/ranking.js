@@ -448,3 +448,40 @@ function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ag
   }
   return sorties;
 }
+
+/**
+ * Faut-il remplacer le classement conservé par celui qu'on vient de produire ?
+ *
+ * ── La règle tient en une phrase, et elle a coûté deux fois ───────────────
+ * Un classement VIDE ne remplace jamais un classement plein.
+ *
+ * Le bot ne produit qu'un classement par jour, à 13 h 30 à New York. Mais
+ * CHAQUE démarrage lance un cycle immédiat, et hors séance ce cycle n'évalue
+ * rien : il produit un classement de zéro ligne. Persisté tel quel, il écrasait
+ * celui de la journée.
+ *
+ * Le 17 août, huit redémarrages ont d'abord effacé le classement en mémoire —
+ * d'où la persistance sur disque. Le soir même, quatre déploiements ont effacé
+ * le classement persisté, par le même mécanisme d'un cran plus bas. Corriger la
+ * mémoire sans corriger ce qu'on y écrit ne servait à rien.
+ *
+ * Isolée ici parce qu'une règle enfouie dans un cycle de mille lignes n'est
+ * vérifiable qu'en production, et qu'on vient d'en payer le prix deux fois.
+ *
+ * @returns {{conserver: boolean, retenu: object|null, raison: string}}
+ */
+export function classementAConserver(nouveau, precedent) {
+  const rempli = (c) => (c?.classement?.length ?? 0) > 0;
+
+  if (rempli(nouveau)) {
+    return { conserver: false, retenu: nouveau, raison: 'classement du cycle, exploitable' };
+  }
+  if (rempli(precedent)) {
+    return {
+      conserver: true,
+      retenu: precedent,
+      raison: `cycle sans actif évaluable : classement du ${precedent.at?.slice(0, 16) ?? '?'} conservé`,
+    };
+  }
+  return { conserver: false, retenu: nouveau, raison: 'aucun classement disponible, ni ancien ni nouveau' };
+}

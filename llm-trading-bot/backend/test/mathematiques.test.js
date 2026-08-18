@@ -27,7 +27,7 @@ process.env.SYMBOLS = 'AAPL,MSFT';
 const { zscoreWinsorise, jacobiEigen, lowdinOrthogonalise, entropieDiversite, combinerSignaux,
   poidsSelonRegime } = await import('../src/core/signalBlend.js');
 const { ajusterPlackettLuce, statistiqueWald } = await import('../src/core/plackettLuce.js');
-const { exitRank, ageEnSeances } = await import('../src/core/ranking.js');
+const { exitRank, ageEnSeances, classementAConserver } = await import('../src/core/ranking.js');
 const { rankIC } = await import('../src/core/rankMetrics.js');
 const { RiskManager } = await import('../src/core/riskManager.js');
 
@@ -469,5 +469,39 @@ describe('audit du 18 août — les six écarts trouvés', () => {
       abstention: { abstenir: false },
     });
     assert.ok(res.sorties.has('T49'), 'sans date, la durée minimale ne s\'applique pas');
+  });
+});
+
+describe('un classement vide ne remplace jamais un classement plein', () => {
+  // Le défaut le plus coûteux de l'audit, et le seul qui ait frappé DEUX fois :
+  // huit redémarrages le 17 août ont effacé le classement en mémoire, puis
+  // quatre déploiements le soir ont effacé le classement persisté. La même
+  // cause, un cran plus bas.
+  const plein = { at: '2026-08-17T17:42:00.000Z', classement: [{ symbol: 'MPC', rang: 1 }] };
+  const vide = { at: '2026-08-17T21:53:00.000Z', classement: [] };
+
+  test('un cycle sans actif évaluable conserve le classement précédent', () => {
+    const g = classementAConserver(vide, plein);
+    assert.equal(g.conserver, true);
+    assert.equal(g.retenu, plein);
+    assert.match(g.raison, /conservé/);
+  });
+
+  test('un cycle qui a classé quelque chose remplace bien l\'ancien', () => {
+    const neuf = { at: '2026-08-18T17:42:00.000Z', classement: [{ symbol: 'DUK', rang: 1 }] };
+    const g = classementAConserver(neuf, plein);
+    assert.equal(g.conserver, false);
+    assert.equal(g.retenu, neuf);
+  });
+
+  test('sans aucun classement disponible, on ne bloque rien', () => {
+    const g = classementAConserver(vide, null);
+    assert.equal(g.conserver, false);
+    assert.equal(g.retenu, vide);
+  });
+
+  test('un classement absent est traité comme un classement vide', () => {
+    assert.equal(classementAConserver(null, plein).retenu, plein);
+    assert.equal(classementAConserver({ at: 'x' }, plein).retenu, plein);
   });
 });
