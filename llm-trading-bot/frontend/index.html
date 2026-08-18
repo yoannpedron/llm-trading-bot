@@ -20,6 +20,10 @@
     </div>
 
     <div class="topbar-right">
+      <!-- Le bot ne travaille qu'une fois par jour, à 13 h 30 à New York. Sans
+           cette ligne, un dashboard immobile ne dit pas s'il est en panne ou
+           simplement en attente — la question revenait à chaque coup d'œil. -->
+      <span id="next-cycle" class="next-cycle" hidden></span>
       <span id="mode-badge" class="badge badge-muted">—</span>
       <span id="conn-status" class="conn conn-idle">
         <span class="dot"></span><span id="conn-text">Connexion…</span>

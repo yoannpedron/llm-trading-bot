@@ -100,6 +100,29 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 .badge-paper { background: var(--accent-soft); color: var(--accent); }
 .badge-live { background: var(--down-soft); color: var(--down); }
 
+/* ── Prochain cycle ────────────────────────────────────────────────────────
+   Discret par construction : c'est une information d'attente, pas une alerte.
+   Même graisse et même couleur que l'état de connexion voisin, avec des
+   chiffres tabulaires pour que le décompte ne fasse pas danser la ligne à
+   chaque seconde. */
+.next-cycle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.next-cycle b {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* Dans le dernier quart d'heure, le décompte se réchauffe sans clignoter. */
+.next-cycle.imminent b { color: var(--warn); }
+/* Pendant le cycle, c'est l'activité qu'on montre, plus l'attente. */
+.next-cycle.actif b { color: var(--accent); }
+
 .conn { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-dim); }
 .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
 .conn-ok .dot { background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); }
@@ -906,6 +929,10 @@ details.raw pre {
   .topbar { padding: 10px 14px; gap: 8px; }
   .brand-sub { display: none; }
   .conn { font-size: 11px; }
+  /* Sur un écran étroit, on garde le décompte mais pas l'heure de séance :
+     « dans 11 h 57 » suffit à répondre à la question posée. */
+  .next-cycle { font-size: 11px; }
+  .next-cycle .quand { display: none; }
   .topbar-right { gap: 6px; }
   .topbar-right .btn { padding: 6px 10px; font-size: 12px; }
   .tabs { padding-top: 4px; }

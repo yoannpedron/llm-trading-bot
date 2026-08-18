@@ -36,6 +36,7 @@ const state = {
   logFilter: 'all',
   data: null,
   timer: null,
+  dernierStatut: null,
   settingsAutoOpened: false,
   logs: [],
 };
@@ -126,6 +127,120 @@ const fmtDate = (iso) => {
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
+
+/* ═══ PROCHAIN CYCLE ═══════════════════════════════════════════════════════
+   Le bot ne travaille qu'une fois par jour, à 13 h 30 à New York. Le reste du
+   temps le dashboard est parfaitement immobile — et rien ne distingue « en
+   attente » de « en panne ». D'où ce décompte.
+
+   ── Pourquoi un calcul et pas une valeur servie par l'API ────────────────
+   Le serveur pourrait publier la prochaine échéance, mais elle se périme dès
+   qu'elle est envoyée : le dashboard rafraîchit toutes les quelques secondes,
+   le décompte doit avancer chaque seconde. On calcule donc localement à partir
+   du cron, que l'API publie déjà.
+
+   ── Le seul point délicat : le fuseau ────────────────────────────────────
+   Le cron s'exécute en heure de New York, le navigateur est ailleurs, et le
+   décalage change deux fois par an. Convertir « 13 h 30 à New York » en instant
+   absolu ne peut donc pas se faire avec un décalage constant. On passe par
+   `Intl`, seule source de vérité sur les règles d'heure d'été.                */
+
+/** Décalage de New York par rapport à UTC, en minutes, à un instant donné. */
+function decalageNewYork(instant) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(instant);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  // `hour` peut valoir « 24 » à minuit selon l'implémentation.
+  const commeUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  return (commeUTC - Math.floor(instant / 1000) * 1000) / 60000;
+}
+
+/** Instant absolu correspondant à une heure murale de New York. */
+function instantNewYork(annee, mois, jour, heure, minute) {
+  const mural = Date.UTC(annee, mois, jour, heure, minute);
+  // Deux passes : la première estime le décalage, la seconde le corrige aux
+  // deux dates de l'année où il change entre les deux.
+  let t = mural - decalageNewYork(mural) * 60000;
+  t = mural - decalageNewYork(t) * 60000;
+  return t;
+}
+
+/** Date civile de New York à un instant donné : { annee, mois, jour, jourSemaine }. */
+function dateNewYork(instant) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour12: false, weekday: 'short',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(instant).map((x) => [x.type, x.value]));
+  const jours = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return { annee: +p.year, mois: +p.month - 1, jour: +p.day, jourSemaine: jours[p.weekday] };
+}
+
+/**
+ * Prochaine exécution d'un cron « minute heure * * jours ».
+ *
+ * On ne gère que la forme utilisée par le planificateur du bot — minute et
+ * heure fixes, jours de la semaine en liste ou en intervalle. Écrire un
+ * analyseur de cron complet pour afficher une ligne de texte serait
+ * disproportionné, et se tromper en silence sur une expression exotique serait
+ * pire que de ne rien afficher : on rend `null` dès que la forme sort du cadre.
+ */
+function prochainCycle(cron, maintenant = Date.now()) {
+  if (typeof cron !== 'string') return null;
+  const champs = cron.trim().split(/\s+/);
+  if (champs.length !== 5) return null;
+
+  const [minuteTexte, heureTexte, jourMois, moisTexte, jourSemaineTexte] = champs;
+  const minute = Number(minuteTexte);
+  const heure = Number(heureTexte);
+  if (!Number.isInteger(minute) || !Number.isInteger(heure)) return null;
+  if (minute < 0 || minute > 59 || heure < 0 || heure > 23) return null;
+  if (jourMois !== '*' || moisTexte !== '*') return null;
+
+  // Jours autorisés : « * », « 1-5 », « 1,3,5 », ou une combinaison.
+  const joursAutorises = new Set();
+  if (jourSemaineTexte === '*') {
+    for (let j = 0; j < 7; j += 1) joursAutorises.add(j);
+  } else {
+    for (const morceau of jourSemaineTexte.split(',')) {
+      const intervalle = morceau.match(/^(\d)-(\d)$/);
+      if (intervalle) {
+        const [, a, b] = intervalle.map(Number);
+        for (let j = a; j <= b; j += 1) joursAutorises.add(j % 7);
+      } else if (/^\d$/.test(morceau)) {
+        joursAutorises.add(Number(morceau) % 7);
+      } else {
+        return null;   // forme non reconnue : on préfère ne rien annoncer
+      }
+    }
+  }
+  if (!joursAutorises.size) return null;
+
+  // Au plus huit jours d'avance : un cron hebdomadaire est toujours atteint.
+  for (let avance = 0; avance <= 8; avance += 1) {
+    const jourCible = dateNewYork(maintenant + avance * 86400000);
+    if (!joursAutorises.has(jourCible.jourSemaine)) continue;
+    const t = instantNewYork(jourCible.annee, jourCible.mois, jourCible.jour, heure, minute);
+    if (t > maintenant) return t;
+  }
+  return null;
+}
+
+/** « 11 h 57 », « 4 min 08 s », « 12 j 3 h » — jamais plus de deux unités. */
+function delaiLisible(ms) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const j = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (j > 0) return `${j} j ${h} h`;
+  if (h > 0) return `${h} h ${String(m).padStart(2, '0')}`;
+  if (m > 0) return `${m} min ${String(sec).padStart(2, '0')} s`;
+  return `${sec} s`;
+}
 
 const relativeTime = (iso) => {
   if (!iso) return 'jamais';
@@ -261,6 +376,11 @@ function scheduleRefresh() {
   clearInterval(state.timer);
   if (state.refreshInterval > 0) state.timer = setInterval(refresh, state.refreshInterval);
 }
+
+// Le décompte bat à la seconde et ne coûte rien : aucun appel réseau, une
+// seule ligne de texte réécrite. Il reste indépendant du rafraîchissement des
+// données, qui peut être mis à 0 par l'utilisateur sans faire figer l'heure.
+setInterval(majProchainCycle, 1000);
 
 // ── Connexion ────────────────────────────────────────────────
 
@@ -765,7 +885,66 @@ function renderEngineLive(status) {
     : (status?.paused ? 'en pause' : 'en veille');
 }
 
+/**
+ * Affiche le prochain cycle, et le décompte qui y mène.
+ *
+ * Appelée à chaque seconde, indépendamment du rafraîchissement réseau : la
+ * seule information qui change entre deux appels d'API est l'heure qu'il est.
+ *
+ * Trois états, parce que « dans 11 h 57 » serait faux dans deux d'entre eux :
+ * un cycle en cours, une pause demandée, et l'attente ordinaire.
+ */
+function majProchainCycle() {
+  const el = $('next-cycle');
+  if (!el) return;
+  const status = state.dernierStatut;
+  if (!status) { el.hidden = true; return; }
+
+  el.classList.remove('imminent', 'actif');
+
+  if (status.isRunning) {
+    el.hidden = false;
+    el.classList.add('actif');
+    el.innerHTML = '<span class="quand">Cycle</span> <b>en cours…</b>';
+    return;
+  }
+  if (status.paused) {
+    el.hidden = false;
+    el.innerHTML = '<span class="quand">Planificateur</span> <b>en pause</b>';
+    return;
+  }
+
+  const t = prochainCycle(status.cron);
+  if (t == null) { el.hidden = true; return; }
+
+  const reste = t - Date.now();
+  // Entre l'échéance et le démarrage effectif il s'écoule quelques secondes.
+  // Annoncer « dans 0 s » pendant ce laps donnerait un décompte figé : on dit
+  // ce qui se passe réellement.
+  if (reste <= 0) {
+    el.hidden = false;
+    el.classList.add('actif');
+    el.innerHTML = '<span class="quand">Cycle</span> <b>imminent</b>';
+    return;
+  }
+
+  const heure = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit',
+  }).format(t);
+
+  el.hidden = false;
+  if (reste < 15 * 60000) el.classList.add('imminent');
+  el.innerHTML = `<span class="quand">Prochain cycle ${esc(heure)} ET —</span> <b>dans ${esc(delaiLisible(reste))}</b>`;
+  el.title = `Le planificateur déclenche un cycle selon « ${status.cron} », en heure de New York. `
+    + `Prochaine échéance : ${new Date(t).toLocaleString('fr-FR')} (heure locale).`;
+}
+
 function renderStatus(status, calendar) {
+  // Mémorisé pour le décompte, qui bat à la seconde alors que le réseau ne
+  // répond que toutes les trente secondes.
+  state.dernierStatut = status;
+  majProchainCycle();
+
   renderEngineLive(status);
   const running = status.isRunning ? 'Cycle en cours' : status.paused ? 'En pause' : 'En veille';
   $('st-state').innerHTML = `<span class="pill ${status.paused ? 'pill-skip' : 'pill-exec'}">${esc(running)}</span>`;
