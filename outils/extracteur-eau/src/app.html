@@ -340,7 +340,43 @@ dl { display:flex; flex-direction:column; }
 .mini .zn.ok { border-color:rgba(78,168,122,.8); background:rgba(78,168,122,.14); }
 
 /* — Panneau question — */
-.quest { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; position:sticky; top:132px; }
+.quest { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; position:sticky; top:132px; display:flex; flex-direction:column; max-height:calc(100vh - 156px); }
+
+/* Bannière type de document (gaz/électricité/non-eau) */
+.ctrl-ban { display:none; align-items:flex-start; gap:10px; padding:12px 18px; font-size:12.5px; line-height:1.5; border-bottom:1px solid var(--border); }
+.ctrl-ban.on { display:flex; }
+.ctrl-ban.warn { background:var(--warn-soft); color:#e5c07b; }
+.ctrl-ban svg { flex:none; margin-top:1px; }
+
+/* En-tête de la grille de relecture */
+.grille-tete { padding:13px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.grille-tete .t { font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); }
+.grille-tete .compte { margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+
+/* Liste des champs — cœur de la relecture */
+.champs-liste { overflow-y:auto; flex:1; }
+.frow { border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; }
+.frow:last-child { border-bottom:none; }
+.frow-tete { display:flex; align-items:center; gap:10px; padding:9px 16px; }
+.frow:hover { background:var(--surface-2); }
+.frow.actif { background:var(--surface-2); }
+.frow.actif .frow-tete { box-shadow:inset 3px 0 0 var(--accent); }
+.frow-dot { width:8px; height:8px; border-radius:50%; flex:none; background:var(--text-faint); }
+.frow.attente .frow-dot { background:var(--warn); }
+.frow.valide .frow-dot { background:var(--ok); }
+.frow.corrige .frow-dot { background:var(--accent); }
+.frow.na .frow-dot { background:var(--border-strong); }
+.frow-nom { font-size:12.5px; color:var(--text-dim); width:104px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.frow.cle .frow-nom { color:var(--text); font-weight:500; }
+.frow-val { flex:1; min-width:0; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.frow-val.vide { color:var(--text-faint); font-family:inherit; font-style:italic; }
+.frow-jauge { width:34px; height:3px; border-radius:99px; background:var(--surface-3); overflow:hidden; flex:none; }
+.frow-jauge i { display:block; height:100%; background:var(--ok); }
+.frow-jauge.moyen i { background:var(--warn); }
+.frow-jauge.faible i { background:var(--danger); }
+.frow-detail { padding:4px 16px 16px; }
+.frow.doute .frow-nom::after { content:'!'; color:var(--warn); font-weight:700; margin-left:5px; }
+
 .quest-tete { padding:16px 20px 14px; border-bottom:1px solid var(--border); }
 .quest-eyebrow { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.09em; color:var(--text-faint); display:flex; align-items:center; gap:8px; }
 .quest-champ { font-size:19px; font-weight:600; letter-spacing:-.02em; margin-top:6px; }
@@ -425,7 +461,13 @@ dl { display:flex; flex-direction:column; }
   padding:12px 18px; margin-top:18px; position:sticky; bottom:16px;
   box-shadow:0 8px 26px rgba(0,0,0,.45);
 }
-.puces { display:flex; gap:4px; flex-wrap:wrap; flex:1; min-width:180px; }
+.puces { display:flex; gap:14px; flex-wrap:wrap; flex:1; min-width:180px; align-items:center; }
+.leg { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-faint); }
+.leg .pt { width:8px; height:8px; border-radius:50%; }
+.leg .pt.attente { background:var(--warn); }
+.leg .pt.valide { background:var(--ok); }
+.leg .pt.corrige { background:var(--accent); }
+.leg .pt.na { background:var(--border-strong); }
 .puce {
   width:auto; min-width:26px; height:22px; padding:0 7px; border-radius:5px; cursor:pointer;
   border:1px solid var(--border-strong); background:var(--surface-2);
@@ -693,15 +735,12 @@ label.cand input { width:15px; height:15px; margin-top:2px; accent-color:var(--a
         </div>
 
         <div class="quest" id="quest">
-          <div class="quest-tete">
-            <div class="quest-eyebrow">
-              <span id="questRang">Champ 1 / 17</span>
-              <span id="questObl"></span>
-            </div>
-            <div class="quest-champ" id="questChamp">—</div>
-            <div class="quest-aide" id="questAide"></div>
+          <div class="ctrl-ban" id="ctrlBanniere"></div>
+          <div class="grille-tete">
+            <span class="t">Champs de la facture</span>
+            <span class="compte" id="grilleCompte">0 / 16</span>
           </div>
-          <div class="quest-corps" id="questCorps"></div>
+          <div class="champs-liste" id="champListe"></div>
         </div>
 
       </div>
@@ -2788,6 +2827,46 @@ function detecterTypeDoc(ctx) {
   return { type, alerte, indices: { eau, gaz, elec } };
 }
 
+// Nettoyage anti-charabia des champs texte. La reconnaissance optique fait
+// baver dans les valeurs le tampon « Reçu le », des restes de colonnes, un
+// caractère parasite en tête. Plutôt que de proposer « RECU IE AUDIKA » ou
+// « £E RUE OU CHATELET », on retire ce qui est reconnaissable comme du bruit,
+// et si la valeur en ressort trop abîmée, on préfère la vider et la signaler :
+// une case vide se corrige, une case fausse trompe.
+const RE_TAMPON = /\bRE[CÇ]U\s+(?:LE|IE|IÉ)\b.*$|\bIMPRIME\s+PAR\b.*$|\bLA\s+POSTE\b.*$|\bPAR\s+COURRIER\b.*$|\b\d{1,2}\s+(?:JOUE|AOU|AOUT|JUIL|JUIN|MARS|MAI|AVRIL|FEV|JANV|SEPT|OCT|NOV|DEC)[A-Z.]*\s+20\d\d\b.*$/;
+const RE_BRUIT_TETE = /^(?:[^A-Z0-9]+|[A-Z£#]\s+(?=\d)|\d{1,2}[A-Z]{2,}\s)/;
+
+function assainirTexte(v) {
+  let s = String(v ?? '').trim();
+  if (!s || s === 'N/A') return 'N/A';
+  s = s.replace(RE_TAMPON, '').trim();
+  s = s.replace(/^[^A-Z0-9]+/, '').trim();
+  // Une valeur d'adresse ou de nom recousue à partir de trois cellules
+  // séparées par des tirets (« NOM - RUE - VILLE ») n'est pas une valeur : on
+  // ne garde que le premier morceau.
+  const parts = s.split(/\s+-\s+/);
+  if (parts.length >= 3) s = parts[0].trim();
+  // Reste un token isolé d'une ou deux lettres en fin ? Souvent du bruit
+  // (« … CO995 FT »). On l'enlève s'il ne fait pas sens.
+  s = s.replace(/\s+(?:FT|IE|II|LI|LL|EE|RE)$/,'').trim();
+  return s || 'N/A';
+}
+
+// Une valeur texte est jugée trop abîmée si, une fois nettoyée, elle reste
+// truffée d'incohérences : ratio de lettres trop faible, tokens d'une lettre
+// en pagaille, ou vestige de tampon.
+function tropAbimee(v) {
+  const s = String(v ?? '');
+  if (s === 'N/A' || s.length < 3) return false;
+  const lettres = (s.match(/[A-Z]/gi) || []).length;
+  if (lettres / s.length < 0.45) return true;
+  const toks = s.split(/\s+/);
+  const isoles = toks.filter(t => t.length === 1 && !/^\d$/.test(t)).length;
+  if (toks.length >= 3 && isoles >= 2) return true;
+  if (RE_TAMPON.test(s)) return true;
+  return false;
+}
+
 function extraire(doc) {
   const ctx = { doc, lignes: doc.lignes, pages: doc.pages };
   ctx.segments = doc.lignes.flatMap(l => l.segments || [l]);
@@ -2819,6 +2898,25 @@ function extraire(doc) {
   if (ch['Ref_Client'].valeur !== 'N/A' && ch['Ref_Client'].valeur === ch['N_Contrat'].valeur) {
     ch['N_Contrat'].conf *= 0.5;
     ch['N_Contrat'].origine += ' — identique à la référence client, à vérifier';
+  }
+
+  // Nettoyage anti-charabia sur les champs texte. Une valeur trop abîmée est
+  // vidée et signalée : le contrôle visuel montrera la zone pour saisir à la main.
+  for (const c of ['Entite Desservie','Rue Site','Ville Site','Entite_Payeuse','Rue Payeur','Ville Payeur']) {
+    const propre = assainirTexte(ch[c].valeur);
+    if (propre !== ch[c].valeur) {
+      ch[c].origine = (ch[c].origine || '') + ' — nettoyé (bruit OCR retiré)';
+      ch[c].valeur = propre;
+    }
+    if (tropAbimee(ch[c].valeur)) {
+      // On conserve la lecture douteuse comme piste, mais on ne l'affiche plus
+      // comme valeur : mieux vaut une case vide qu'une case fausse.
+      (ch[c].candidats ||= []).unshift({ valeur: ch[c].valeur, zone: ch[c].zone, conf: 0.2,
+        why: 'lecture optique très incertaine' });
+      ch[c].valeur = 'N/A';
+      ch[c].conf = 0.15;
+      ch[c].origine = 'lecture trop incertaine — à saisir depuis la zone';
+    }
   }
 
   // Document manifestement pas une facture d'eau : on rabaisse la confiance de
@@ -3260,27 +3358,71 @@ function majZonesMinis() {
 }
 
 // ── Panneau de question ───────────────────────────────────────────
+// Rendu de la grille de relecture : tous les champs sont visibles d'un coup,
+// le champ courant est déplié avec son détail (saisie, actions, candidats,
+// calcul, annuaire). On voit en un regard ce qui est validé, corrigé, ou à
+// vérifier, et on ne s'occupe que des lignes en doute.
 function dessinerQuestion() {
-  const champ = ctrlListe[ctrlIdx];
+  const doc = ctrlDoc;
+  const td = doc.ctx.typeDoc;
+  const ban = $('ctrlBanniere');
+  if (td && td.alerte) {
+    ban.className = 'ctrl-ban warn on';
+    ban.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`
+      + `<span><b>${esc(td.alerte)}.</b> Vérifiez chaque champ, ou retirez cette facture avec « Abandonner ».</span>`;
+  } else ban.className = 'ctrl-ban';
+
+  const seuil = Number($('optSeuil').value);
+  $('champListe').innerHTML = ctrlListe.map((champ, k) => ligneChamp(champ, k, seuil)).join('');
+
+  const inp = $('qSaisie');
+  if (inp) {
+    const champ = ctrlListe[ctrlIdx];
+    inp.addEventListener('input', () => {
+      ctrlValeurs[champ] = inp.value.trim() || 'N/A';
+      ctrlEtats[champ] = 'corrige';
+      majLigneCourante();
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); validerChamp(); }
+    });
+    // Amener la ligne dépliée dans le champ de vision.
+    const rowActif = $('champListe').querySelector('.frow.actif');
+    if (rowActif) rowActif.scrollIntoView({ block: 'nearest' });
+  }
+  majPuces();
+  majZonesMinis();
+}
+
+// Une ligne compacte, dépliée en détail si c'est le champ courant.
+function ligneChamp(champ, k, seuil) {
   const src = ctrlDoc.champs[champ] || VIDE();
   const val = ctrlValeurs[champ] ?? 'N/A';
   const etat = ctrlEtats[champ] || 'attente';
   const vide = val === 'N/A' || val === '';
-
-  $('questRang').textContent = `Champ ${ctrlIdx + 1} / ${ctrlListe.length}`;
-  $('questObl').innerHTML = CHAMPS_CLES.has(champ)
-    ? '<span style="color:var(--warn)">· champ sensible</span>' : '';
-  $('questChamp').textContent = champ;
-  $('questAide').textContent = AIDE_CHAMP[champ] || '';
-
   const conf = Math.round((src.conf || 0) * 100);
-  const niveau = conf >= 80 ? '' : conf >= 55 ? ' moyen' : ' faible';
-  const srcTxt = ctrlDoc.doc.src === 'texte' ? 'couche texte du PDF'
-               : (src.zone && ctrlDoc.doc.pages.find(p => p.num === src.zone.p)?.src === 'ocr')
-                 ? 'reconnaissance optique' : 'couche texte du PDF';
+  const actif = k === ctrlIdx;
+  const doute = etat === 'attente' && (conf < seuil * 100 || vide) && CHAMPS_CLES.has(champ);
+  const niveau = conf >= 80 ? '' : conf >= 55 ? 'moyen' : 'faible';
 
-  let h = '';
-  h += `<div class="quest-libelle">${vide ? 'Rien n\'a été trouvé pour ce champ.' : 'Est-ce bien ce qui est écrit sur la facture ?'}</div>`;
+  const classes = ['frow', etat, actif ? 'actif' : '', CHAMPS_CLES.has(champ) ? 'cle' : '', doute ? 'doute' : ''].filter(Boolean).join(' ');
+  let h = `<div class="${classes}">`;
+  h += `<div class="frow-tete" onclick="allerChamp(${k})">
+    <span class="frow-dot"></span>
+    <span class="frow-nom" title="${esc(champ)}">${esc(COURT[champ] || champ)}</span>
+    <span class="frow-val${vide ? ' vide' : ''}">${vide ? 'à saisir' : esc(val)}</span>
+    <span class="frow-jauge ${niveau}"><i style="width:${conf}%"></i></span>
+  </div>`;
+  if (actif) h += `<div class="frow-detail">${detailChamp(champ, src, val, etat, vide, conf)}</div>`;
+  h += `</div>`;
+  return h;
+}
+
+function detailChamp(champ, src, val, etat, vide, conf) {
+  const srcTxt = src.zone && ctrlDoc.doc.pages.find(p => p.num === src.zone.p)?.src === 'ocr'
+    ? 'reconnaissance optique' : 'couche texte du PDF';
+  const niveau = conf >= 80 ? '' : conf >= 55 ? ' moyen' : ' faible';
+  let h = `<div class="quest-aide" style="margin:2px 0 12px">${esc(AIDE_CHAMP[champ] || '')}</div>`;
 
   if (CHOIX_FIXES[champ]) {
     h += `<div class="choix-grp" style="margin-bottom:12px">`
@@ -3294,7 +3436,6 @@ function dessinerQuestion() {
                  placeholder="valeur introuvable — saisissez-la ou désignez la zone"
                  spellcheck="false" autocomplete="off">
         </div>`;
-
   h += `<div class="val-meta">
           <span>${esc(srcTxt)}</span>
           <div class="jauge${niveau}"><i style="width:${conf}%"></i></div>
@@ -3302,9 +3443,6 @@ function dessinerQuestion() {
         </div>`;
   if (src.origine) h += `<div class="val-meta" style="margin-top:6px"><span>${esc(src.origine)}</span></div>`;
 
-  // Quand rien n'a été trouvé, confirmer revient à déclarer le champ absent :
-  // l'intitulé du bouton doit le dire, sans quoi on fait acquiescer
-  // l'utilisateur à une valeur qui n'existe pas.
   h += `<div class="quest-actions">
     <button class="btn btn-ok" onclick="validerChamp()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></svg>
@@ -3317,7 +3455,6 @@ function dessinerQuestion() {
       Absent de la facture <span class="kbd">N</span></button>
   </div>`;
 
-  // Détail du calcul pour les deux champs qui en résultent d'un.
   if (champ === 'Abnt €HT/6M' && src.lignesAbnt) h += blocAbonnement(src);
   else if (champ === 'Conso m³/6M' && src.detail) h += `<div class="sect"><div class="sect-titre">Détail du calcul</div><div class="calcul">${esc(src.detail)}</div></div>`;
 
@@ -3338,16 +3475,26 @@ function dessinerQuestion() {
       <button class="btn btn-sm btn-outline" onclick="confronterBan()">Confronter à la Base Adresse Nationale</button>
       <div id="banRes" style="margin-top:9px;font-size:12px;color:var(--text-faint)"></div></div>`;
   }
+  return h;
+}
 
-  $('questCorps').innerHTML = h;
-  const inp = $('qSaisie');
-  inp.addEventListener('input', () => {
-    ctrlValeurs[champ] = inp.value.trim() || 'N/A';
-    ctrlEtats[champ] = 'corrige';
-    majPuces();
-  });
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); validerChamp(); }
+// Rafraîchit uniquement l'apparence des lignes (statut, valeur, compteur) sans
+// reconstruire la ligne dépliée : la saisie en cours ne doit pas perdre le focus.
+function majLigneCourante() {
+  const liste = $('champListe');
+  ctrlListe.forEach((champ, k) => {
+    const row = liste.children[k];
+    if (!row) return;
+    const etat = ctrlEtats[champ] || 'attente';
+    row.classList.remove('attente', 'valide', 'corrige', 'na');
+    row.classList.add(etat);
+    const valEl = row.querySelector('.frow-val');
+    if (valEl && k !== ctrlIdx) {
+      const v = ctrlValeurs[champ] ?? 'N/A';
+      const vide = v === 'N/A' || v === '';
+      valEl.textContent = vide ? 'à saisir' : v;
+      valEl.classList.toggle('vide', vide);
+    }
   });
   majPuces();
   majZonesMinis();
@@ -3458,21 +3605,23 @@ function avancer() {
 }
 
 function majPuces() {
-  const b = $('puces');
-  b.innerHTML = ctrlListe.map((c, i) => {
-    const et = ctrlEtats[c] || 'attente';
-    return `<button class="puce ${et}${i === ctrlIdx ? ' cour' : ''}" onclick="allerChamp(${i})"
-      title="${esc(c)} — ${et === 'valide' ? 'confirmé' : et === 'corrige' ? 'corrigé' : et === 'na' ? 'déclaré absent' : 'à contrôler'} : ${esc(ctrlValeurs[c] ?? '')}">${esc(COURT[c] || c)}</button>`;
-  }).join('');
   const faits = ctrlListe.filter(c => (ctrlEtats[c] || 'attente') !== 'attente').length;
-  $('avance').textContent = `${faits} / ${ctrlListe.length} contrôlés`;
-  $('btnFinirFacture').classList.toggle('btn-ok', faits === ctrlListe.length);
-  $('btnFinirFacture').classList.toggle('btn-outline', faits !== ctrlListe.length);
+  const restants = ctrlListe.length - faits;
+  const b = $('puces');
+  if (b) b.innerHTML =
+    `<span class="leg"><span class="pt attente"></span>à voir</span>`
+    + `<span class="leg"><span class="pt valide"></span>confirmé</span>`
+    + `<span class="leg"><span class="pt corrige"></span>corrigé</span>`
+    + `<span class="leg"><span class="pt na"></span>absent</span>`;
+  $('avance').textContent = restants ? `${restants} champ${restants > 1 ? 's' : ''} à voir` : 'tout est vu';
+  const gc = $('grilleCompte');
+  if (gc) gc.textContent = `${faits} / ${ctrlListe.length}`;
+  $('btnFinirFacture').classList.toggle('btn-ok', restants === 0);
+  $('btnFinirFacture').classList.toggle('btn-outline', restants !== 0);
 }
 
 function toutValiderFacture() {
   for (const c of ctrlListe) if ((ctrlEtats[c] || 'attente') === 'attente') ctrlEtats[c] = 'valide';
-  majPuces();
   dessinerQuestion();
 }
 
