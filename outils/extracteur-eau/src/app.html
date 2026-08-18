@@ -2836,19 +2836,29 @@ function detecterTypeDoc(ctx) {
 const RE_TAMPON = /\bRE[CÇ]U\s+(?:LE|IE|IÉ)\b.*$|\bIMPRIME\s+PAR\b.*$|\bLA\s+POSTE\b.*$|\bPAR\s+COURRIER\b.*$|\b\d{1,2}\s+(?:JOUE|AOU|AOUT|JUIL|JUIN|MARS|MAI|AVRIL|FEV|JANV|SEPT|OCT|NOV|DEC)[A-Z.]*\s+20\d\d\b.*$/;
 const RE_BRUIT_TETE = /^(?:[^A-Z0-9]+|[A-Z£#]\s+(?=\d)|\d{1,2}[A-Z]{2,}\s)/;
 
-function assainirTexte(v) {
+const RE_TYPE_VOIE_DEBUT = /^(?:RUE|AVENUE|AV|BD|BOULEVARD|IMP|IMPASSE|CHE|CHEMIN|ALL|ALLEE|PL|PLACE|ROUTE|RTE|QUAI|RES|RESIDENCE|LOT|SQUARE|COURS|VOIE|CITE)\b/;
+
+function assainirTexte(v, champ) {
   let s = String(v ?? '').trim();
   if (!s || s === 'N/A') return 'N/A';
   s = s.replace(RE_TAMPON, '').trim();
   s = s.replace(/^[^A-Z0-9]+/, '').trim();
-  // Une valeur d'adresse ou de nom recousue à partir de trois cellules
-  // séparées par des tirets (« NOM - RUE - VILLE ») n'est pas une valeur : on
-  // ne garde que le premier morceau.
+  const rue = champ === 'Rue Site' || champ === 'Rue Payeur';
+  const ville = champ === 'Ville Site' || champ === 'Ville Payeur';
+  // Le tampon « Reçu le 24 AOÛT 2026 » bave dans l'adresse : on retire toute
+  // queue « … <jour> <mois> 20xx » ou un millésime esseulé en fin de rue/ville.
+  if (rue || ville) {
+    s = s.replace(/\s+\d{1,2}\s+[A-Z][A-Z.]*(?:\s+[A-Z][A-Z.]*)?\s+20\d\d\b.*$/, '').trim();
+    s = s.replace(/\s+20\d\d\b.*$/, '').trim();
+  }
+  // Une lettre isolée collée devant un type de voie (« E RUE … », « M RES … »)
+  // est du bruit optique : on l'enlève. On ne touche pas aux civilités (« M. »).
+  if (rue) s = s.replace(/^[A-Z]\s+(?=RUE|AV|AVENUE|BD|BOULEVARD|IMP|IMPASSE|CHE|CHEMIN|ALL|ALLEE|PL|PLACE|ROUTE|RTE|QUAI|RES|RESIDENCE|LOT|SQUARE|COURS|VOIE|CITE)/, '').trim();
+  // Une valeur recousue à partir de trois cellules séparées par des tirets
+  // (« NOM - RUE - VILLE ») n'est pas une valeur : on garde le premier morceau.
   const parts = s.split(/\s+-\s+/);
   if (parts.length >= 3) s = parts[0].trim();
-  // Reste un token isolé d'une ou deux lettres en fin ? Souvent du bruit
-  // (« … CO995 FT »). On l'enlève s'il ne fait pas sens.
-  s = s.replace(/\s+(?:FT|IE|II|LI|LL|EE|RE)$/,'').trim();
+  s = s.replace(/\s+(?:FT|IE|II|LI|LL|EE|RE)$/, '').trim();
   return s || 'N/A';
 }
 
@@ -2903,7 +2913,7 @@ function extraire(doc) {
   // Nettoyage anti-charabia sur les champs texte. Une valeur trop abîmée est
   // vidée et signalée : le contrôle visuel montrera la zone pour saisir à la main.
   for (const c of ['Entite Desservie','Rue Site','Ville Site','Entite_Payeuse','Rue Payeur','Ville Payeur']) {
-    const propre = assainirTexte(ch[c].valeur);
+    const propre = assainirTexte(ch[c].valeur, c);
     if (propre !== ch[c].valeur) {
       ch[c].origine = (ch[c].origine || '') + ' — nettoyé (bruit OCR retiré)';
       ch[c].valeur = propre;
