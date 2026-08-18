@@ -397,9 +397,12 @@ export class RiskManager {
       return { triggered: 'STOP_LOSS', reason: `stop touché : ${price} <= ${stop.toFixed(4)}`, level: stop };
     }
 
-    // Take-profit uniquement s'il a été explicitement posé — ce que la
-    // stratégie ne fait plus. Conservé pour ne pas ignorer un niveau défini
-    // manuellement via l'API.
+    // Objectif de gain, posé à l'entrée par `protectionLevels` à +14 % — le
+    // milieu du plateau mesuré entre 12 % et 16 %. Ce commentaire disait
+    // encore « ce que la stratégie ne fait plus », vestige de la période où
+    // `takeProfitPct` valait zéro : la lecture du code laissait croire que les
+    // positions n'avaient pas d'objectif, alors que les dix lignes ouvertes en
+    // portent une.
     if (position.takeProfitPrice && price >= position.takeProfitPrice) {
       return {
         triggered: 'TAKE_PROFIT',

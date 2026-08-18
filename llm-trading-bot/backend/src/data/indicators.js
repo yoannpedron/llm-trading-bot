@@ -29,7 +29,30 @@ export function ema(values, period) {
   return out;
 }
 
-/** RSI de Wilder (lissage exponentiel des gains/pertes moyens). */
+/**
+ * Valeur du RSI à partir des moyennes de gain et de perte.
+ *
+ *   perte nulle ET gain nul  -> 50, l'actif n'a pas bougé
+ *   perte nulle, gain positif -> 100, il n'a fait que monter
+ */
+function rsiDepuis(avgGain, avgLoss) {
+  if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
+/**
+ * RSI de Wilder (lissage exponentiel des gains/pertes moyens).
+ *
+ * ── Le cas « aucun mouvement » ────────────────────────────────────────────
+ * Quand la perte moyenne est nulle, le rapport gain/perte diverge et la
+ * formule est indéfinie. Le repli était 100 — « surachat maximal » — ce qui
+ * est juste quand il n'y a QUE des hausses, et faux quand il n'y a aucun
+ * mouvement du tout : une série parfaitement plate donnait RSI = 100.
+ *
+ * Le RSI alimente le facteur `surventeRsi`, qui vaut (50 − RSI)/50 : un titre
+ * immobile aurait donc reçu le score le plus baissier de l'univers, −1, à
+ * égalité avec un titre en surachat franc. On distingue donc les deux.
+ */
 export function rsi(values, period = 14) {
   const out = new Array(values.length).fill(null);
   if (values.length <= period) return out;
@@ -43,7 +66,7 @@ export function rsi(values, period = 14) {
   }
   let avgGain = gain / period;
   let avgLoss = loss / period;
-  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  out[period] = rsiDepuis(avgGain, avgLoss);
 
   for (let i = period + 1; i < values.length; i += 1) {
     const delta = values[i] - values[i - 1];
@@ -51,7 +74,7 @@ export function rsi(values, period = 14) {
     const l = delta < 0 ? -delta : 0;
     avgGain = (avgGain * (period - 1) + g) / period;
     avgLoss = (avgLoss * (period - 1) + l) / period;
-    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    out[i] = rsiDepuis(avgGain, avgLoss);
   }
   return out;
 }

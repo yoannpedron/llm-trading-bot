@@ -887,12 +887,35 @@ export class TradingEngine {
           .sort((a, b) => a.rang - b.rang),
       };
 
-      // Sur disque immédiatement : un redémarrage ne doit pas effacer le
-      // classement du jour, et le bot n'en produit qu'un.
-      this.rankingStore.data.ranking = this.lastRanking;
-      await this.rankingStore.save().catch((err) => {
-        log.warn(`Classement non persisté (${err.message}) — il sera perdu au prochain redémarrage.`);
-      });
+      // ── Un classement VIDE ne remplace jamais un classement plein ────────
+      // Persister le classement le protégeait des redémarrages. Il restait un
+      // trou : chaque démarrage lance un cycle, et hors séance ce cycle
+      // n'évalue rien — il produit un classement de zéro ligne, qui écrasait
+      // aussitôt celui de la journée.
+      //
+      // Constaté ce soir : quatre déploiements successifs à 21 h UTC, marché
+      // fermé, et le classement des dix achats du 17 août remplacé par un
+      // tableau vide. La persistance fonctionnait ; c'est ce qu'elle
+      // persistait qui était faux.
+      //
+      // On ne remplace donc que par du contenu, jamais par du vide.
+      const utile = this.lastRanking.classement?.length > 0;
+      if (utile) {
+        this.rankingStore.data.ranking = this.lastRanking;
+        await this.rankingStore.save().catch((err) => {
+          log.warn(`Classement non persisté (${err.message}) — il sera perdu au prochain redémarrage.`);
+        });
+      } else {
+        // On garde en mémoire le classement précédent : le dashboard doit
+        // continuer d'afficher la dernière décision réelle, pas un vide.
+        const precedent = this.rankingStore.data.ranking;
+        if (precedent?.classement?.length) {
+          this.lastRanking = precedent;
+          log.info(
+            `Cycle sans actif évaluable : le classement du ${precedent.at?.slice(0, 16) ?? '?'} est conservé.`,
+          );
+        }
+      }
 
       const results = [];
       for (const evaluation of evaluations) {

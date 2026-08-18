@@ -371,3 +371,103 @@ describe('dimensionnement et protections', () => {
     assert.equal(risk.checkExits(p, 105), null, 'entre les deux, on garde');
   });
 });
+
+/**
+ * ── Six défauts trouvés par l'audit numérique du 18 août ──────────────────
+ *
+ * Aucun n'était visible à la lecture : ils ont tous été trouvés en confrontant
+ * le code à une ré-implémentation indépendante ou à une identité connue. Ces
+ * tests les figent.
+ */
+const { rsi } = await import('../src/data/indicators.js');
+const { melangerSignaux } = await import('../src/core/signalBlend.js');
+const { rankAndSelect } = await import('../src/core/ranking.js');
+
+describe('audit du 18 août — les six écarts trouvés', () => {
+
+  test('le RSI d\'une série immobile vaut 50, pas 100', () => {
+    // 100 signifie « surachat maximal ». Une série plate n'a rien acheté du
+    // tout, et le facteur `surventeRsi` = (50 − RSI)/50 lui donnait le score
+    // le plus baissier de l'univers.
+    assert.equal(rsi(new Array(60).fill(50), 14).at(-1), 50);
+    assert.equal(rsi([...Array(60)].map((_, i) => 100 + i), 14).at(-1), 100, 'que des hausses : 100');
+    assert.equal(rsi([...Array(60)].map((_, i) => 100 - i), 14).at(-1), 0, 'que des baisses : 0');
+  });
+
+  test('l\'écrêtage mord aussi sur les petits échantillons', () => {
+    // L'indice valait floor(0,01 × (n−1)), donc 0 pour tout n ≤ 100 : la borne
+    // basse était le minimum lui-même et rien n'était écrêté.
+    const x = [...Array(50)].map((_, i) => i);
+    x[0] = -1e6; x[49] = 1e6;
+    const z = zscoreWinsorise(x);
+    assert.ok(Math.abs(z[0]) < 3, `extrême bas ramené à ${z[0].toFixed(2)} σ`);
+    assert.ok(Math.abs(z[49]) < 3, `extrême haut ramené à ${z[49].toFixed(2)} σ`);
+  });
+
+  test('l\'écrêtage reste inchangé sur 150 actifs', () => {
+    // La correction ne doit RIEN changer en production : à 150 valeurs,
+    // l'ancien indice valait déjà 1.
+    const x = [...Array(150)].map((_, i) => i);
+    const z = zscoreWinsorise(x);
+    const tries = [...x].sort((a, b) => a - b);
+    const bas = tries[1]; const haut = tries[148];
+    const moyenne = 149 / 2;
+    assert.ok(z[0] > z[1] - 1e-12 && z[0] < z[1] + 1e-12, 'le plus bas est ramené sur le deuxième');
+    assert.ok(bas === 1 && haut === 148, `bornes ${bas} et ${haut}`);
+    assert.ok(Math.abs(z.reduce((a, b) => a + b, 0)) < 1e-9, `moyenne nulle (${moyenne} au centre)`);
+  });
+
+  test('un facteur absent du PREMIER actif reste dans le mélange', () => {
+    // La liste des signaux se lisait sur les clés du premier actif rencontré :
+    // une introduction en bourse récente placée en tête de l'univers suffisait
+    // à supprimer le momentum 12-1 pour les 149 autres.
+    const evaluations = []; const rangs = new Map();
+    for (let i = 0; i < 20; i += 1) {
+      const s = `S${i}`;
+      evaluations.push({ symbol: s, evaluated: true, decision: { lambda: (i % 7) / 10 } });
+      const f = {
+        momentumCourt: { score: (i % 5) / 10 },
+        momentum: { score: (i % 3) / 10 },
+        volatilite: { score: -(i % 4) / 10 },
+        rsi: { score: (i % 6) / 10 },
+      };
+      if (i === 0) delete f.momentum;   // pas assez d'historique sur le premier
+      rangs.set(s, f);
+    }
+    const res = melangerSignaux(evaluations, rangs, null);
+    assert.ok(res.signauxUtilises.includes('momentum'),
+      `signaux retenus : ${res.signauxUtilises.join(', ')}`);
+    assert.equal(res.signauxUtilises.length, 5);
+  });
+
+  test('le seuil de sortie publié est celui qui a servi', () => {
+    // Il omettait `kappa` : le journal annonçait « sortie au-delà du rang 19 »
+    // quand la règle appliquée sortait au-delà du 27.
+    const evals = Array.from({ length: 100 }, (_, i) => ({
+      symbol: `K${i}`, decision: { forecast: { edge: 100 - i } },
+    }));
+    for (const kappa of [0.4, 1, 2]) {
+      const res = rankAndSelect(evals, {
+        maxSelected: 10, held: new Set(['K99']), kappa, abstention: { abstenir: false },
+      });
+      assert.equal(res.seuilSortie, exitRank({ universe: 100, maxSelected: 10, kappa }),
+        `kappa ${kappa}`);
+    }
+  });
+
+  test('une position sans date d\'ouverture n\'est pas protégée, et c\'est dit', () => {
+    // Comportement volontaire — figer une ligne qu'on ne sait pas dater serait
+    // pire — mais il doit être visible : c'est ce qui arrive après une perte
+    // d'état ou sur une position ouverte hors du bot.
+    const evals = Array.from({ length: 50 }, (_, i) => ({
+      symbol: `T${i}`, decision: { forecast: { edge: 50 - i } },
+    }));
+    const res = rankAndSelect(evals, {
+      maxSelected: 10, held: new Set(['T49']), ageMinimum: 21,
+      positions: [{ symbol: 'T49', openedAt: null }],
+      maintenant: new Date('2026-08-18T13:30:00Z'),
+      abstention: { abstenir: false },
+    });
+    assert.ok(res.sorties.has('T49'), 'sans date, la durée minimale ne s\'applique pas');
+  });
+});

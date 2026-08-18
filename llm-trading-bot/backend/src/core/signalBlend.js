@@ -56,9 +56,20 @@ export function zscoreWinsorise(valeurs, { centile = CENTILE_ECRETAGE } = {}) {
   const finis = valeurs.filter(Number.isFinite);
   if (finis.length < 3) return valeurs.map(() => null);
 
+  // ── L'écrêtage ne mordait plus en dessous de 101 valeurs ────────────────
+  // L'indice `floor(centile × (n−1))` vaut 0 dès que centile × (n−1) < 1, donc
+  // pour tout n ≤ 100 à 1 % : la borne basse devenait le minimum lui-même et
+  // rien n'était écrêté. La protection disparaissait en silence exactement là
+  // où elle compte le plus — un échantillon court est celui où une valeur
+  // aberrante pèse le plus lourd.
+  //
+  // On impose donc au moins une valeur par queue. À 150 actifs, l'indice
+  // valait déjà 1 : le comportement en production est rigoureusement inchangé.
   const tries = [...finis].sort((a, b) => a - b);
-  const bas = tries[Math.floor(centile * (tries.length - 1))];
-  const haut = tries[Math.ceil((1 - centile) * (tries.length - 1))];
+  const dernier = tries.length - 1;
+  const rang = Math.min(Math.max(1, Math.floor(centile * dernier)), Math.floor(dernier / 2));
+  const bas = tries[rang];
+  const haut = tries[dernier - rang];
 
   const ecretes = valeurs.map((v) => (Number.isFinite(v) ? Math.min(Math.max(v, bas), haut) : null));
   const utiles = ecretes.filter(Number.isFinite);
@@ -560,7 +571,22 @@ export function melangerSignaux(evaluations, rangsFacteurs, listwise) {
     return { scores: new Map(), note: 'trop peu d\'actifs pour combiner' };
   }
 
-  let noms = [...new Set(signaux.values().next().value ? Object.keys([...signaux.values()][0]) : [])];
+  // ── La liste des signaux est l'UNION, pas les clés du premier actif ──────
+  // `classerFacteurs` n'inscrit un facteur que pour les actifs où il est
+  // calculable : un titre de moins de 252 séances n'a pas de `momentum` 12-1,
+  // un titre sans ATR exploitable n'a pas de `volatilite`.
+  //
+  // Lire la liste sur le PREMIER actif rencontré faisait donc dépendre la
+  // composition du mélange d'un seul titre, arbitrairement le premier de
+  // l'univers. Vérifié : en retirant `momentum` au seul premier actif, le
+  // mélange tombe de cinq signaux à quatre pour les cent quarante-neuf autres,
+  // sans rien signaler. Une introduction en bourse récente placée en tête de
+  // liste suffisait à supprimer un facteur pour tout le monde.
+  //
+  // L'union ne coûte rien : les actifs auxquels un signal manque reçoivent
+  // déjà l'imputation neutre à zéro, et le compteur d'imputations la rend
+  // visible.
+  let noms = [...new Set([...signaux.values()].flatMap((ligne) => Object.keys(ligne)))];
 
   // ── `reversal` est la NÉGATION EXACTE de `momentumCourt` ────────────────
   // Vérifié sur données réelles : momentumCourt = −0,022618 et reversal =

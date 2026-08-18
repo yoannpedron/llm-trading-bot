@@ -300,7 +300,12 @@ export function rankAndSelect(evaluations, {
     ranks,
     dispersion,
     median,
-    seuilSortie: exitRank({ universe: scored.length, maxSelected }),
+    // Le seuil PUBLIÉ doit être celui qui a servi : il omettait `kappa`, si
+    // bien qu'un kappa injecté — en simulation, ou le jour où on le réglera —
+    // faisait annoncer « sortie au-delà du rang 19 » quand la règle appliquée
+    // sortait au-delà du 27. Le journal décrivait alors une stratégie que le
+    // bot ne suivait pas.
+    seuilSortie: exitRank({ universe: scored.length, maxSelected, kappa }),
     reason: null,
   };
 }
@@ -384,6 +389,7 @@ function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ag
   const seuil = exitRank({ universe, maxSelected, kappa });
   const sorties = new Set();
   const retenuesParAge = new Map();
+  const ageInconnu = [];
 
   for (const symbol of held) {
     const info = ranks.get(symbol);
@@ -400,13 +406,30 @@ function sortiesParRang(ranks, held, universe, maxSelected, { ageMinimum = 0, ag
     // qu'il ait produit revient à payer l'aller-retour complet pour une
     // fraction du mouvement. On laisse donc la position vivre, même quand son
     // rang décroche — le rang décroche constamment sur du bruit transversal.
+    // ── Une date d'ouverture perdue désarme la règle, en silence ──────────
+    // La condition exige `age != null` : sans date, la durée minimale ne
+    // s'applique pas et la position peut être soldée dès le premier cycle.
+    // C'est le bon choix — figer une ligne qu'on ne sait pas dater serait pire
+    // qu'une rotation de trop — mais il ne doit pas passer inaperçu, car c'est
+    // exactement ce qui arrive après une perte d'état ou une position ouverte
+    // hors du bot. Le garde-fou le plus important de la stratégie s'éteignait
+    // sans une ligne de journal.
     const age = ages?.get(symbol);
+    if (ageMinimum > 0 && age == null) ageInconnu.push(symbol);
     if (ageMinimum > 0 && age != null && age < ageMinimum) {
       retenuesParAge.set(symbol, age);
       continue;
     }
 
     sorties.add(symbol);
+  }
+
+  if (ageInconnu.length) {
+    log.warn(
+      `${ageInconnu.length} position(s) sans date d'ouverture connue : ${ageInconnu.join(', ')} — `
+      + `la durée minimale de ${ageMinimum} séances ne les protège pas, elles peuvent être soldées `
+      + 'dès ce cycle.',
+    );
   }
 
   if (retenuesParAge.size) {
