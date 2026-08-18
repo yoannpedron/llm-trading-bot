@@ -29,10 +29,10 @@ describe('durée minimale de détention', () => {
     const held = new Set(['S29']);
     const positions = [{ symbol: 'S29', openedAt: ilYA(3) }];   // ~2 séances
 
-    const sansAge = rankAndSelect(evaluations(univers), { maxSelected: 10, held });
+    const sansAge = rankAndSelect(evaluations(univers), { maxSelected: 10, held , seuilConviction: 0 });
     const avecAge = rankAndSelect(evaluations(univers), {
       maxSelected: 10, held, ageMinimum: 21, positions,
-    });
+     seuilConviction: 0 });
 
     assert.ok(sansAge.sorties.has('S29'), 'sans durée minimale, le rang décroché doit sortir');
     assert.equal(avecAge.sorties.has('S29'), false, 'la durée minimale doit primer sur le rang');
@@ -44,7 +44,7 @@ describe('durée minimale de détention', () => {
 
     const r = rankAndSelect(evaluations(univers), {
       maxSelected: 10, held, ageMinimum: 21, positions,
-    });
+     seuilConviction: 0 });
     assert.ok(r.sorties.has('S29'), 'passé la durée minimale, le rang reprend la main');
   });
 
@@ -53,7 +53,7 @@ describe('durée minimale de détention', () => {
     for (const jours of [1, 40]) {
       const r = rankAndSelect(evaluations(univers), {
         maxSelected: 10, held, ageMinimum: 21, positions: [{ symbol: 'S0', openedAt: ilYA(jours) }],
-      });
+       seuilConviction: 0 });
       assert.equal(r.sorties.has('S0'), false, `S0 est premier, il ne doit jamais sortir (${jours} j)`);
     }
   });
@@ -66,7 +66,7 @@ describe('durée minimale de détention', () => {
       held: new Set(['S29']),
       ageMinimum: 21,
       positions: [{ symbol: 'S29', openedAt: null }],
-    });
+     seuilConviction: 0 });
     assert.ok(r.sorties.has('S29'));
   });
 
@@ -294,7 +294,7 @@ describe('la sélection déclenche-t-elle vraiment un achat ?', () => {
       decision: { ...decisionRang, forecast: { edge: 3 - i * 0.1 } },
     }));
 
-    const sel = rankAndSelect(evals, { maxSelected: 10 });
+    const sel = rankAndSelect(evals, { maxSelected: 10 , seuilConviction: 0 });
     assert.ok(sel.selected.size > 0, 'le classement doit retenir des actifs');
 
     const achats = univers

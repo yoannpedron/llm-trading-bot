@@ -833,6 +833,12 @@ export class TradingEngine {
         maxRetenus: config.risk.maxPositions,
         seuilSortie: ranking.seuilSortie ?? null,
         sorties: [...(ranking.sorties ?? [])],
+        // ── Le verrou de conviction, publié pour être lisible ────────────────
+        // Sans ça, « seulement 7 positions » ressemble à une panne alors que
+        // c'est la règle qui s'applique : les trois places restantes n'ont
+        // trouvé personne d'assez détaché de la coupe du jour, et le capital
+        // correspondant attend en liquidités. Une place vide est une décision.
+        conviction: ranking.conviction ?? null,
         // Une abstention doit toujours pouvoir s'expliquer. Sans ce détail, un
         // actif bien classé mais jamais acheté ressemble à un bug.
         dureeMinimale: config.risk.minHoldingDays,

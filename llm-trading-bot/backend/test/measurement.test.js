@@ -836,7 +836,7 @@ describe('sélection transversale — classer plutôt que seuiller', () => {
   test('retient les meilleurs par ordre, sans regarder le niveau', () => {
     const r = rankAndSelect(
       [ev('A', 0.10), ev('B', 0.50), ev('C', 0.30), ev('D', 0.05), ev('E', 0.40)],
-      { maxSelected: 3 },
+      { maxSelected: 3 , seuilConviction: 0 },
     );
     // K = 3 est demandé, mais seuls B et E sont STRICTEMENT au-dessus de la
     // médiane transversale — laquelle vaut ici 0,30, c'est-à-dire C lui-même.
@@ -858,8 +858,8 @@ describe('sélection transversale — classer plutôt que seuiller', () => {
     // invariant : seul l'ordre compte.
     const base = [ev('A', 0.10), ev('B', 0.50), ev('C', 0.30), ev('D', 0.05), ev('E', 0.40)];
     const gonfle = base.map((e) => ev(e.symbol, e.decision.forecast.edge + 0.20));
-    const a = rankAndSelect(base, { maxSelected: 3 });
-    const b = rankAndSelect(gonfle, { maxSelected: 3 });
+    const a = rankAndSelect(base, { maxSelected: 3 , seuilConviction: 0 });
+    const b = rankAndSelect(gonfle, { maxSelected: 3 , seuilConviction: 0 });
     assert.deepEqual([...a.selected].sort(), [...b.selected].sort());
   });
 
@@ -870,7 +870,7 @@ describe('sélection transversale — classer plutôt que seuiller', () => {
     // rang de signal.
     const r = rankAndSelect(
       [ev('A', 0.25), ev('B', 0.25), ev('C', 0.26), ev('D', 0.25), ev('E', 0.24)],
-      { maxSelected: 3 },
+      { maxSelected: 3 , seuilConviction: 0 },
     );
     assert.equal(r.selected.size, 0, 'aucune sélection sous le seuil de dispersion');
     assert.ok(r.dispersion < MIN_DISPERSION);
@@ -885,20 +885,20 @@ describe('sélection transversale — classer plutôt que seuiller', () => {
     // doit empêcher.
     const r = rankAndSelect(
       [ev('A', 0.60), ev('B', 0.55), ev('C', 0.10), ev('D', 0.08), ev('E', 0.05)],
-      { maxSelected: 3 },
+      { maxSelected: 3 , seuilConviction: 0 },
     );
     assert.deepEqual([...r.selected].sort(), ['A', 'B']);
   });
 
   test('un seul actif évaluable ne se classe pas', () => {
-    const r = rankAndSelect([ev('A', 0.9)], { maxSelected: 3 });
+    const r = rankAndSelect([ev('A', 0.9)], { maxSelected: 3 , seuilConviction: 0 });
     assert.equal(r.selected.size, 0, 'un classement à un élément n\'est pas un classement');
   });
 
   test('les prévisions manquantes sont écartées, pas classées dernières', () => {
     const r = rankAndSelect(
       [ev('A', 0.50), { symbol: 'B', decision: null }, ev('C', 0.40), ev('D', 0.10)],
-      { maxSelected: 2 },
+      { maxSelected: 2 , seuilConviction: 0 },
     );
     assert.equal(r.ranks.has('B'), false, 'un actif sans prévision n\'a pas de rang');
     assert.equal(r.ranks.get('A').total, 3, 'le total ne compte que les évaluables');
@@ -1058,7 +1058,7 @@ describe('sortie par classement — la moitié qui manquait', () => {
   test('une position tombée hors de la bande est signalée à la vente', () => {
     const rows = univers(150);
     // S100 est très loin dans le classement — bien au-delà du rang 16.
-    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S100']) });
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S100']) , seuilConviction: 0 });
     assert.ok(r.sorties.has('S100'), 'la position mal classée doit sortir');
     assert.equal(r.sorties.size, 1);
   });
@@ -1068,7 +1068,7 @@ describe('sortie par classement — la moitié qui manquait', () => {
     // ne fait rien. Vendre là engendrerait des allers-retours dont chacun
     // coûte 6,25 bps pour un gain de classement marginal.
     const rows = univers(150);
-    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S9']) });
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['S9']) , seuilConviction: 0 });
     assert.equal(r.sorties.has('S9'), false, 'le rang 10 est dans la bande de tolérance');
     assert.equal(r.sorties.size, 0);
   });
@@ -1078,7 +1078,7 @@ describe('sortie par classement — la moitié qui manquait', () => {
     // manqué ce cycle n'a rien fait de mal ; vendre sur une absence de donnée
     // serait la pire des raisons d'agir.
     const rows = univers(150);
-    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['INCONNU']) });
+    const r = rankAndSelect(rows, { maxSelected: 3, held: new Set(['INCONNU']) , seuilConviction: 0 });
     assert.equal(r.sorties.size, 0);
   });
 
@@ -1088,7 +1088,7 @@ describe('sortie par classement — la moitié qui manquait', () => {
     // Les confondre ferait du bot un acheteur qui ne vend jamais — exactement
     // le défaut que cette version corrige.
     const plats = Array.from({ length: 150 }, (_, i) => ev(`S${i}`, 0.25 + (i % 3) * 0.0001));
-    const r = rankAndSelect(plats, { maxSelected: 3, held: new Set(['S140']) });
+    const r = rankAndSelect(plats, { maxSelected: 3, held: new Set(['S140']) , seuilConviction: 0 });
     assert.equal(r.selected.size, 0, 'aucun achat sous le seuil de dispersion');
     assert.ok(r.sorties.size >= 0, 'les sorties restent calculées');
     assert.ok(r.ranks.size > 0, 'les rangs existent même sans dispersion');

@@ -1,4 +1,5 @@
 import { createLogger } from '../logger.js';
+import { config } from '../config.js';
 import { sectorOf } from '../data/universe.js';
 
 const log = createLogger('rank');
@@ -154,6 +155,7 @@ export function rankAndSelect(evaluations, {
   abstention = null,
   maintenant = undefined,
   kappa = KAPPA,
+  seuilConviction = config.risk.seuilConviction ?? 0,
 } = {}) {
   const ages = positions
     ? new Map(positions
@@ -255,13 +257,33 @@ export function rankAndSelect(evaluations, {
   // Le plafond ne réordonne rien : il parcourt le classement dans l'ordre et
   // saute simplement les actifs dont le secteur est déjà servi. Le meilleur
   // reste le meilleur.
+  // ── Le verrou de conviction ─────────────────────────────────────────────
+  // Le filtre médian est ordinal : il dit « mieux que la moitié », ce qui est
+  // toujours vrai pour les dix premiers. Il ne mord donc jamais. Le verrou,
+  // lui, est ABSOLU : il exige que le score se détache de la coupe du jour.
+  //
+  // Réduit en écarts-types de la coupe transversale, il est sans unité — le
+  // même chiffre veut dire la même chose en marché calme et en dislocation.
+  // Une place non pourvue reste en liquidités : c'est le prix, et il a été
+  // mesuré (voir `seuilConviction` dans la configuration).
+  const ecartTypeEdge = dispersion;
+  const zDe = (edge) => (ecartTypeEdge > 0 ? (edge - mean) / ecartTypeEdge : 0);
+
   const selected = new Set();
   const parSecteur = new Map();
   const ecartesParSecteur = [];
+  const ecartesParConviction = [];
 
   for (const s of scored) {
     if (selected.size >= maxSelected) break;
     if (s.edge <= median) break; // le tri est décroissant : tout le reste suit
+
+    // Le tri étant décroissant, le premier qui échoue condamne tous les
+    // suivants : on note ce qui reste et on s'arrête.
+    if (seuilConviction > 0 && zDe(s.edge) < seuilConviction) {
+      ecartesParConviction.push({ symbol: s.symbol, z: Number(zDe(s.edge).toFixed(2)) });
+      break;
+    }
 
     if (maxParSecteur > 0) {
       const secteur = secteurDe(s.symbol) || 'inconnu';
@@ -274,6 +296,17 @@ export function rankAndSelect(evaluations, {
     }
 
     selected.add(s.symbol);
+  }
+
+  // Une place laissee vide est une DECISION, pas un incident : elle doit se
+  // lire dans les logs, sinon « seulement 7 positions » ressemble a une panne.
+  if (ecartesParConviction.length) {
+    const manquantes = maxSelected - selected.size;
+    log.info(
+      `Verrou de conviction (${seuilConviction} ecart-type) — ${manquantes} place(s) laissee(s) vide(s) : `
+      + `le mieux classe des restants, ${ecartesParConviction[0].symbol}, plafonne a `
+      + `${ecartesParConviction[0].z} ecart-type. Le capital correspondant reste en liquidites.`,
+    );
   }
 
   if (ecartesParSecteur.length) {
@@ -306,6 +339,17 @@ export function rankAndSelect(evaluations, {
     // sortait au-delà du 27. Le journal décrivait alors une stratégie que le
     // bot ne suivait pas.
     seuilSortie: exitRank({ universe: scored.length, maxSelected, kappa }),
+    conviction: {
+      seuil: seuilConviction,
+      placesVides: Math.max(0, maxSelected - selected.size),
+      meilleurRefuse: ecartesParConviction[0] ?? null,
+      // Le score reduit des retenus : c'est lui qui dit de combien la barre a
+      // ete franchie, et il rend le seuil verifiable depuis le dashboard.
+      zRetenus: [...selected].map((sym) => {
+        const e = scored.find((x) => x.symbol === sym);
+        return { symbol: sym, z: Number(zDe(e.edge).toFixed(2)) };
+      }),
+    },
     reason: null,
   };
 }

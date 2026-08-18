@@ -449,7 +449,7 @@ describe('audit du 18 août — les six écarts trouvés', () => {
     for (const kappa of [0.4, 1, 2]) {
       const res = rankAndSelect(evals, {
         maxSelected: 10, held: new Set(['K99']), kappa, abstention: { abstenir: false },
-      });
+       seuilConviction: 0 });
       assert.equal(res.seuilSortie, exitRank({ universe: 100, maxSelected: 10, kappa }),
         `kappa ${kappa}`);
     }
@@ -467,7 +467,7 @@ describe('audit du 18 août — les six écarts trouvés', () => {
       positions: [{ symbol: 'T49', openedAt: null }],
       maintenant: new Date('2026-08-18T13:30:00Z'),
       abstention: { abstenir: false },
-    });
+     seuilConviction: 0 });
     assert.ok(res.sorties.has('T49'), 'sans date, la durée minimale ne s\'applique pas');
   });
 });
@@ -503,5 +503,83 @@ describe('un classement vide ne remplace jamais un classement plein', () => {
   test('un classement absent est traité comme un classement vide', () => {
     assert.equal(classementAConserver(null, plein).retenu, plein);
     assert.equal(classementAConserver({ at: 'x' }, plein).retenu, plein);
+  });
+});
+
+/**
+ * ── LE VERROU DE CONVICTION ────────────────────────────────────────────────
+ *
+ * Règle ABSOLUE d'entrée, ajoutée après mesure sur 434 vrais départs à 100 $ :
+ * un titre n'est acheté que si son score se détache de τ écarts-types de la
+ * coupe transversale du jour. Une place non pourvue reste en liquidités.
+ *
+ * Testée sur une coupe de taille RÉALISTE : sur huit actifs synthétiques aucun
+ * score n'atteint deux écarts-types, et le test ne mesurerait rien.
+ */
+describe('verrou de conviction', () => {
+  // Coupe de 141 actifs — la taille réellement observée en production après
+  // les filtres d'éligibilité. Scores gaussiens engendrés de façon déterministe.
+  const coupe = (n = 141) => {
+    let graine = 7;
+    const alea = () => {
+      graine = (graine * 1103515245 + 12345) & 0x7fffffff;
+      return graine / 0x7fffffff;
+    };
+    const gauss = () => Math.sqrt(-2 * Math.log(alea() || 1e-12)) * Math.cos(2 * Math.PI * alea());
+    return Array.from({ length: n }, (_, i) => ({
+      symbol: `Z${i}`,
+      decision: { forecast: { edge: gauss() * 0.64 } },
+    }));
+  };
+
+  const options = (seuil) => ({
+    maxSelected: 10, maxParSecteur: 0, abstention: { abstenir: false }, seuilConviction: seuil,
+  });
+
+  test('sans verrou, les dix places sont pourvues', () => {
+    const r = rankAndSelect(coupe(), options(0));
+    assert.equal(r.selected.size, 10);
+    assert.equal(r.conviction.placesVides, 0);
+  });
+
+  test('le verrou laisse des places vides quand personne ne se détache', () => {
+    const r = rankAndSelect(coupe(), options(2.0));
+    assert.ok(r.selected.size < 10, `${r.selected.size} retenu(s) au lieu de 10`);
+    assert.equal(r.conviction.placesVides, 10 - r.selected.size);
+    assert.ok(r.conviction.meilleurRefuse, 'le premier refusé doit être nommé');
+  });
+
+  test('tout titre retenu dépasse effectivement le seuil', () => {
+    for (const seuil of [1.0, 1.5, 2.0, 2.5]) {
+      const r = rankAndSelect(coupe(), options(seuil));
+      for (const { symbol, z } of r.conviction.zRetenus) {
+        assert.ok(z >= seuil, `${symbol} retenu à ${z} écart-type pour un seuil de ${seuil}`);
+      }
+    }
+  });
+
+  test('plus le seuil monte, moins il y a de retenus', () => {
+    const tailles = [0, 1.0, 1.5, 2.0, 2.5, 3.0]
+      .map((seuil) => rankAndSelect(coupe(), options(seuil)).selected.size);
+    for (let i = 1; i < tailles.length; i += 1) {
+      assert.ok(tailles[i] <= tailles[i - 1],
+        `seuil croissant mais ${tailles[i]} > ${tailles[i - 1]} retenus`);
+    }
+    assert.ok(tailles[0] > tailles.at(-1), `de ${tailles[0]} à ${tailles.at(-1)} retenus`);
+  });
+
+  test('le seuil publié est celui qui a servi', () => {
+    assert.equal(rankAndSelect(coupe(), options(1.75)).conviction.seuil, 1.75);
+  });
+
+  test('le verrou ne touche JAMAIS aux sorties', () => {
+    // Un verrou qui bloquerait aussi les ventes figerait le portefeuille : on
+    // n'achèterait plus faute de conviction, et on ne vendrait plus non plus.
+    const evals = coupe();
+    const dernier = evals.at(-1).symbol;
+    const avec = rankAndSelect(evals, { ...options(3.0), held: new Set([dernier]) });
+    const sans = rankAndSelect(evals, { ...options(0), held: new Set([dernier]) });
+    assert.deepEqual([...avec.sorties], [...sans.sorties],
+      'les sorties doivent être identiques quel que soit le seuil d\'entrée');
   });
 });

@@ -27,13 +27,13 @@ describe('neutralité sectorielle', () => {
   const secteurDe = (s) => secteurs[s];
 
   test('sans plafond, un seul secteur rafle le portefeuille', () => {
-    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 0 });
+    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 0 , seuilConviction: 0 });
     const pris = [...r.selected];
     assert.equal(pris.filter((s) => secteurs[s] === 'Technologie').length, 5, 'les 5 places partent à la tech');
   });
 
   test('avec plafond, la concentration sectorielle est bornée', () => {
-    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 2 });
+    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 2 , seuilConviction: 0 });
     const pris = [...r.selected];
     const parSecteur = {};
     for (const s of pris) parSecteur[secteurs[s]] = (parSecteur[secteurs[s]] ?? 0) + 1;
@@ -41,7 +41,7 @@ describe('neutralité sectorielle', () => {
   });
 
   test('le plafond ne réordonne rien : le meilleur reste pris en premier', () => {
-    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 2 });
+    const r = rankAndSelect(evals, { maxSelected: 5, secteurDe, maxParSecteur: 2 , seuilConviction: 0 });
     assert.ok(r.selected.has('T1'), 'le premier du classement doit toujours être retenu');
     assert.ok(r.selected.has('T2'), 'le deuxième de son secteur passe encore');
     assert.equal(r.selected.has('T3'), false, 'le troisième du même secteur est écarté');
@@ -61,7 +61,7 @@ describe('neutralité sectorielle', () => {
     const neufSecteurs = ['Tech', 'Finance', 'Santé', 'Énergie', 'Industrie', 'Conso', 'Utilities', 'Immo', 'Télécom'];
     const secteurLarge = (s) => neufSecteurs[Number(s.slice(1)) % 9];
 
-    const r = rankAndSelect(grands, { maxSelected: 10, secteurDe: secteurLarge, maxParSecteur: 2 });
+    const r = rankAndSelect(grands, { maxSelected: 10, secteurDe: secteurLarge, maxParSecteur: 2 , seuilConviction: 0 });
     assert.equal(r.selected.size, 10, 'les places libérées doivent être reprises ailleurs');
 
     const parSecteur = {};
@@ -73,7 +73,7 @@ describe('neutralité sectorielle', () => {
     // Comportement préexistant, rendu explicite : on n'achète jamais un actif
     // sous la médiane transversale, quel que soit le nombre de places libres.
     // Sur un univers étroit, c'est lui qui limite, pas le plafond sectoriel.
-    const r = rankAndSelect(evals, { maxSelected: 12, secteurDe, maxParSecteur: 0 });
+    const r = rankAndSelect(evals, { maxSelected: 12, secteurDe, maxParSecteur: 0 , seuilConviction: 0 });
     assert.ok(r.selected.size <= Math.ceil(evals.length / 2));
   });
 });
@@ -284,14 +284,14 @@ describe('durée minimale de détention — le garde-fou qui était invérifiabl
     const tot = rankAndSelect(evaluations, {
       ...commun,
       maintenant: new Date('2025-06-12T18:00:00.000Z'),
-    });
+     seuilConviction: 0 });
     assert.equal(tot.sorties.has('S19'), false, 'sortie interdite avant 21 séances');
 
     // Six mois plus tard : la durée est atteinte, la sortie redevient permise.
     const tard = rankAndSelect(evaluations, {
       ...commun,
       maintenant: new Date('2025-12-05T18:00:00.000Z'),
-    });
+     seuilConviction: 0 });
     assert.equal(tard.sorties.has('S19'), true, 'sortie permise une fois la durée écoulée');
   });
 
@@ -304,7 +304,7 @@ describe('durée minimale de détention — le garde-fou qui était invérifiabl
     const positions = [{ symbol: 'S19', openedAt: new Date().toISOString() }];
     const r = rankAndSelect(evaluations, {
       maxSelected: 3, held: new Set(['S19']), ageMinimum: 21, positions,
-    });
+     seuilConviction: 0 });
     assert.equal(r.sorties.has('S19'), false);
   });
 });

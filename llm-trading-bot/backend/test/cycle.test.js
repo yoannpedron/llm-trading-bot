@@ -25,6 +25,20 @@ process.env.ONLY_MARKET_HOURS = 'false';
 process.env.LLM_COOLDOWN_MS = '0';
 process.env.SYMBOLS = Array.from({ length: 40 }, (_, i) => `T${i}`).join(',');
 process.env.RANKING_TIRAGES_BOOTSTRAP = '30';
+// ── Verrou de conviction désactivé ICI, et seulement ici ──────────────────
+// Ce fichier vérifie que les PIÈCES SONT BRANCHÉES : le moteur classe-t-il,
+// sélectionne-t-il, passe-t-il réellement un ordre ? C'est le test qui a
+// rattrapé la régression où le bot classait parfaitement puis n'achetait
+// jamais, et cette valeur-là doit être préservée.
+//
+// Le verrou est une règle ABSOLUE : il exige que le score se détache de deux
+// écarts-types de la coupe du jour. Sur quarante actifs synthétiques aux prix
+// engendrés par un générateur, aucun ne s'en détache — le verrou bloquerait
+// tout, et le test cesserait de mesurer ce qu'il annonce.
+//
+// La règle du verrou est donc testée à part, sur une coupe transversale de
+// taille réaliste (voir mathematiques.test.js).
+process.env.SEUIL_CONVICTION = '0';
 
 const { config } = await import('../src/config.js');
 const { RiskManager } = await import('../src/core/riskManager.js');

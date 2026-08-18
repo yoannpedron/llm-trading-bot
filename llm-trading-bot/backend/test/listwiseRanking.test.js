@@ -153,7 +153,7 @@ describe('classement par comparaison — bout en bout', () => {
     const sel = rankAndSelect(r.evaluations, {
       maxSelected: 10,
       abstention: { abstenir: !r.test.significatif, raison: 'non significatif' },
-    });
+     seuilConviction: 0 });
 
     assert.equal(sel.selected.size, 10);
     // C'est LE point : avec la notation individuelle, cinquante actifs
@@ -171,7 +171,7 @@ describe('classement par comparaison — bout en bout', () => {
     const sel = rankAndSelect(r.evaluations, {
       maxSelected: 10,
       abstention: { abstenir: !r.test.significatif, raison: 'hasard' },
-    });
+     seuilConviction: 0 });
     assert.equal(sel.selected.size, 0, 'aucun achat sur un classement aléatoire');
     assert.match(sel.reason, /hasard/);
   });

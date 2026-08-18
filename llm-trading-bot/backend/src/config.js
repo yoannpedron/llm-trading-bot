@@ -241,6 +241,75 @@ export const config = {
     maxPerSector: num('MAX_PER_SECTOR', 3),
 
     /**
+     * ── VERROU DE CONVICTION ──────────────────────────────────────────────
+     * Seuil ABSOLU d'entrée, en écarts-types du score combiné du jour.
+     *
+     * La règle d'entrée était purement relative : prendre les dix meilleurs,
+     * quoi qu'ils vaillent. Un jour où les cent cinquante titres sont
+     * médiocres, le bot achetait quand même les dix moins mauvais — et
+     * engageait cent pour cent du capital. Il n'existait aucun moyen de dire
+     * « aucun de ceux-là ne mérite d'être acheté ».
+     *
+     * Le seuil est exprimé en écarts-types de la coupe transversale du jour,
+     * donc sans unité : le même chiffre veut dire la même chose en marché calme
+     * et en dislocation. Un seuil sur le rendement, lui, aurait été dix fois
+     * plus exigeant dans un cas que dans l'autre.
+     *
+     * ── Ce que ça coûte ────────────────────────────────────────────────────
+     * Les places non pourvues restent en LIQUIDITÉS, qui ne rapportent rien.
+     * Le verrou n'est donc gagnant que si les titres écartés font moins bien
+     * que le MARCHÉ — pas seulement moins bien que les meilleurs. C'est cette
+     * question-là qui a été mesurée.
+     *
+     * ── La mesure : 434 vrais départs à 100 $ ──────────────────────────────
+     * 144 actifs, janvier 2016 → août 2026, une date de départ tous les cinq
+     * jours, portefeuille vide à chaque fois, lecture sur la MÉDIANE des
+     * arrivées à un an :
+     *
+     *     τ        médiane    bat le passif   lignes tenues   liquidités
+     *     aucun    122,86 $     62 %              10,0           1 %
+     *     1,75     126,09 $     71 %               9,8           3 %
+     *     1,90     128,79 $     77 %               9,7           4 %
+     *     2,00     130,85 $     76 %               9,6           5 %
+     *     2,25     132,21 $     83 %               9,2           8 %
+     *     2,50     124,65 $     73 %               8,3          17 %
+     *     3,00     110,05 $     18 %               4,6          54 %
+     *
+     * Au-delà de 2,5 le verrou se retourne : le capital immobile coûte plus
+     * que les mauvaises entrées évitées. À 3, plus d'une place sur deux reste
+     * vide et le bot perd contre l'inaction.
+     *
+     * ── Le garde-fou : TROIS tiers indépendants ────────────────────────────
+     * Écart au « sans verrou » du même tiers, en médiane :
+     *
+     *     τ       2017-2020   2020-2023   2023-2026
+     *     1,50      -3,59 $     -0,24 $     -0,33 $   perdant partout
+     *     1,75      +1,54 $     -2,18 $     +3,18 $   mitigé
+     *     1,90      +3,76 $     +2,63 $     +7,52 $   gagnant sur les trois
+     *     2,00      +2,26 $     +0,49 $     +8,65 $   gagnant sur les trois
+     *     2,25      +4,45 $     +0,85 $     +7,54 $   gagnant sur les trois
+     *     2,40      -0,35 $     -0,04 $     +6,19 $   mitigé
+     *
+     * ── Pourquoi 2,0 et non 2,25, qui affiche mieux ───────────────────────
+     * Parce que 2,25 est le MAXIMUM de la grille, et prendre le maximum est
+     * exactement l'erreur qui m'avait fait retenir 13 % de prise de bénéfice —
+     * un sommet isolé 32 % au-dessus de ses deux voisins, donc du bruit. La
+     * zone qui gagne sur les trois tiers va de 1,9 à 2,25 ; 2,0 est à
+     * l'intérieur, c'est une valeur ronde et non une décimale ajustée, et sa
+     * part de liquidités immobiles reste faible (5 %).
+     *
+     * ── Ce que la mesure ne dit PAS ───────────────────────────────────────
+     * Le gain n'est pas uniforme : fort sur 2023-2026 (+8,65 $), quasi nul sur
+     * 2020-2023 (+0,49 $). Ce n'est donc pas une propriété stable du marché,
+     * c'est un effet qui a bien tenu récemment. À revoir quand le carnet
+     * fantôme aura de quoi trancher sur données réelles.
+     *
+     * Mettre 0 (ou une valeur négative) désactive le verrou et rend la règle
+     * d'entrée purement relative, comme avant.
+     */
+    seuilConviction: num('SEUIL_CONVICTION', 2.0),
+
+    /**
      * ── Fenêtre d'exécution, en heure de New York ─────────────────────────
      * Le spread suit une courbe en U sur la séance. À l'ouverture, les teneurs
      * de marché élargissent leurs fourchettes pour se protéger de l'asymétrie
