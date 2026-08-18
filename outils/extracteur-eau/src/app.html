@@ -890,8 +890,8 @@ label.cand input { width:15px; height:15px; margin-top:2px; accent-color:var(--a
           </span>
           <select id="optDpi">
             <option value="150">150 ppp — rapide</option>
-            <option value="200" selected>200 ppp — équilibré</option>
-            <option value="300">300 ppp — fin</option>
+            <option value="200">200 ppp — équilibré</option>
+            <option value="300" selected>300 ppp — fin, recommandé pour les scans</option>
           </select>
         </div>
 
@@ -1642,7 +1642,11 @@ function construireLignes(pages) {
     l.conf = l.mots.reduce((s, m) => s + (m.conf ?? 100), 0) / l.mots.length;
   }
   const gardees = lignes.filter(l => l.txt);
-  for (const l of gardees) l.segments = decouperColonnes(l);
+  gardees.forEach((l, i) => {
+    l.rang = i;                       // numéro de bande, pour retrouver les voisins
+    l.segments = decouperColonnes(l);
+    for (const seg of l.segments) seg.rang = i;
+  });
   return gardees;
 }
 
@@ -1810,7 +1814,7 @@ const ETIQUETTES = {
 const MOTIF_ID = /[A-Z0-9][A-Z0-9\-\/\. ]{2,29}/;
 const ANTI_CONTRAT = /TITULAIRE\s+DU\s+CONTRAT|OBJET\s+DU\s+CONTRAT|(?:DATE|DEBUT|FIN|SOUSCRIPTION|RESILIATION)\s+(?:DE\s+|DU\s+)?CONTRAT|CONDITIONS\s+DU\s+CONTRAT/;
 
-const ETIQ_SITE = /ADRESSE\s+DESSERVIE|POINT\s+DE\s+LIVRAISON|LIEU\s+DE\s+CONSOMMATION|ADRESSE\s+DE\s+(?:DESSERTE|CONSOMMATION|LIVRAISON|FOURNITURE|L\s*'?\s*INSTALLATION)|IMMEUBLE\s+DESSERVI|LOGEMENT\s+DESSERVI|BIEN\s+DESSERVI|LIEU\s+DESSERVI|SITUATION\s+DU\s+BRANCHEMENT|ADRESSE\s+DU\s+COMPTEUR|TITULAIRE\s+DU\s+CONTRAT|ABONNE\s*\(?S?\)?\s*[:.]|LIEU\s+DE\s+LIVRAISON|ADRESSE\s+DU\s+POINT/;
+const ETIQ_SITE = /(?:PROPRIETE|INSTALLATION)\s+DESSERVIE|ADRESSE\s+DU\s+BRANCHEMENT|NOM\s+DE\s+L\s*'?\s*ABONNE|ADRESSE\s+DESSERVIE|POINT\s+DE\s+LIVRAISON|LIEU\s+DE\s+CONSOMMATION|ADRESSE\s+DE\s+(?:DESSERTE|CONSOMMATION|LIVRAISON|FOURNITURE|L\s*'?\s*INSTALLATION)|IMMEUBLE\s+DESSERVI|LOGEMENT\s+DESSERVI|BIEN\s+DESSERVI|LIEU\s+DESSERVI|SITUATION\s+DU\s+BRANCHEMENT|ADRESSE\s+DU\s+COMPTEUR|TITULAIRE\s+DU\s+CONTRAT|ABONNE\s*\(?S?\)?\s*[:.]|LIEU\s+DE\s+LIVRAISON|ADRESSE\s+DU\s+POINT/;
 const ETIQ_PAYEUR = /ADRESSE\s+DE\s+FACTURATION|ADRESSE\s+D\s*'?\s*ENVOI|DESTINATAIRE|FACTURE\s+ADRESSEE|ADRESSE\s+POSTALE|VOS\s+COORDONNEES|ADRESSE\s+DU\s+PAYEUR|ENVOI\s+DE\s+LA\s+FACTURE/;
 
 const MOTS_VOIE = new RegExp('\\b(?:RUE|AVENUE|AV|BOULEVARD|BD|BLD|CHEMIN|CHE|CHEM|ALLEE|ALL|IMPASSE|IMP|PLACE|PL|ROUTE|RTE|QUAI|QU|SQUARE|SQ|LIEU\\s*DIT|LD|RESIDENCE|RES|HAMEAU|HAM|LOTISSEMENT|LOT|ZONE|ZA|ZI|ZAC|COURS|CRS|SENTIER|SEN|PASSAGE|PAS|VILLA|VLA|ROND\\s*POINT|RPT|FAUBOURG|FG|MONTEE|TRAVERSE|VOIE|CITE|DOMAINE|CLOS|PARC|MAIL|ESPLANADE|PROMENADE|RUELLE|VENELLE|GRANDE\\s*RUE|CHAUSSEE|LEVEE|PORT|BERGE|CHALET|MAS|FERME|TOUR|BATIMENT|BAT|APPARTEMENT|APPT|APT|ETAGE|ESCALIER|BOITE\\s*POSTALE|BP|CS)\\b');
@@ -1820,49 +1824,127 @@ const RE_MONTANT  = /\d{1,3}(?:[ .]\d{3})*[,.]\d{2}\b|\b\d+[,.]\d{2}\b/g;
 const RE_DATE     = /\b(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\b/;
 
 // ── Recherche d'une valeur derrière une étiquette ──────────────────
-// Trois emplacements, par ordre de fiabilité décroissante : sur la même ligne
-// après l'étiquette, sur la ligne juste en dessous dans la même colonne, puis
-// sur la deuxième ligne en dessous.
+// Sur une facture réelle, la valeur d'une étiquette se trouve à l'un de trois
+// endroits, et à aucun autre :
+//
+//   « N° compteur : A20AB123456 »        → juste après, dans la même cellule ;
+//   « Référence client │ 0041174660 »    → dans la cellule voisine à droite ;
+//   « Référence client »                 → dans la cellule du dessous, quand
+//   « 0041174660 »                         l'étiquette coiffe une colonne.
+//
+// Ces trois cas se raisonnent sur des cellules, jamais sur des lignes entières :
+// une facture d'eau imprime une colonne de contacts sur toute la hauteur de la
+// page, et une ligne pleine largeur colle « ABONNEMENT 74,08 € » à « un accueil
+// se tiendra dans les locaux… ». C'est ce qui faisait dérailler l'extraction.
+
+function segmentsMemeBande(ctx, seg) {
+  return ctx.segments.filter(o => o.rang === seg.rang && o !== seg);
+}
+
+// Cellules situées sous une étiquette et dans sa colonne. On exige un vrai
+// recouvrement horizontal avec l'étiquette elle-même : c'est ce qui distingue
+// la valeur qui lui appartient de celle de la colonne d'à côté.
+// Cellules situées juste au-dessus, dans la même colonne. Sur un document
+// scanné, l'interligne d'un bloc d'adresse varie assez pour que le nom et la
+// rue tombent dans deux blocs distincts : c'est la colonne qui fait foi.
+function segmentsDessus(ctx, seg, n) {
+  return ctx.segments
+    .filter(o => o.p === seg.p && o !== seg && o.y1 <= seg.y0 + seg.h * 0.4
+              && seg.y0 - o.y1 < seg.h * 5
+              && Math.min(o.x1, seg.x1 + seg.h * 2.5) - Math.max(o.x0, seg.x0 - seg.h * 0.8) > 0)
+    .sort((a, b) => b.y1 - a.y1)
+    .slice(0, n || 3);
+}
+
+function segmentsDessous(ctx, seg, aGauche, aDroite) {
+  const g = seg.x0 - (aGauche ?? seg.h * 0.8);
+  const d = seg.x1 + (aDroite ?? seg.h * 2.5);
+  return ctx.segments
+    .filter(o => o.p === seg.p && o.rang > seg.rang
+              && o.y0 > seg.y1 - seg.h * 0.4 && o.y0 - seg.y1 < seg.h * 4
+              && Math.min(o.x1, d) - Math.max(o.x0, g) > 0)
+    .sort((a, b) => (a.y0 - b.y0) || Math.abs(a.x0 - seg.x0) - Math.abs(b.x0 - seg.x0));
+}
+
+// « Nom de l'abonné et adresse du branchement » : ce qui suit « nom de
+// l'abonné » n'est pas le nom de l'abonné, c'est la suite de l'étiquette. On
+// écarte donc toute valeur qui ressemble encore à un intitulé, ou qui s'ouvre
+// sur un mot de liaison.
+const RE_INTITULE = /^(?:VOTRE|NOTRE|MON|MA|LE|LA)?\s*(?:REFERENCE|REF|NUMERO|N°|ADRESSE|NOM|TITULAIRE|CLIENT|ABONNE|CONTRAT|COMPTEUR|IDENTIFIANT|FACTURE|PRENOM|RAISON\s+SOCIALE|DESIGNATION|LIBELLE|MONTANT|PERIODE)\b/;
+
+function valeurPlausible(v) {
+  const t = String(v || '').trim();
+  if (t.replace(/[^A-Z0-9]/g, '').length < 3) return false;
+  if (ETIQ_SITE.test(t) || ETIQ_PAYEUR.test(t)) return false;
+  if (/^(?:ET|DE|DU|DES|LA|LE|LES|AU|AUX|A|POUR|PAR|SUR)\b/.test(t)) return false;
+  // Un intitulé sans le moindre chiffre reste un intitulé : « Votre
+  // référence » n'est pas une raison sociale.
+  if (RE_INTITULE.test(t) && !/\d/.test(t)) return false;
+  return true;
+}
+
+// Une valeur candidate dans une cellule voisine : on la prend au début de la
+// cellule, faute de quoi n'importe quel nombre de la ligne ferait l'affaire.
+function valeurDansSegment(seg, motifValeur, debutSeulement) {
+  const m = seg.N.match(motifValeur);
+  if (!m) return null;
+  if (debutSeulement && m.index > 2) return null;
+  if (!valeurPlausible(m[0])) return null;
+  const mots = motsIntervalle(seg, m.index, m.index + m[0].length);
+  return { valeur: m[0].trim(), zone: zoneDeMots(mots, seg.p), mots };
+}
+
 function valeursEtiquetees(ctx, motifs, motifValeur, anti) {
   const out = [];
-  for (const l of ctx.lignes) {
-    // Certaines tournures contiennent le mot-clé sans annoncer la valeur :
-    // « titulaire du contrat », « date du contrat ». On écarte la ligne.
-    if (anti && anti.test(l.N)) continue;
+  // « Nom et Prénom ou Raison sociale » : le libellé se prolonge après le
+  // motif reconnu. Une valeur qui répond encore à l'un des motifs de la
+  // famille est donc un reste d'intitulé, pas une valeur.
+  const resteDIntitule = v => motifs.some(re => re.test(v))
+    || /^(?:OU|ET)\s/.test(v) || /\bRAISON\s+SOCIALE\b|\bPRENOM\b|\bADRESSE\b/.test(v);
+  for (const seg of ctx.segments) {
+    if (anti && anti.test(seg.N)) continue;
     for (const re of motifs) {
-      const m = l.N.match(re);
+      const m = seg.N.match(re);
       if (!m) continue;
       const finEtiq = m.index + m[0].length;
-      const zoneEtiq = zoneIntervalle(l, m.index, finEtiq);
+      const etiquette = seg.txt.slice(0, 34);
 
-      // 1. même ligne
-      const reste = l.N.slice(finEtiq);
-      const sep = (reste.match(/^[\s:.\-–—]*/) || [''])[0].length;
+      // 1. dans la cellule même, juste après l'étiquette
+      const reste = seg.N.slice(finEtiq);
+      const sep = (reste.match(/^[\s:.\-–—|]*/) || [''])[0].length;
       const cible = reste.slice(sep);
       const mv = cible.match(motifValeur);
-      if (mv && mv.index < 3) {
+      if (mv && mv.index < 3 && valeurPlausible(mv[0]) && !resteDIntitule(mv[0])) {
         const a = finEtiq + sep + mv.index, b = a + mv[0].length;
-        const mots = motsIntervalle(l, a, b);
-        out.push({ valeur: mv[0].trim(), zone: zoneDeMots(mots, l.p), zoneEtiq,
-                   conf: 0.92 * confMots(mots), origine: `étiquette « ${l.txt.slice(0, 34)} », même ligne`, ligne: l });
+        const mots = motsIntervalle(seg, a, b);
+        out.push({ valeur: mv[0].trim(), zone: zoneDeMots(mots, seg.p),
+                   conf: 0.92 * confMots(mots),
+                   origine: `étiquette « ${etiquette} », même cellule`, seg });
         continue;
       }
-      // 2. lignes en dessous, dans la même colonne
-      const dessous = ctx.lignes
-        .filter(o => o.p === l.p && o.y0 >= l.y1 - l.h * 0.3 && o.y0 - l.y1 < l.h * 3.2
-                     && Math.min(o.x1, l.x1 + l.h * 6) - Math.max(o.x0, l.x0) > 0)
-        .sort((a, b) => a.y0 - b.y0);
+
+      // 2. dans une cellule voisine à droite, sur la même bande
       let pris = false;
-      for (let k = 0; k < Math.min(2, dessous.length) && !pris; k++) {
-        const o = dessous[k];
-        const mv2 = o.N.match(motifValeur);
-        if (mv2 && mv2.index < 3) {
-          const mots = motsIntervalle(o, mv2.index, mv2.index + mv2[0].length);
-          out.push({ valeur: mv2[0].trim(), zone: zoneDeMots(mots, o.p), zoneEtiq,
-                     conf: (k === 0 ? 0.78 : 0.62) * confMots(mots),
-                     origine: `étiquette « ${l.txt.slice(0, 30)} », ligne ${k === 0 ? 'suivante' : '+2'}`, ligne: o });
-          pris = true;
-        }
+      const droite = segmentsMemeBande(ctx, seg)
+        .filter(o => o.x0 >= seg.x1 - seg.h)
+        .sort((a, b) => a.x0 - b.x0);
+      for (const o of droite.slice(0, 3)) {
+        const v = valeurDansSegment(o, motifValeur, true);
+        if (!v || resteDIntitule(v.valeur)) continue;
+        out.push({ valeur: v.valeur, zone: v.zone, conf: 0.86 * confMots(v.mots),
+                   origine: `étiquette « ${etiquette} », cellule à droite`, seg: o });
+        pris = true; break;
+      }
+      if (pris) continue;
+
+      // 3. dans la cellule du dessous, quand l'étiquette coiffe une colonne
+      const dessous = segmentsDessous(ctx, seg);
+      for (const o of dessous.slice(0, 3)) {
+        const v = valeurDansSegment(o, motifValeur, true);
+        if (!v || resteDIntitule(v.valeur)) continue;
+        out.push({ valeur: v.valeur, zone: v.zone, conf: 0.74 * confMots(v.mots),
+                   origine: `étiquette « ${etiquette} », cellule en dessous`, seg: o });
+        break;
       }
     }
   }
@@ -1878,11 +1960,40 @@ function nettoyerId(v) {
   return (s.length >= 3 && /\d/.test(s)) ? s : '';
 }
 
+// Tous les groupes de caractères qui ont l'allure d'un identifiant, classés
+// par proximité avec un mot-clé de la famille cherchée. Sert de filet quand
+// l'étiquette n'a pas été reconnue — l'utilisateur choisit d'un clic.
+function identifiantsPlausibles(ctx, motifs) {
+  const out = [];
+  const vus = new Set();
+  for (const seg of ctx.segments) {
+    const re = /\b[A-Z0-9][A-Z0-9\-\/]{5,19}\b/g;
+    let m;
+    while ((m = re.exec(seg.N))) {
+      const propre = nettoyerId(m[0]);
+      if (!propre || vus.has(propre)) continue;
+      if (/^(?:19|20)\d{6}$/.test(propre)) continue;          // une date, pas un numéro
+      vus.add(propre);
+      const proche = motifs.some(r => r.test(seg.N));
+      out.push({ valeur: propre, conf: proche ? 0.45 : 0.2,
+                 zone: zoneIntervalle(seg, m.index, m.index + m[0].length),
+                 why: `${proche ? 'à côté de l\'intitulé' : 'relevé'} page ${seg.p} — « ${seg.txt.slice(0, 30)} »` });
+    }
+  }
+  return out.sort((a, b) => b.conf - a.conf).slice(0, 10);
+}
+
 function champIdentifiant(ctx, motifs, nom, anti) {
   const brut = valeursEtiquetees(ctx, motifs, MOTIF_ID, anti)
     .map(c => ({ ...c, propre: nettoyerId(c.valeur) }))
     .filter(c => c.propre);
-  if (!brut.length) return VIDE(`aucune étiquette de type « ${nom} » trouvée`);
+  if (!brut.length) {
+    // Aucune étiquette exploitable : plutôt que de laisser l'utilisateur
+    // recopier un numéro à la main, on lui présente ceux que porte la facture.
+    const r = VIDE(`aucune étiquette de type « ${nom} » trouvée`);
+    r.candidats = identifiantsPlausibles(ctx, motifs);
+    return r;
+  }
 
   // Dédoublonnage : la même valeur peut être trouvée par plusieurs étiquettes.
   const vus = new Map();
@@ -1905,6 +2016,23 @@ function champIdentifiant(ctx, motifs, nom, anti) {
 
 const estLigneVoie = l => /^\s*\d{1,4}\s*(?:BIS|TER|QUATER)?\s+\S/.test(l.N) || MOTS_VOIE.test(l.N);
 
+// « SOGECA / 231 RUE DES CABOEUFS / BATIMENT A CS4527 / 92230 GENNEVILLIERS » :
+// la ligne juste au-dessus du code postal n'est pas la voie, c'est un
+// complément. On note donc chaque ligne et on retient la mieux placée, pas la
+// plus proche.
+const MOTS_COMPLEMENT = /\b(?:BATIMENT|BAT|APPARTEMENT|APPT|APT|ETAGE|ESCALIER|ESC|BOITE\s*POSTALE|BP|CS|TSA|RESIDENCE|RES|IMMEUBLE|PORTE|LOT|LOTISSEMENT|ZONE|ZA|ZI|ZAC)\b/;
+function scoreVoie(txt) {
+  const numerote = /^\s*\d{1,4}\s*(?:BIS|TER|QUATER)?\s+\S/.test(txt);
+  const voie = MOTS_VOIE.test(txt);
+  const complement = MOTS_COMPLEMENT.test(txt);
+  if (numerote && voie) return 3;
+  if (voie && !complement) return 2.2;
+  if (numerote) return 1.6;
+  if (voie) return 1.2;
+  if (complement) return 0.5;
+  return 0;
+}
+
 // « Adresse desservie : 16 ALL DU MOULIN HARVY » : la voie commence après
 // l'étiquette. Sans ce nettoyage, l'étiquette se retrouverait recopiée dans la
 // colonne « Rue Site » du classeur.
@@ -1916,6 +2044,23 @@ function debutVoie(texte) {
   if (c >= 0 && texte.length - c > 4) i = c + 1;
   while (i < texte.length && /[\s:.\-–—]/.test(texte[i])) i++;
   return i;
+}
+
+// Ce qui surplombe une voie n'est pas toujours un nom : sur une facture, une
+// ligne de date ou un intitulé de rubrique passe souvent juste au-dessus de
+// l'adresse. Un nom est court, colle à la voie, et ne charrie ni date ni
+// kyrielle de chiffres.
+function ressembleANom(o, ancre) {
+  if (ETIQ_SITE.test(o.N) || ETIQ_PAYEUR.test(o.N)) return false;
+  if (!/[A-Z]{2}/.test(o.N)) return false;
+  if (scoreVoie(o.N) >= 1.6 || /\b\d{5}\b/.test(o.N)) return false;
+  if (RE_DATE.test(o.N)) return false;
+  if ((o.N.match(/\d/g) || []).length > 5) return false;
+  if (o.N.length > 60) return false;
+  if (o.x1 - o.x0 > (ancre.x1 - ancre.x0) * 2.4 + 40) return false;
+  if (ancre.y0 - o.y1 > ancre.h * 2.6) return false;
+  if (/^(FACTURE|PAGE|DATE|EMISE|PERIODE|TOTAL|MONTANT|PRIX|RELEVE|NET|SOLDE|TEL|TELEPHONE|SIRET|TVA|CODE|N°|NUMERO|REF|VOTRE|NOTRE|SERVICE)\b/.test(o.N)) return false;
+  return true;
 }
 
 function detecterAdresses(ctx) {
@@ -1937,30 +2082,41 @@ function detecterAdresses(ctx) {
 
       // La voie est soit devant le code postal sur la même ligne, soit sur
       // l'une des lignes précédentes du bloc.
-      let rue = null, zoneRue = null, iRue = -1, rueIncertaine = false;
+      let rue = null, zoneRue = null, ligneRue = null, rueIncertaine = false;
       const avantCp = l.N.slice(0, iCp);
       const dv = debutVoie(avantCp);
       if (avantCp.slice(dv).trim() && estLigneVoie({ N: avantCp.slice(dv) })) {
         rue = avantCp.slice(dv).trim();
         zoneRue = zoneIntervalle(l, dv, iCp);
       } else {
-        for (let k = i - 1; k >= Math.max(0, i - 3); k--) {
-          const o = bloc.lignes[k];
-          if (!estLigneVoie(o)) continue;
+        // La voie se cherche dans la colonne du code postal, sur trois crans,
+        // et non parmi les lignes du bloc : sur un scan, l'interligne suffit à
+        // faire éclater un bloc d'adresse en deux.
+        const dessus = segmentsDessus(ctx, l, 3);
+        let meilleur = 0;
+        dessus.forEach((o, rang) => {
+          const sc = scoreVoie(o.N) - rang * 0.15;   // à mérite égal, la plus proche
+          if (sc <= 0 || sc <= meilleur) return;
           const d = debutVoie(o.N);
+          meilleur = sc;
           rue = o.N.slice(d).trim();
           zoneRue = zoneIntervalle(o, d, o.N.length);
-          iRue = k;
-          break;
-        }
-        if (!rue && i > 0) {
-          // Aucune ligne ne ressemble à une voie : on prend celle qui précède
-          // le code postal, faute de mieux, mais on le signale — c'est
-          // exactement le genre de cas que le contrôle visuel doit trancher.
-          const o = bloc.lignes[i-1];
-          const d = debutVoie(o.N);
-          rue = o.N.slice(d).trim(); zoneRue = zoneIntervalle(o, d, o.N.length); iRue = i - 1;
-          rueIncertaine = true;
+          ligneRue = o;
+        });
+        if (!rue && dessus.length) {
+          // Rien ne ressemble à une voie. On peut se rabattre sur la ligne qui
+          // précède le code postal — certaines adresses rurales n'ont ni
+          // numéro ni type de voie — mais pas sur un intitulé ni sur une
+          // ligne à rallonge : proposer « adresse de la propriété desservie »
+          // comme nom de rue est pire que ne rien proposer.
+          const o = dessus[0];
+          const acceptable = !ETIQ_SITE.test(o.N) && !ETIQ_PAYEUR.test(o.N)
+            && o.N.length <= 45 && !/[()"]|RUBRIQUE/.test(o.N) && /[A-Z]{3}/.test(o.N);
+          if (acceptable) {
+            const d = debutVoie(o.N);
+            rue = o.N.slice(d).trim(); zoneRue = zoneIntervalle(o, d, o.N.length); ligneRue = o;
+            rueIncertaine = true;
+          }
         }
       }
 
@@ -1968,14 +2124,9 @@ function detecterAdresses(ctx) {
       // les étiquettes et les lignes purement numériques.
       const noms = [];
       let zoneNom = null;
-      const debut = iRue >= 0 ? iRue : i;
-      for (let k = Math.max(0, debut - 3); k < debut; k++) {
-        const o = bloc.lignes[k];
-        if (ETIQ_SITE.test(o.N) || ETIQ_PAYEUR.test(o.N)) continue;
-        if (!/[A-Z]{2}/.test(o.N)) continue;
-        if (/^(FACTURE|PAGE|DATE|TEL|TELEPHONE|SIRET|TVA|CODE)\b/.test(o.N)) continue;
-        noms.push(o.N); zoneNom = zoneUnion(zoneNom, zoneLigne(o));
-      }
+      const ancre = ligneRue || l;
+      for (const o of segmentsDessus(ctx, ancre, 2).reverse())
+        if (ressembleANom(o, ancre)) { noms.push(o.N); zoneNom = zoneUnion(zoneNom, zoneLigne(o)); }
 
       adr.push({
         bloc, cp, ville, rue, rueIncertaine, noms: noms.join(' '),
@@ -1986,6 +2137,32 @@ function detecterAdresses(ctx) {
       });
     }
   }
+  // Aux adresses trouvées par leur code postal s'ajoutent celles annoncées par
+  // une étiquette. Les doublons sont écartés sur la voie et le code postal.
+  const centre = b => [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+  for (const a of adressesEtiquetees(ctx)) {
+    const cle = `${a.rue}|${a.cp}`;
+    // La même adresse peut figurer deux fois sur la facture — en fenêtre
+    // d'enveloppe et dans le pavé « adresse desservie ». L'étiquette ne vaut
+    // que pour l'exemplaire qu'elle désigne : on la rattache au plus proche,
+    // sans quoi le rôle se retrouve collé à l'autre.
+    const [ax, ay] = centre(a.bloc);
+    const deja = adr.filter(x => `${x.rue}|${x.cp}` === cle)
+      .sort((u, v) => {
+        const [ux, uy] = centre(u.bloc), [vx, vy] = centre(v.bloc);
+        return (Math.hypot(ux - ax, uy - ay) + (u.bloc.p !== a.bloc.p ? 5000 : 0))
+             - (Math.hypot(vx - ax, vy - ay) + (v.bloc.p !== a.bloc.p ? 5000 : 0));
+      })[0];
+    if (deja) {
+      // Même adresse déjà trouvée par son code postal : on lui transmet
+      // l'étiquette, sans quoi le rôle qu'elle annonce serait perdu et le
+      // lieu desservi finirait dans la colonne du payeur.
+      deja.viaEtiquette = deja.viaEtiquette || a.viaEtiquette;
+      deja.etiquetteTxt = deja.etiquetteTxt || a.etiquetteTxt;
+      continue;
+    }
+    adr.push(a);
+  }
   return classerAdresses(ctx, adr);
 }
 
@@ -1994,6 +2171,105 @@ function detecterAdresses(ctx) {
 //   · la position en fenêtre d'enveloppe, en haut à droite de la première
 //     page, qui trahit le bloc d'expédition ;
 //   · à défaut, l'ordre d'apparition.
+// Toutes les factures n'impriment pas le code postal du lieu desservi : une
+// facture SAUR se contente de « Adresse desservie : 2 QUAI SURCOUF » suivi de
+// « REDON ». Une détection ancrée sur le code postal ne voit alors rien du
+// tout. On repart donc de l'étiquette elle-même, et on lit ce qu'elle annonce.
+function adressesEtiquetees(ctx) {
+  const out = [];
+  for (const seg of ctx.segments) {
+    const estSite = ETIQ_SITE.test(seg.N);
+    const estPay  = !estSite && ETIQ_PAYEUR.test(seg.N);
+    if (!estSite && !estPay) continue;
+    const m = seg.N.match(estSite ? ETIQ_SITE : ETIQ_PAYEUR);
+    const fin = m.index + m[0].length;
+
+    // Où commence la valeur : dans la cellule même, à droite, ou en dessous.
+    let cellule = null, i0 = 0;
+    const reste = seg.N.slice(fin);
+    const sep = (reste.match(/^[\s:.\-–—|]*/) || [''])[0].length;
+    if (valeurPlausible(reste.slice(sep))) { cellule = seg; i0 = fin + sep; }
+    if (!cellule) {
+      const droite = segmentsMemeBande(ctx, seg).filter(o => o.x0 >= seg.x1 - seg.h)
+                       .sort((a, b) => a.x0 - b.x0);
+      if (droite.length && droite[0].N.replace(/[^A-Z0-9]/g, '').length >= 4) cellule = droite[0];
+    }
+    if (!cellule) {
+      const dessous = segmentsDessous(ctx, seg);
+      if (dessous.length) cellule = dessous[0];
+    }
+    if (!cellule) continue;
+
+    // La suite de l'adresse occupe les cellules du dessous. On descend de
+    // proche en proche : mesurer les écarts depuis l'étiquette couperait
+    // l'adresse au bout d'une ligne, l'interligne se cumulant à chaque cran.
+    const suite = [];
+    let courante = cellule;
+    for (let k = 0; k < 3; k++) {
+      const suivante = segmentsDessous(ctx, courante)
+        .find(o => !ETIQ_SITE.test(o.N) && !ETIQ_PAYEUR.test(o.N) && !suite.includes(o));
+      if (!suivante) break;
+      suite.push(suivante);
+      courante = suivante;
+    }
+    const morceaux = [{ seg: cellule, i0: cellule === seg ? i0 : 0, i1: cellule.N.length },
+                      ...suite.map(o => ({ seg: o, i0: 0, i1: o.N.length }))];
+
+    // Lecture : un code postal s'il y en a un, la voie, puis la commune.
+    let cp = null, ville = null, rue = null;
+    let zCp = null, zVille = null, zRue = null, zTout = null;
+    for (const mo of morceaux) {
+      const txt = mo.seg.N.slice(mo.i0, mo.i1);
+      zTout = zoneUnion(zTout, zoneIntervalle(mo.seg, mo.i0, mo.i1));
+      const mc = txt.match(/\b(\d{2}\s?\d{3})\b\s*([A-Z][A-Z'\- ]{2,40})?/);
+      if (mc && !cp) {
+        cp = mc[1].replace(/\s/g, '');
+        const j = mo.i0 + txt.indexOf(mc[1]);
+        zCp = zoneIntervalle(mo.seg, j, j + mc[1].length);
+        if (mc[2] && mc[2].trim().length > 2) {
+          ville = mc[2].trim();
+          const k = mo.i0 + txt.indexOf(mc[2]);
+          zVille = zoneIntervalle(mo.seg, k, k + mc[2].length);
+        }
+        const avant = txt.slice(0, txt.indexOf(mc[1])).trim();
+        if (!rue && avant.length > 3 && estLigneVoie({ N: avant })) {
+          rue = avant;
+          zRue = zoneIntervalle(mo.seg, mo.i0, mo.i0 + txt.indexOf(mc[1]));
+        }
+        continue;
+      }
+      if (!rue && estLigneVoie({ N: txt })) {
+        const d = debutVoie(txt);
+        rue = txt.slice(d).trim();
+        zRue = zoneIntervalle(mo.seg, mo.i0 + d, mo.i1);
+        continue;
+      }
+      // Une cellule qui n'est ni voie ni code postal, après la voie, est la
+      // commune ; avant la voie, c'est le nom de l'occupant.
+      if (rue && !ville && /^[A-Z][A-Z'\- ]{2,40}$/.test(txt.trim())) {
+        ville = txt.trim();
+        zVille = zoneIntervalle(mo.seg, mo.i0, mo.i1);
+      }
+    }
+    if (!rue && !cp) continue;
+
+    const bloc = { p: cellule.p, lignes: morceaux.map(x => x.seg),
+                   x0: Math.min(...morceaux.map(x => x.seg.x0)), x1: Math.max(...morceaux.map(x => x.seg.x1)),
+                   y0: Math.min(...morceaux.map(x => x.seg.y0)), y1: Math.max(...morceaux.map(x => x.seg.y1)),
+                   hMed: cellule.h, largeurPage: cellule.largeurPage, hauteurPage: cellule.hauteurPage };
+    out.push({
+      bloc, cp: cp || 'N/A', ville: ville || 'N/A', rue: rue || 'N/A',
+      rueIncertaine: !rue, cpManquant: !cp, noms: '',
+      zoneCp: zCp, zoneVille: zVille, zoneRue: zRue || zTout, zoneNom: null,
+      zoneBloc: { p: bloc.p, x0: bloc.x0, x1: bloc.x1, y0: bloc.y0, y1: bloc.y1 },
+      ligneCp: cellule, conf: confMots(cellule.mots),
+      viaEtiquette: estSite ? 'site' : 'payeur',
+      etiquetteTxt: seg.txt.slice(0, 30),
+    });
+  }
+  return out;
+}
+
 function classerAdresses(ctx, adr) {
   for (const a of adr) {
     let sSite = 0, sPay = 0;
@@ -2009,6 +2285,9 @@ function classerAdresses(ctx, adr) {
       ));
     const dansBloc = a.bloc.lignes.slice(0, 2);
     let zoneEtiq = null;
+    if (a.viaEtiquette === 'site')   { sSite += 3.5; raisons.push(`étiquette « ${a.etiquetteTxt} »`); }
+    if (a.viaEtiquette === 'payeur') { sPay  += 3.5; raisons.push(`étiquette « ${a.etiquetteTxt} »`); }
+
     for (const o of [...voisines, ...dansBloc]) {
       if (ETIQ_SITE.test(o.N))   { sSite += 3; raisons.push(`étiquette « ${o.txt.slice(0,28)} »`); zoneEtiq = zoneLigne(o); }
       if (ETIQ_PAYEUR.test(o.N)) { sPay  += 3; raisons.push(`étiquette « ${o.txt.slice(0,28)} »`); zoneEtiq = zoneLigne(o); }
@@ -2020,15 +2299,18 @@ function classerAdresses(ctx, adr) {
     if (a.bloc.p === 1 && a.bloc.x0 > W * 0.40 && a.bloc.y0 > H * 0.06 && a.bloc.y1 < H * 0.46) {
       sPay += 2; raisons.push("position en fenêtre d'enveloppe");
     }
-    if (a.bloc.p === 1 && a.bloc.x1 < W * 0.55 && a.bloc.y0 < H * 0.30) {
-      sSite += 0.4;
+    // Le papier à en-tête occupe le coin supérieur gauche. Ce n'est jamais
+    // l'adresse d'envoi, et très rarement celle du lieu desservi.
+    if (a.bloc.p === 1 && a.bloc.x1 < W * 0.48 && a.bloc.y0 < H * 0.28) {
+      sPay -= 2.5;
+      sSite -= 0.8;
     }
     // Le distributeur imprime sa propre adresse en tête de facture. Elle n'est
     // ni le lieu desservi ni le payeur ; sa raison sociale et ses mentions
     // légales la trahissent.
     const txtBloc = a.bloc.lignes.map(o => o.N).join(' ');
     a.emetteur = FOURNISSEURS.some(([re]) => re.test(txtBloc))
-      || /\bRCS\b|\bSIRET\b|\bSERVICE\s+CLIENT\b|\bAU\s+CAPITAL\b|\bTSA\s+\d/.test(txtBloc);
+      || /\bRCS\b|\bSIRET\b|\bSERVICE\s+(?:CLIENT|RELATION)|\bAU\s+CAPITAL\b|\bTSA\s*\d|WWW\.|\bAGENCE\b|\bDEPANNAGE\b|\bURGENCE\b/.test(txtBloc);
     if (a.emetteur) { sSite -= 4; sPay -= 4; }
 
     a.scoreSite = sSite; a.scorePayeur = sPay;
@@ -2063,12 +2345,14 @@ function champAdresse(ctx, role, partie) {
               : partie === 'ville' ? a.zoneVille
               : partie === 'cp' ? a.zoneCp : (a.zoneNom || a.zoneBloc);
 
-  const base = partie === 'cp' ? 0.95 : partie === 'ville' ? 0.9
+  const base = partie === 'cp' ? (retenu.cpManquant ? 0 : 0.95)
+             : partie === 'ville' ? (retenu.ville === 'N/A' ? 0 : 0.9)
              : partie === 'rue' ? (retenu.rueIncertaine ? 0.45 : 0.82) : 0.7;
   const bonus = (retenu.raisons.length ? 0.06 : (A.toutes.length === 1 ? -0.12 : -0.2))
               + (retenu.emetteur ? -0.3 : 0);
   const pourquoi = (retenu.emetteur ? "attention : bloc ressemblant à l'adresse de l'émetteur — " : '')
-    + (partie === 'rue' && retenu.rueIncertaine ? "aucune mention de voie reconnue, ligne prise juste au-dessus du code postal — " : '')
+    + (partie === 'rue' && retenu.rueIncertaine ? "aucune mention de voie reconnue — " : '')
+    + (partie === 'cp' && retenu.cpManquant ? "la facture n'imprime pas de code postal pour cette adresse — " : '')
     + (retenu.raisons.length
       ? retenu.raisons.join(', ')
       : (A.toutes.length === 1 ? "unique bloc d'adresse de la facture" : "aucune étiquette : bloc retenu par sa position"));
@@ -2092,6 +2376,10 @@ const FOURNISSEURS = [
   [/\bSTGS\b/,                   'STGS'],
   [/\bSOGEDO\b/,                 'SOGEDO'],
   [/\bNANTAISE DES EAUX\b/,      'NANTAISE DES EAUX'],
+  [/\bNOREADE\b|\bSIDEN\s*-?\s*SIAN\b/, 'NOREADE'],
+  [/\bEAUX DE VIENNE\b/,         'EAUX DE VIENNE'],
+  [/\bSOGEST\b/,                 'SOGEST'],
+  [/\bAQUALTER\b/,               'AQUALTER'],
   [/\bEAUX DE MARSEILLE\b/,      'EAUX DE MARSEILLE'],
   [/\bREGIE DES EAUX\b|\bREGIE MUNICIPALE\b/, 'REGIE DES EAUX'],
   [/\bSIAEP\b|\bSIVOM\b|\bSYNDICAT DES EAUX\b/, 'SYNDICAT DES EAUX'],
@@ -2099,21 +2387,25 @@ const FOURNISSEURS = [
 
 function champFournisseur(ctx) {
   const trouves = [];
-  for (const l of ctx.lignes) {
+  for (const l of ctx.segments) {
     for (const [re, canon] of FOURNISSEURS) {
       const m = l.N.match(re);
       if (!m) continue;
       // Un nom imprimé gros et haut sur la première page, c'est l'en-tête de
-      // l'émetteur. Le même nom en bas de page dans les mentions légales pèse
-      // beaucoup moins.
+      // l'émetteur ; le même nom en bas de page dans les mentions légales pèse
+      // beaucoup moins. Et sur une facture où deux opérateurs se partagent
+      // l'eau et l'assainissement, c'est celui de l'eau qu'on veut.
       const H = l.hauteurPage || 842;
       let s = 0.55;
       if (l.p === 1) s += 0.12;
       if (l.y0 < H * 0.22) s += 0.18;
       if (l.h > 12) s += 0.10;
-      trouves.push({ canon, conf: borne(s, 0, 0.95) * confMots(l.mots),
+      if (/\bEAU\s+POTABLE\b|\bDISTRIBUTION\b|\bSERVICE\s+DE\s+L\s*'?\s*EAU\b/.test(l.N)) s += 0.14;
+      if (/\bASSAINISSEMENT\b/.test(l.N)) s -= 0.22;
+      trouves.push({ canon, conf: borne(s, 0.05, 0.95) * confMots(l.mots),
                      zone: zoneIntervalle(l, m.index, m.index + m[0].length),
-                     origine: `nom relevé page ${l.p}${l.y0 < H * 0.22 ? ', en-tête' : ''}` });
+                     origine: `nom relevé page ${l.p}${l.y0 < H * 0.22 ? ', en-tête' : ''}`
+                              + (/ASSAINISSEMENT/.test(l.N) ? ', mais rattaché à l\'assainissement' : '') });
     }
   }
   if (!trouves.length) return VIDE('aucun distributeur connu reconnu dans le texte');
@@ -2174,33 +2466,84 @@ function dateFr(j, mo, an) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Les factures datent leur période de trois façons : « du 01/07/26 au
+// 31/12/26 », « de août 2025 à février 2026 », ou deux dates posées dans un
+// tableau sans le moindre mot de liaison. Les trois se rencontrent dans un même
+// lot, et la période commande tout le report à six mois.
+const MOIS_FR = { JANVIER:1, FEVRIER:2, MARS:3, AVRIL:4, MAI:5, JUIN:6,
+                  JUILLET:7, AOUT:8, SEPTEMBRE:9, OCTOBRE:10, NOVEMBRE:11, DECEMBRE:12 };
+const RE_TOUTES_DATES = /\b(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\b/g;
+
 function periodeDeLigne(l) {
-  const re = /\bDU\s+(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\s+(?:AU|A)\s+(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\b/;
-  const m = l.N.match(re);
-  if (!m) return null;
-  const d1 = dateFr(m[1], m[2], m[3]), d2 = dateFr(m[4], m[5], m[6]);
-  if (!d1 || !d2 || d2 <= d1) return null;
-  const jours = (d2 - d1) / 86400000;
-  let mois = jours / 30.44;
-  if (mois < 0.4 || mois > 26) return null;
-  mois = moisUsuels(mois);
-  return { d1, d2, jours, mois, zone: zoneIntervalle(l, m.index, m.index + m[0].length),
-           texte: l.txt.slice(0, 70), ligne: l };
+  const brut = (d1, d2, i0, i1, sur) => {
+    if (!d1 || !d2 || d2 <= d1) return null;
+    const jours = (d2 - d1) / 86400000;
+    let mois = jours / 30.44;
+    if (mois < 0.4 || mois > 26) return null;
+    mois = moisUsuels(mois);
+    return { d1, d2, jours, mois, zone: zoneIntervalle(l, i0, i1),
+             texte: l.txt.slice(0, 70), ligne: l, sur };
+  };
+
+  // 1. « du JJ/MM/AAAA au JJ/MM/AAAA »
+  const m1 = l.N.match(/\bDU\s+(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\s+(?:AU|A)\s+(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})\b/);
+  if (m1) {
+    const r = brut(dateFr(m1[1],m1[2],m1[3]), dateFr(m1[4],m1[5],m1[6]), m1.index, m1.index + m1[0].length, 'dates');
+    if (r) return r;
+  }
+
+  // 2. « de août 2025 à février 2026 » — on compte du premier du mois de début
+  // au premier du mois de fin, ce qui rend bien les six mois d'un semestre.
+  const m2 = l.N.match(/\b(?:DE|DU)\s+([A-Z]{3,9})\s+(\d{4})\s+(?:A|AU)\s+([A-Z]{3,9})\s+(\d{4})\b/);
+  if (m2 && MOIS_FR[m2[1]] && MOIS_FR[m2[3]]) {
+    const a = new Date(Date.UTC(+m2[2], MOIS_FR[m2[1]] - 1, 1));
+    const b = new Date(Date.UTC(+m2[4], MOIS_FR[m2[3]] - 1, 1));
+    const r = brut(a, b, m2.index, m2.index + m2[0].length, 'mois');
+    if (r) return r;
+  }
+
+  // 3. Deux dates seules dans une cellule qui parle de période : les tableaux
+  // d'index n'écrivent ni « du » ni « au ».
+  if (/\bPERIODE\b|\bCONSOMMATION\b|\bFACTURATION\b|\bRELEVE\b/.test(l.N)) {
+    const re = new RegExp(RE_TOUTES_DATES.source, 'g');
+    const ds = [];
+    let m;
+    while ((m = re.exec(l.N))) {
+      const d = dateFr(m[1], m[2], m[3]);
+      if (d && d.getUTCFullYear() > 1990 && d.getUTCFullYear() < 2100)
+        ds.push({ d, i0: m.index, i1: m.index + m[0].length });
+    }
+    if (ds.length >= 2) {
+      ds.sort((a, b) => a.d - b.d);
+      const r = brut(ds[0].d, ds[ds.length-1].d, ds[0].i0, ds[ds.length-1].i1, 'deux dates');
+      if (r) return r;
+    }
+  }
+  return null;
 }
 
 function detecterPeriode(ctx) {
   const trouves = [];
-  for (const l of ctx.lignes) {
+  // Les cellules d'abord : une bande pleine largeur peut coller la date d'une
+  // colonne à celle d'une autre et fabriquer une période qui n'existe pas.
+  for (const l of [...ctx.segments, ...ctx.lignes]) {
     const p = periodeDeLigne(l);
     if (!p) continue;
-    let s = 0.6;
-    if (/PERIODE|FACTURATION|CONSOMMATION|CONSOMME|VOLUME/.test(l.N)) s += 0.28;
-    if (/ABONNEMENT/.test(l.N)) s += 0.05;
+    let s = p.sur === 'dates' ? 0.66 : p.sur === 'mois' ? 0.62 : 0.5;
+    if (/PERIODE|FACTURATION|CONSOMMATION|CONSOMME|VOLUME|FACTURE DE/.test(l.N)) s += 0.24;
+    if (/ABONNEMENT/.test(l.N)) s += 0.04;
     trouves.push({ ...p, conf: borne(s, 0, 0.95) });
   }
   if (!trouves.length) return null;
-  trouves.sort((a, b) => b.conf - a.conf);
-  return trouves[0];
+  // À égalité de crédit, la période la plus souvent rencontrée l'emporte.
+  const parCle = new Map();
+  for (const t of trouves) {
+    const cle = t.d1.toISOString().slice(0,10) + '|' + t.d2.toISOString().slice(0,10);
+    const e = parCle.get(cle);
+    if (!e) parCle.set(cle, { ...t, n: 1 });
+    else { e.n++; if (t.conf > e.conf) Object.assign(e, t, { n: e.n }); }
+  }
+  return [...parCle.values()].sort((a, b) => (b.conf + b.n * 0.03) - (a.conf + a.n * 0.03))[0];
 }
 
 const MOIS_VERS_FREQ = m =>
@@ -2234,7 +2577,7 @@ function champFrequence(ctx) {
 }
 
 function champTelereleve(ctx) {
-  for (const l of ctx.lignes) {
+  for (const l of ctx.segments) {
     const m = l.N.match(/\bTELE\s*-?\s*RELEVE\w*\b|\bRADIO\s*-?\s*RELEVE\w*\b|\bRELEVE\s+A\s+DISTANCE\b|\bTELERELEVE\w*\b/);
     if (m) return RES('OUI', 0.9 * confMots(l.mots),
                       zoneIntervalle(l, m.index, m.index + m[0].length),
@@ -2257,23 +2600,37 @@ const RE_LIGNE_ABNT = /\bABONNEMENT\b|\bPART\s+FIXE\b|\bREDEVANCE\s+FIXE\b|\bLOC
 
 function lignesAbonnement(ctx) {
   const out = [];
-  for (const l of ctx.lignes) {
-    if (!RE_LIGNE_ABNT.test(l.N)) continue;
-    if (/\bTOTAL\b|\bRECAPITULATIF\b|\bTVA\b/.test(l.N)) continue;
-    const mts = montantsDeLigne(l);
+  const vus = new Set();
+  for (const seg of ctx.segments) {
+    if (!RE_LIGNE_ABNT.test(seg.N)) continue;
+    if (/\bTOTAL\b|\bRECAPITULATIF\b|\bTVA\b|\bHORS\s+ABONNEMENT/.test(seg.N)) continue;
+
+    // Le montant est dans la cellule de l'étiquette, ou dans une cellule de la
+    // même bande, plus à droite — la colonne « montant » d'un tableau.
+    let mts = montantsDeLigne(seg), source = seg;
+    if (!mts.length) {
+      const droite = segmentsMemeBande(ctx, seg)
+        .filter(o => o.x0 >= seg.x1 - seg.h)
+        .sort((a, b) => b.x0 - a.x0);        // la colonne des montants est la plus à droite
+      for (const o of droite) {
+        const m = montantsDeLigne(o);
+        if (m.length) { mts = m; source = o; break; }
+      }
+    }
     if (!mts.length) continue;
-    // Dans un tableau de facture, le montant hors taxes est le dernier de la
-    // ligne ; ce qui précède est la quantité, le prix unitaire, le taux.
+
     const retenu = mts[mts.length - 1];
-    const per = periodeDeLigne(l);
-    // Le libellé s'arrête au premier chiffre de la colonne des montants :
-    // recopier la ligne entière rendrait l'addition illisible.
-    const motsLib = motsIntervalle(l, 0, mts[0].i0);
-    const libelle = (motsLib.map(m => m.t).join(' ') || l.txt).slice(0, 64).trim();
+    const cle = `${seg.p}|${Math.round(seg.y0)}|${retenu.v}`;
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+
+    const motsLib = motsIntervalle(seg, 0, mts === montantsDeLigne(seg) && mts[0] ? mts[0].i0 : seg.N.length);
+    const libelle = (motsLib.map(m => m.t).join(' ') || seg.txt).slice(0, 64).trim();
     out.push({
       libelle, montant: retenu.v, zone: retenu.zone,
-      zoneLigne: zoneLigne(l), tousMontants: mts, periode: per, retenu: true,
-      conf: confMots(l.mots), ligne: l,
+      zoneLigne: zoneUnion(zoneLigne(seg), retenu.zone),
+      tousMontants: mts, periode: periodeDeLigne(seg), retenu: true,
+      conf: confMots(seg.mots), ligne: seg,
     });
   }
   return out;
@@ -2318,23 +2675,41 @@ function champAbonnement(ctx) {
 }
 
 // ── Consommation ──────────────────────────────────────────────────
+// Le mètre cube est le pire cauchemar d'un moteur optique : sur les onze
+// factures d'essai, l'exposant 3 est ressorti en « m° », « m² », « mI », « m? »
+// ou rien du tout. On accepte donc toutes ces graphies, quitte à s'appuyer sur
+// le contexte de la cellule pour départager.
+const RE_VOLUME = /(\d[\d ]*(?:[,.]\d+)?)\s*M\s*[3³²°ºOQ?ŸI¥]?(?![A-Z0-9])/g;
+
 function champConso(ctx) {
   const cands = [];
-  for (const l of ctx.lignes) {
-    // Un volume, c'est un nombre suivi de son unité. On cherche l'unité, puis
-    // le nombre qui la précède immédiatement.
-    const re = /(\d[\d ]*(?:[,.]\d+)?)\s*(M3|M³|MC)\b/g;
+  const ajouter = (seg, v, i0, i1, bonus, pourquoi) => {
+    if (!isFinite(v) || v < 0 || v > 100000) return;
+    let s = 0.42 + (bonus || 0);
+    if (/\bINDEX\b|\bANCIEN\b|\bNOUVEAU\b|\bPRECEDENT\b|\bRELEVE\s+LE\b/.test(seg.N)) s -= 0.30;
+    if (/\bESTIM/.test(seg.N)) s -= 0.05;
+    cands.push({ valeur: v, conf: borne(s, 0.05, 0.9) * confMots(seg.mots),
+                 zone: zoneIntervalle(seg, i0, i1),
+                 why: pourquoi || `« ${seg.txt.slice(0, 44)} »` });
+  };
+
+  for (const seg of ctx.segments) {
+    const contexte = /\bCONSOMMATION\b|\bVOLUME\b|\bEAU\s+CONSOMMEE\b|\bCONSOMME\b|\bFACTUREE?\b/.test(seg.N);
+    const re = new RegExp(RE_VOLUME.source, 'g');
     let m;
-    while ((m = re.exec(l.N))) {
-      const v = nombreFr(m[1]);
-      if (!isFinite(v) || v < 0 || v > 100000) continue;
-      let s = 0.45;
-      if (/\bCONSOMMATION\b|\bVOLUME\b|\bEAU\s+CONSOMMEE\b|\bCONSOMME\b/.test(l.N)) s += 0.32;
-      if (/\bINDEX\b|\bANCIEN\b|\bNOUVEAU\b|\bPRECEDENT\b/.test(l.N)) s -= 0.30;
-      if (/\bESTIM/.test(l.N)) s -= 0.05;
-      cands.push({ valeur: v, conf: borne(s, 0.05, 0.9) * confMots(l.mots),
-                   zone: zoneIntervalle(l, m.index, m.index + m[0].length),
-                   why: `« ${l.txt.slice(0, 44)} »`, ligne: l });
+    while ((m = re.exec(seg.N))) {
+      ajouter(seg, nombreFr(m[1]), m.index, m.index + m[0].length, contexte ? 0.34 : 0);
+    }
+    // « Votre consommation » seule dans sa cellule, le volume dans la voisine.
+    if (contexte && !new RegExp(RE_VOLUME.source).test(seg.N)) {
+      for (const o of segmentsMemeBande(ctx, seg).filter(o => o.x0 >= seg.x1 - seg.h)
+                       .sort((a, b) => a.x0 - b.x0).slice(0, 3)) {
+        const mm = o.N.match(new RegExp(RE_VOLUME.source));
+        if (!mm) continue;
+        ajouter(o, nombreFr(mm[1]), mm.index, mm.index + mm[0].length, 0.30,
+                `« ${seg.txt.slice(0, 28)} » puis « ${o.txt.slice(0, 22)} »`);
+        break;
+      }
     }
   }
   if (!cands.length) return VIDE("aucun volume en mètres cubes repéré");
@@ -2344,15 +2719,16 @@ function champConso(ctx) {
   const f = mois ? facteurSixMois(mois) : 1;
   const valeur = Math.round(g.valeur * f);
   const detail = `  volume lu = ${g.valeur} m³\n  ${g.why}`
-    + (mois ? `\n  période de ${mois.toFixed(1)} mois → × ${f.toFixed(3)} pour six mois`
+    + (mois ? `\n  période de ${mois} mois → × ${f.toFixed(3)} pour six mois`
             : `\n  période inconnue → aucun report`)
     + `\n  consommation retenue = ${valeur} m³ / 6 mois`;
   const r = RES(String(valeur), g.conf * (mois ? 1 : 0.8), g.zone,
-                `volume de ${g.valeur} m³ ramené à six mois`);
-  r.candidats = cands.slice(1, 8).map(c => ({
+                `volume de ${g.valeur} m³${mois ? ' ramené à six mois' : ', période inconnue'}`);
+  const vus = new Set([String(valeur)]);
+  r.candidats = cands.slice(1, 10).map(c => ({
     valeur: String(Math.round(c.valeur * f)), zone: c.zone, conf: c.conf,
     why: `${c.valeur} m³ — ${c.why}`,
-  }));
+  })).filter(c => !vus.has(c.valeur) && vus.add(c.valeur));
   r.detail = detail;
   r.brutConso = g.valeur;
   r.facteur = f;
@@ -2367,9 +2743,13 @@ function champEntite(ctx, role) {
   // Une étiquette nominative explicite l'emporte sur la simple position dans
   // le bloc d'adresse.
   const motifs = role === 'site'
-    ? [/\bTITULAIRE\s+DU\s+CONTRAT\b/, /\bTITULAIRE\b/, /\bABONNE\s*[:.]/, /\bNOM\s+DE\s+L\s*'?\s*ABONNE\b/]
+    // Les libellés longs passent avant les courts : « titulaire du compte »
+    // avant « titulaire », sans quoi la valeur retenue commence à « du compte ».
+    ? [/\bTITULAIRE\s+DU\s+(?:CONTRAT|COMPTE|BRANCHEMENT)\b/, /\bNOM\s+DE\s+L\s*'?\s*ABONNE\b/,
+       /\bNOM\s+DU\s+CLIENT\b/, /\bNOM\s+ET\s+PRENOM\b/, /\bRAISON\s+SOCIALE\b/,
+       /\bTITULAIRE\s*[:.]/, /\bABONNE\s*[:.]/]
     : [/\bDESTINATAIRE\b/, /\bRAISON\s+SOCIALE\b/, /\bNOM\s+DU\s+PAYEUR\b/];
-  const etiq = valeursEtiquetees(ctx, motifs, /[A-Z][A-Z'’\- ]{2,60}/);
+  const etiq = valeursEtiquetees(ctx, motifs, /[A-Z][A-Z0-9'’\-. ]{2,60}/);
   if (etiq.length) {
     const g = etiq.sort((a, b) => b.conf - a.conf)[0];
     const r = RES(g.valeur.trim(), g.conf, g.zone, g.origine);

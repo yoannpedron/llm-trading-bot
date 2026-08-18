@@ -66,6 +66,33 @@ d'abonnement ramenée à six mois donne l'abonnement, une période facturée don
 la périodicité. Aucune inférence statistique, aucun modèle : le champ
 « pourquoi » de chaque proposition dit toujours quelle règle a joué.
 
+## Ce qu'il faut en attendre
+
+Mesuré sur onze factures réelles, toutes scannées, de sept émetteurs différents
+(SAUR, SUEZ, Veolia, Noréade, AGUR, SEDIF, régie locale), avec une qualité de
+reconnaissance optique comprise entre 67 % et 85 % :
+
+| | |
+|---|---|
+| Champs renseignés automatiquement | environ trois sur quatre |
+| Bloc d'adresse du payeur | juste dans la quasi-totalité des cas |
+| Distributeur, référence client | juste le plus souvent |
+| Numéro de compteur, abonnement | souvent absents de la première page |
+| Champs manifestement faux | aucun : le moteur préfère ne rien proposer |
+
+C'est le point important : **un champ douteux est laissé vide et signalé plutôt
+que rempli au hasard**, et le contrôle visuel présente alors la page, les
+lectures possibles, et le pointeur pour désigner la bonne zone. Une facture
+scannée d'un émetteur inhabituel demandera quelques corrections ; elle ne
+produira pas de ligne fausse passée inaperçue.
+
+Deux réglages pèsent lourd sur des scans :
+
+- **Finesse de numérisation** à 300 ppp (valeur par défaut). À 150 ppp, les
+  numéros de compteur en petits caractères deviennent illisibles.
+- **Pages examinées** : le détail de l'abonnement est fréquemment au verso.
+  Trois pages est un bon compromis ; passez à cinq si vos factures sont longues.
+
 ## Confidentialité
 
 - Aucun modèle de langage, aucune intelligence artificielle générative.
