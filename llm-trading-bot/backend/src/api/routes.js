@@ -64,28 +64,37 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     if (!config.server.adminToken) {
       return res.status(503).json({ error: 'ADMIN_TOKEN non configuré : routes d\'écriture désactivées.' });
     }
+    // ── Le jeton est vérifié AVANT le compteur, et c'est le point clé ─────
+    // Compter d'abord verrouillait aussi le jeton VALIDE : dix essais ratés
+    // depuis un poste, et l'opérateur ne pouvait plus rien faire pendant un
+    // quart d'heure — vérifié en production, je m'en suis exclu moi-même en
+    // testant la limitation.
+    //
+    // Vérifier d'abord ne rend rien à un attaquant : celui qui devine le jeton
+    // entrait de toute façon. Ce que la limitation doit ralentir, c'est la
+    // RECHERCHE, et elle le fait toujours — dix mauvais essais et les suivants
+    // ne sont plus traités.
     const origine = req.ip ?? 'inconnue';
     const maintenant = Date.now();
     const compteur = echecs.get(origine);
-    if (compteur && maintenant - compteur.depuis < FENETRE_MS && compteur.n >= TENTATIVES_MAX) {
-      const reste = Math.ceil((FENETRE_MS - (maintenant - compteur.depuis)) / 60000);
+    const recent = compteur && maintenant - compteur.depuis < FENETRE_MS ? compteur : null;
+
+    if (memeJeton(token, config.server.adminToken)) {
+      // Un succès efface l'ardoise : l'opérateur qui s'est trompé une fois ne
+      // traîne pas son compteur derrière lui.
+      echecs.delete(origine);
+      return next();
+    }
+
+    echecs.set(origine, { n: (recent?.n ?? 0) + 1, depuis: recent?.depuis ?? maintenant });
+
+    if (recent && recent.n >= TENTATIVES_MAX) {
+      const reste = Math.ceil((FENETRE_MS - (maintenant - recent.depuis)) / 60000);
       return res.status(429).json({
         error: `Trop de jetons invalides. Réessayez dans ${reste} minute(s).`,
       });
     }
-
-    if (!memeJeton(token, config.server.adminToken)) {
-      const base = compteur && maintenant - compteur.depuis < FENETRE_MS
-        ? compteur
-        : { n: 0, depuis: maintenant };
-      echecs.set(origine, { n: base.n + 1, depuis: base.depuis });
-      return res.status(401).json({ error: 'Jeton administrateur invalide.' });
-    }
-
-    // Un succès efface l'ardoise : l'opérateur qui s'est trompé une fois ne
-    // traîne pas son compteur pendant un quart d'heure.
-    echecs.delete(origine);
-    return next();
+    return res.status(401).json({ error: 'Jeton administrateur invalide.' });
   };
 
   const asyncRoute = (handler) => (req, res) => {
