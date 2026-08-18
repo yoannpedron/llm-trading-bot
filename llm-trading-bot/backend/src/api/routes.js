@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
 import { getRecentLogs } from '../logger.js';
 import { getMarketSnapshot, getMarketClock, getCandleSeries } from '../data/marketData.js';
@@ -22,6 +23,36 @@ import { keyPool } from '../llm/keyPool.js';
 export function createRouter({ engine, broker, risk, journal, scheduler }) {
   const router = express.Router();
 
+  // ── Deux défauts sur la porte d'entrée, trouvés par l'audit ─────────────
+  //
+  // 1. `token !== config.server.adminToken` compare caractère par caractère et
+  //    s'arrête au premier écart. Le temps de réponse fuit donc la longueur du
+  //    préfixe correct. C'est ténu à travers un réseau, mais la parade coûte
+  //    une ligne.
+  //
+  // 2. Rien ne limitait les tentatives. Mesuré sur le serveur en production :
+  //    cinq jetons faux d'affilée, cinq 401 rendus en 100 ms chacun, sans le
+  //    moindre ralentissement. Un jeton court se devine à ce rythme.
+  //
+  // Le compteur vit en mémoire : un redémarrage le remet à zéro, ce qui est
+  // acceptable — un attaquant ne redémarre pas le service, et l'opérateur qui
+  // se trompe de jeton n'a qu'à relancer.
+  const FENETRE_MS = 15 * 60 * 1000;
+  const TENTATIVES_MAX = 10;
+  const echecs = new Map();
+
+  /** Comparaison à temps constant, qui ne trahit pas non plus la longueur. */
+  const memeJeton = (fourni, attendu) => {
+    if (typeof fourni !== 'string' || typeof attendu !== 'string') return false;
+    const a = Buffer.from(fourni, 'utf8');
+    const b = Buffer.from(attendu, 'utf8');
+    if (a.length !== b.length) {
+      timingSafeEqual(b, b);   // même travail, pour ne pas répondre plus vite
+      return false;
+    }
+    return timingSafeEqual(a, b);
+  };
+
   const requireAdmin = (req, res, next) => {
     // ── En-tête seulement, jamais l'URL ────────────────────────────────────
     // Un `?token=…` en repli paraissait commode. Une URL traverse les journaux
@@ -33,9 +64,27 @@ export function createRouter({ engine, broker, risk, journal, scheduler }) {
     if (!config.server.adminToken) {
       return res.status(503).json({ error: 'ADMIN_TOKEN non configuré : routes d\'écriture désactivées.' });
     }
-    if (token !== config.server.adminToken) {
+    const origine = req.ip ?? 'inconnue';
+    const maintenant = Date.now();
+    const compteur = echecs.get(origine);
+    if (compteur && maintenant - compteur.depuis < FENETRE_MS && compteur.n >= TENTATIVES_MAX) {
+      const reste = Math.ceil((FENETRE_MS - (maintenant - compteur.depuis)) / 60000);
+      return res.status(429).json({
+        error: `Trop de jetons invalides. Réessayez dans ${reste} minute(s).`,
+      });
+    }
+
+    if (!memeJeton(token, config.server.adminToken)) {
+      const base = compteur && maintenant - compteur.depuis < FENETRE_MS
+        ? compteur
+        : { n: 0, depuis: maintenant };
+      echecs.set(origine, { n: base.n + 1, depuis: base.depuis });
       return res.status(401).json({ error: 'Jeton administrateur invalide.' });
     }
+
+    // Un succès efface l'ardoise : l'opérateur qui s'est trompé une fois ne
+    // traîne pas son compteur pendant un quart d'heure.
+    echecs.delete(origine);
     return next();
   };
 

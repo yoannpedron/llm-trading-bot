@@ -52,6 +52,18 @@ async function bootstrap() {
     }),
   );
 
+  // ── Une seule couche de proxy, et elle est locale ──────────────────────
+  // Caddy termine le TLS puis relaie vers 127.0.0.1 : sans cette ligne, Express
+  // voit toutes les requêtes venir du proxy et `req.ip` vaut 127.0.0.1 pour
+  // tout le monde. La limitation de tentatives sur les routes d'écriture
+  // deviendrait alors globale — dix jetons faux, venus de n'importe où,
+  // verrouilleraient l'administration pour l'opérateur légitime.
+  //
+  // La valeur 1 dit « fais confiance à UN saut ». Le port du backend n'est
+  // joignable que depuis la machine elle-même, donc personne d'autre que Caddy
+  // ne peut fabriquer cet en-tête.
+  app.set('trust proxy', 1);
+
   const scheduler = startScheduler(engine);
   app.use('/api', createRouter({ engine, broker, risk, journal, scheduler }));
 
