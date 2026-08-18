@@ -409,7 +409,25 @@ export class TradingEngine {
       // sans lui, 99 % de ce que produit le bot serait jeté.
       await shadowBook.record({
         symbol,
-        action: decision.action,
+        // ── LE CARNET ENREGISTRAIT L'INVERSE DE CE QUE LE BOT A FAIT ────────
+        // `decision.action` est la décision AVANT sélection transversale.
+        // Depuis que le modèle classe au lieu de noter, elle vaut toujours
+        // « HOLD » : `decisionDepuisRang` la fixe ainsi, et c'est
+        // `actionEffective` qui la promeut en BUY plus haut dans cette
+        // méthode.
+        //
+        // Conséquence mesurée sur les 900 décisions enregistrées : AUCUNE
+        // n'était marquée BUY, pas même les dix titres réellement achetés le
+        // 17 août. Or `ShadowBook.score` traite un « HOLD sans position »
+        // comme un pari BAISSIER — il rend `-excessReturn`. Le carnet censé
+        // arbitrer la stratégie s'apprêtait donc à noter ses dix achats comme
+        // des paris à la baisse, c'est-à-dire à conclure l'exact contraire de
+        // la vérité.
+        //
+        // Rien n'était encore corrompu : zéro décision était échue. Mais la
+        // phrase que j'ai répétée deux fois — « le carnet tranchera, et lui je
+        // ne l'aurai pas ajusté » — était fausse tant que ceci tenait.
+        action: effective.action,
         confidence: decision.confidence,
         price,
         executed: outcome.executed,
