@@ -437,10 +437,29 @@ export class TradingEngine {
         baselines: baselines?.get(symbol) ?? null,
       });
 
+      // ── Le dernier NaN, celui qui n'allait pas dans le journal ───────────
+      // Cette ligne annonçait « prévision NaN/NaN/NaN, écart 76 pts ». Même
+      // cause que le message de refus corrigé dans le gestionnaire de risque —
+      // une répartition de probabilités que le modèle ne produit plus — mais à
+      // un endroit qui échappait au contrôle : les logs, que le dashboard
+      // affiche pourtant en clair. Relevé sur LRCX, MRVL, CAT et DUK au cycle
+      // du 18 août, alors que le journal était propre.
+      //
+      // Les « points » étaient faux par-dessus : un score combiné de 0,76 n'est
+      // pas 76 points de probabilité, c'est un nombre sans unité.
       const f = decision.forecast;
+      let apercu = ' (sans prévision)';
+      if (Number.isFinite(decision.rangDecision) && Number.isFinite(decision.totalDecision)) {
+        apercu = ` (rang ${decision.rangDecision}/${decision.totalDecision}`
+          + (Number.isFinite(f?.edge) ? `, score ${f.edge.toFixed(3)})` : ')');
+      } else if (f && [f.pUp, f.pDown, f.pFlat].every(Number.isFinite)) {
+        apercu = ` (prévision ${Math.round(f.pUp * 100)}/${Math.round(f.pDown * 100)}/`
+          + `${Math.round(f.pFlat * 100)}, écart ${(f.edge * 100).toFixed(0)} pts)`;
+      } else if (Number.isFinite(f?.edge)) {
+        apercu = ` (score ${f.edge.toFixed(3)})`;
+      }
       log.info(
-        `${symbol} → ${decision.action}`
-        + (f ? ` (prévision ${Math.round(f.pUp * 100)}/${Math.round(f.pDown * 100)}/${Math.round(f.pFlat * 100)}, écart ${(f.edge * 100).toFixed(0)} pts)` : ' (sans prévision)')
+        `${symbol} → ${decision.action}${apercu}`
         + ` : ${outcome.executed ? 'EXÉCUTÉ' : outcome.reason}`,
       );
       return outcome;
