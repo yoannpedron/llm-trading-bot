@@ -2688,6 +2688,15 @@ function champConso(ctx) {
     let s = 0.42 + (bonus || 0);
     if (/\bINDEX\b|\bANCIEN\b|\bNOUVEAU\b|\bPRECEDENT\b|\bRELEVE\s+LE\b/.test(seg.N)) s -= 0.30;
     if (/\bESTIM/.test(seg.N)) s -= 0.05;
+    // Un histogramme de consommation aligne plusieurs volumes sous des dates de
+    // relevé : ce sont des historiques, pas la consommation facturée. Une
+    // cellule qui porte une date, ou une valeur voisine d'autres volumes, ne
+    // vaut pas la ligne « Votre consommation 20 m³ » du corps de facture.
+    if (RE_DATE.test(seg.N)) s -= 0.28;
+    // Une vraie ligne de consommation facturée porte, dans sa bande, un montant
+    // en euros (le prix). On la privilégie.
+    const memeBande = segmentsMemeBande(ctx, seg);
+    if (memeBande.some(o => /\d[,.]\d{2}\s*€|€/.test(o.N)) || /\d[,.]\d{2}\s*€|€/.test(seg.N)) s += 0.12;
     cands.push({ valeur: v, conf: borne(s, 0.05, 0.9) * confMots(seg.mots),
                  zone: zoneIntervalle(seg, i0, i1),
                  why: pourquoi || `« ${seg.txt.slice(0, 44)} »` });
@@ -2762,10 +2771,28 @@ function champEntite(ctx, role) {
 }
 
 // ── Assemblage ────────────────────────────────────────────────────
+// Ces factures arrivent en lot, et un lot n'est pas toujours homogène : sur les
+// onze premières fournies, l'une était une facture de GAZ (Vialis), pas d'eau.
+// Extraire des mètres cubes d'une facture en kilowattheures ne produit que du
+// faux. On classe donc le document, et on le signale plutôt que de faire semblant.
+function detecterTypeDoc(ctx) {
+  const t = ctx.segments.map(s => s.N).join(' ');
+  const compte = re => (t.match(re) || []).length;
+  const gaz = compte(/\bGAZ\s+NATUREL\b|\bKWH\b|\bPCE\b|\bM3\s*GAZ\b|\bPCS\b|\bMODULOGAZ\b/g);
+  const elec = compte(/\bKVA\b|\bELECTRICIT|\bLINKY\b|\bKWH\b.*\bHEURES\s+CREUSES\b|\bPUISSANCE\s+SOUSCRITE\b/g);
+  const eau = compte(/\bEAU\s+POTABLE\b|\bASSAINISSEMENT\b|\bM3\b|\bM³\b|\bCOMPTEUR\s+D\s*'?\s*EAU\b|\bDISTRIBUTION\s+DE\s+L\s*'?\s*EAU\b|\bREDEVANCE\b|\bABONNEMENT\b/g);
+  let type = 'eau', alerte = null;
+  if (gaz >= 2 && gaz > eau) { type = 'gaz'; alerte = "Ce document ressemble à une facture de GAZ, pas d'eau"; }
+  else if (elec >= 2 && elec > eau) { type = 'electricite'; alerte = "Ce document ressemble à une facture d'ÉLECTRICITÉ, pas d'eau"; }
+  else if (eau === 0) { alerte = "Aucun repère de facture d'eau (ni « eau potable », ni « m³», ni « assainissement »)"; }
+  return { type, alerte, indices: { eau, gaz, elec } };
+}
+
 function extraire(doc) {
   const ctx = { doc, lignes: doc.lignes, pages: doc.pages };
   ctx.segments = doc.lignes.flatMap(l => l.segments || [l]);
   ctx.blocs = construireBlocs(ctx.segments);
+  ctx.typeDoc = detecterTypeDoc(ctx);
   ctx.adresses = detecterAdresses(ctx);
   ctx.periode = detecterPeriode(ctx);
 
@@ -2793,6 +2820,12 @@ function extraire(doc) {
     ch['N_Contrat'].conf *= 0.5;
     ch['N_Contrat'].origine += ' — identique à la référence client, à vérifier';
   }
+
+  // Document manifestement pas une facture d'eau : on rabaisse la confiance de
+  // tous les champs, pour que le contrôle visuel les présente tous en doute.
+  if (ctx.typeDoc.alerte)
+    for (const c of CHAMPS_CTRL) ch[c].conf = Math.min(ch[c].conf, 0.3);
+
   return { champs: ch, ctx };
 }
 
