@@ -74,28 +74,70 @@ describe('phase calendaire', () => {
 describe('carnet fantôme — règles de scoring', () => {
   const { score } = ShadowBook;
 
-  test('un BUY est récompensé par une hausse', () => {
-    assert.equal(score('BUY', false, 0.03), 0.03);
-    assert.equal(score('BUY', false, -0.03), -0.03);
+  /**
+   * ── Le rang prime, parce que c'est ce que la stratégie affirme ──────────
+   * Le bot ne parie pas titre par titre : il CLASSE. Ne pas acheter le 11e
+   * n'est pas parier sur sa baisse, c'est dire que dix autres sont meilleurs.
+   * La notation suit donc le rang, et le poids s'annule au milieu.
+   */
+  test('le mieux classé est un pari long plein', () => {
+    assert.equal(score({ action: 'HOLD', rankFractional: 1 }, 0.03), 0.03);
+    assert.equal(score({ action: 'HOLD', rankFractional: 1 }, -0.03), -0.03);
   });
 
-  test('un SELL est récompensé par une baisse', () => {
-    assert.equal(score('SELL', true, -0.03), 0.03);
-    assert.equal(score('SELL', true, 0.03), -0.03);
+  test('le plus mal classé est un pari court plein', () => {
+    assert.equal(score({ action: 'HOLD', rankFractional: 0 }, 0.03), -0.03);
+    assert.equal(score({ action: 'HOLD', rankFractional: 0 }, -0.03), 0.03);
   });
 
-  test('HOLD avec position vaut « ça continue » : on assume la suite', () => {
-    assert.equal(score('HOLD', true, 0.03), 0.03);
-    assert.equal(score('HOLD', true, -0.03), -0.03);
+  test('le milieu du classement n’affirme rien et ne score rien', () => {
+    assert.equal(score({ action: 'HOLD', rankFractional: 0.5 }, 0.03), 0);
   });
 
-  test('HOLD sans position vaut « rien à prendre » : s\'abstenir avant une hausse est une erreur', () => {
-    assert.equal(score('HOLD', false, 0.03), -0.03);
-    assert.equal(score('HOLD', false, -0.03), 0.03);
+  test('le poids décroît continûment avec le rang', () => {
+    // Le 11e sur 150 est presque retenu : il doit peser presque autant que le
+    // premier, et non pas être traité comme le dernier.
+    const onzieme = score({ action: 'HOLD', rankFractional: 1 - 10 / 149 }, 0.03);
+    const premier = score({ action: 'HOLD', rankFractional: 1 }, 0.03);
+    const dernier = score({ action: 'HOLD', rankFractional: 0 }, 0.03);
+    assert.ok(onzieme > 0.8 * premier, `11e noté ${onzieme.toFixed(4)} contre ${premier} pour le 1er`);
+    assert.ok(onzieme > 0 && dernier < 0, 'le 11e et le 150e ne peuvent pas avoir le même signe');
   });
 
-  test('une action inconnue n\'est pas scorable', () => {
-    assert.equal(score('WAT', false, 0.03), null);
+  test('la moyenne des scores d’un jour est nulle si le classement est du bruit', () => {
+    // Rangs uniformes, rendements indépendants du rang : le portefeuille
+    // long-court pondéré par le rang ne gagne rien. C'est la propriété qui
+    // rend la mesure interprétable.
+    const n = 151;
+    let somme = 0;
+    for (let i = 0; i < n; i += 1) {
+      somme += score({ action: 'HOLD', rankFractional: i / (n - 1) }, 0.02);
+    }
+    assert.ok(Math.abs(somme) < 1e-12, `somme ${somme}`);
+  });
+
+  /** Sans rang — sorties mécaniques — on retombe sur la lecture directionnelle. */
+  test('un BUY sans rang est récompensé par une hausse', () => {
+    assert.equal(score({ action: 'BUY', hadPosition: false }, 0.03), 0.03);
+    assert.equal(score({ action: 'BUY', hadPosition: false }, -0.03), -0.03);
+  });
+
+  test('un SELL sans rang est récompensé par une baisse', () => {
+    assert.equal(score({ action: 'SELL', hadPosition: true }, -0.03), 0.03);
+  });
+
+  test('HOLD avec position et sans rang : on assume la suite', () => {
+    assert.equal(score({ action: 'HOLD', hadPosition: true }, 0.03), 0.03);
+  });
+
+  test('HOLD sans position ET sans rang n’affirme rien : non scorable', () => {
+    // C'était le défaut central : cette ligne valait -0,03, un short plein,
+    // sur 95 % des observations du carnet.
+    assert.equal(score({ action: 'HOLD', hadPosition: false }, 0.03), null);
+  });
+
+  test('une action inconnue n’est pas scorable', () => {
+    assert.equal(score({ action: 'WAT', hadPosition: false }, 0.03), null);
   });
 });
 

@@ -215,21 +215,46 @@ export class ShadowBook {
    *
    * @returns {number|null} rendement signé, ou null si non scorable
    */
-  static score(action, hadPosition, excessReturn) {
+  static score({ action, hadPosition, rankFractional }, excessReturn) {
+    // ── LE RANG D'ABORD, PARCE QUE C'EST CE QUE LA STRATÉGIE AFFIRME ──────
+    // Ne pas acheter un titre n'est PAS parier sur sa baisse : c'est dire que
+    // dix autres sont meilleurs. La version précédente notait tout « HOLD sans
+    // position » comme un short plein — elle traitait donc le 11e du classement
+    // exactement comme le 150e. Sur 900 décisions réelles, 852 étaient dans ce
+    // cas : 95 % de la mesure portait sur une affirmation que le bot n'a jamais
+    // faite.
+    //
+    // Le rang fractionnaire vaut 1 pour le premier et 0 pour le dernier. Le
+    // poids 2·(f − ½) va donc de +1 à −1 et s'annule au milieu :
+    //
+    //     rang 1 sur 150   → +1,00   pari long plein, c'est ce qu'on a acheté
+    //     rang 11          → +0,87   presque retenu, presque long
+    //     rang 75          →  0,00   aucune affirmation, aucun score
+    //     rang 150         → -1,00   pari court plein, c'est le pire du jour
+    //
+    // La moyenne de ces scores sur une journée EST le rendement d'un
+    // portefeuille long-court pondéré par le rang — la mesure canonique d'une
+    // capacité de classement, et celle dont le SPRT a besoin.
+    if (Number.isFinite(rankFractional) && Number.isFinite(excessReturn)) {
+      return 2 * (rankFractional - 0.5) * excessReturn;
+    }
+
+    // ── Repli directionnel, sans rang ────────────────────────────────────
+    // Les sorties mécaniques — stop touché — n'ont pas de rang : elles ne
+    // viennent pas du classement. Elles restent notées comme des paris.
     switch (action) {
-      // Pari haussier explicite.
       case 'BUY':
         return excessReturn;
 
-      // Pari baissier : sortir avant une baisse est une bonne prédiction.
+      // Sortir avant une baisse est une bonne prédiction.
       case 'SELL':
         return -excessReturn;
 
       case 'HOLD':
-        // Avec position : « ça continue » — on reste long, on assume la suite.
-        // Sans position : « il n'y a rien à prendre » — s'abstenir avant une
-        // hausse est une erreur, s'abstenir avant une baisse est correct.
-        return hadPosition ? excessReturn : -excessReturn;
+        // Sans rang ET sans position, il n'y a aucune affirmation à noter.
+        // Compter cela comme un short serait exactement l'erreur corrigée
+        // au-dessus.
+        return hadPosition ? excessReturn : null;
 
       default:
         return null;
@@ -295,7 +320,7 @@ export class ShadowBook {
           assetReturn: round(assetReturn, 6),
           benchReturn: round(benchReturn, 6),
           excessReturn: round(excess, 6),
-          score: round(ShadowBook.score(entry.action, entry.hadPosition, excess), 6),
+          score: round(ShadowBook.score(entry, excess), 6),
         };
       }
 
