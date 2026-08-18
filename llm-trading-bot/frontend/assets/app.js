@@ -2591,12 +2591,46 @@ $('ranking-body').addEventListener('toggle', (event) => {
   const hote = item.querySelector('.rank-detail');
   if (hote.dataset.rempli === '1') return;
 
-  const decision = journalParSymbole.get(item.dataset.symbol);
-  hote.innerHTML = decision
-    ? journalBodyHtml(decision)
-    : '<p class="empty-block">Aucun raisonnement enregistré pour cet actif sur le dernier cycle — '
-      + 'il a pu être écarté avant l\'appel au modèle (marché fermé, cotation absente).</p>';
+  // ── Le message d'absence accusait le mauvais coupable ──────────────────
+  // « Aucun raisonnement enregistré — il a pu être écarté avant l'appel au
+  // modèle » s'affichait sur le titre classé PREMIER. La cause n'avait rien à
+  // voir : le tableau de bord n'embarque que les 25 dernières entrées de
+  // journal, alors que le classement en affiche 150. Les 125 autres n'étaient
+  // pas absentes, elles n'avaient simplement jamais été demandées.
+  //
+  // Charger les 150 à chaque rafraîchissement coûterait quelques centaines de
+  // kilo-octets toutes les trente secondes, pour un panneau dont on déplie une
+  // ligne à la fois. On va donc chercher l'entrée manquante à l'ouverture, et
+  // seulement celle-là.
+  const symbole = item.dataset.symbol;
+  const connue = journalParSymbole.get(symbole);
+  if (connue) {
+    hote.innerHTML = journalBodyHtml(connue);
+    hote.dataset.rempli = '1';
+    return;
+  }
+
+  hote.innerHTML = '<p class="empty-block">Chargement du raisonnement…</p>';
   hote.dataset.rempli = '1';
+  fetch(`${state.apiUrl}/api/journal?limit=1&symbol=${encodeURIComponent(symbole)}`,
+    { headers: { Accept: 'application/json' } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then((entrees) => {
+      const e = Array.isArray(entrees) ? entrees[0] : null;
+      if (e) {
+        journalParSymbole.set(symbole, e);
+        hote.innerHTML = journalBodyHtml(e);
+        return;
+      }
+      // Vraie absence — et là seulement on peut l'affirmer.
+      hote.innerHTML = '<p class="empty-block">Cet actif n’a produit aucune décision : il a été '
+        + 'écarté avant l’appel au modèle — cotation absente, ou marché fermé sur ce titre au '
+        + 'moment du cycle.</p>';
+    })
+    .catch((err) => {
+      hote.innerHTML = `<p class="empty-block">Raisonnement indisponible : ${esc(err.message)}. `
+        + 'Le classement ci-dessus reste valide — seul le détail n’a pas pu être chargé.</p>';
+    });
 }, true);
 
 
