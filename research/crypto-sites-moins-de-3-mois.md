@@ -59,9 +59,17 @@ prépare de vraies transactions (swaps, bridge, paiements marchands).
 PayBox, le connecte à Claude/ChatGPT et lie son compte X. Les montants réellement reçus vont
 d'environ **10 $ à plus de 600 $**, versés sur le wallet Solana du PayBox.
 
-**Statut** : la première vague a été vidée en quelques heures ; une seconde a rouvert le 30/07.
-Il faut avoir la configuration prête à l'avance et surveiller le compte X de MoonPay pour la
-prochaine ouverture. Non destiné aux résidents britanniques.
+**Statut au 19/08/2026** : la première vague a été vidée en quelques heures, une seconde a rouvert
+le 30/07 — et **le site ne mentionne aujourd'hui plus aucun faucet ni giveaway**. L'opération est
+donc à considérer comme close, sauf nouvelle annonce sur le compte X de MoonPay. Le produit, lui,
+est bien actif. Non destiné aux résidents britanniques.
+
+**Ce qu'est PayBox le reste du temps** : un coffre de paiement non-custodial que Claude ou ChatGPT
+pilote via un connecteur MCP (`api.paybox.sh/mcp`). Tu décris l'opération en langage naturel,
+l'IA prépare la transaction, tu valides par passkey (mode *Always Ask*) ou tu la laisses agir dans
+des limites définies (mode *Autonomous*). Clés en MPC + enclave sécurisée : ni MoonPay ni l'agent
+ne peuvent signer seuls. Solana et EVM (Ethereum, Base, Arbitrum, Polygon, Hyperliquid, Tempo,
+Robinhood Chain) plus Bitcoin ; audits Trail of Bits et NCC Group, conformité PCI DSS 4.0.1.
 
 ⚠️ **Sécurité** : tu connectes un agent IA à un portefeuille. Ne laisse dessus que ce que tu es
 prêt à perdre, et n'accorde jamais d'autorisation de dépense illimitée.
@@ -199,11 +207,13 @@ Tu obtiens la date de création réelle, celle du registre, que le site ne peut 
 ## Ce que ça vaut, honnêtement
 
 Sur les trois derniers mois, une seule opportunité a versé des sommes non symboliques et vérifiées :
-**le faucet USDC de PayBox** (10 $ à 600 $), parce qu'il est financé par une entreprise établie qui
-achète de l'acquisition d'utilisateurs. Tout le reste est du **farming de points sans token
-garanti** : c'est un pari, pas un revenu. Le portefeuille raisonnable, si tu veux jouer cette
-fenêtre : PayBox quand une vague rouvre, Yakkamon et Push Chain pour du gratuit à faible effort,
-Nowa en devnet parce que ça ne coûte rien — et rien de ce qui demande un dépôt.
+**le faucet USDC de PayBox** (10 $ à 600 $), parce qu'il était financé par une entreprise établie
+qui achetait de l'acquisition d'utilisateurs — et il n'est plus affiché sur le site. C'est
+révélateur du rythme de cette catégorie : ce qui paie vraiment est une opération de lancement, elle
+dure quelques jours, et il faut être là au bon moment. Tout le reste est du **farming de points
+sans token garanti** : un pari, pas un revenu. Le portefeuille raisonnable pour cette fenêtre :
+Yakkamon et Push Chain pour du gratuit à faible effort, Nowa en devnet parce que ça ne coûte rien,
+PayBox si MoonPay rouvre une vague — et rien de ce qui demande un dépôt.
 
 ---
 
