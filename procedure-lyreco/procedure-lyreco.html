@@ -1,0 +1,1049 @@
+<title>Procédure Achats Lyreco</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f5f7f6;
+  --surface:#ffffff;
+  --surface-2:#eef2f1;
+  --ink:#17232a;
+  --muted:#5b6c72;
+  --line:#d3dbdb;
+  --line-strong:#b4c0c0;
+  --accent:#0d5c63;
+  --accent-ink:#0a474d;
+  --on-accent:#ffffff;
+  --accent-wash:#e2eeee;
+  --ochre:#8a5a12;
+  --ochre-wash:#f6eddd;
+  --brick:#94322b;
+  --brick-wash:#f7e6e3;
+  --todo:#6b4b12;
+  --todo-wash:#fbf0d3;
+  --shadow:0 1px 2px rgba(23,35,42,.06), 0 8px 24px -18px rgba(23,35,42,.5);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#101619;
+    --surface:#182126;
+    --surface-2:#1e292e;
+    --ink:#e3ebea;
+    --muted:#9bacb0;
+    --line:#2c3a3f;
+    --line-strong:#3d4f55;
+    --accent:#5cb8bd;
+    --accent-ink:#8ad3d6;
+    --on-accent:#08201f;
+    --accent-wash:#14312f;
+    --ochre:#d8a355;
+    --ochre-wash:#302614;
+    --brick:#e08376;
+    --brick-wash:#331d1a;
+    --todo:#e4bf72;
+    --todo-wash:#2e2513;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#101619;
+  --surface:#182126;
+  --surface-2:#1e292e;
+  --ink:#e3ebea;
+  --muted:#9bacb0;
+  --line:#2c3a3f;
+  --line-strong:#3d4f55;
+  --accent:#5cb8bd;
+  --accent-ink:#8ad3d6;
+  --on-accent:#08201f;
+  --accent-wash:#14312f;
+  --ochre:#d8a355;
+  --ochre-wash:#302614;
+  --brick:#e08376;
+  --brick-wash:#331d1a;
+  --todo:#e4bf72;
+  --todo-wash:#2e2513;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -20px rgba(0,0,0,.9);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Source Serif 4","Iowan Old Style",Georgia,serif;
+  font-size:16.5px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.layout{
+  max-width:1180px;
+  margin:0 auto;
+  padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 96px;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:40px;
+}
+@media (min-width:1080px){
+  .layout{grid-template-columns:214px minmax(0,1fr);align-items:start;gap:56px}
+}
+
+/* ---------- Sommaire ---------- */
+.toc{display:none}
+@media (min-width:1080px){
+  .toc{
+    display:block;position:sticky;top:32px;
+    font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+    font-size:12.5px;line-height:1.45;
+  }
+  .toc h2{
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 12px;font-weight:600;
+  }
+  .toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .toc a{
+    display:grid;grid-template-columns:22px 1fr;gap:6px;
+    padding:4px 6px;border-radius:4px;color:var(--muted);text-decoration:none;
+    border-left:2px solid transparent;
+  }
+  .toc a span{font-variant-numeric:tabular-nums;color:var(--line-strong)}
+  .toc a:hover{background:var(--surface-2);color:var(--ink)}
+  .toc a:hover span{color:var(--accent)}
+  .toc li.toc-sep{height:1px;background:var(--line);margin:10px 6px;padding:0}
+}
+
+/* ---------- Typographie ---------- */
+h1,h2,h3,h4{font-family:Archivo,"Helvetica Neue",Arial,sans-serif;text-wrap:balance;margin:0}
+h1{font-size:clamp(26px,4vw,36px);font-weight:700;line-height:1.15;letter-spacing:-.015em}
+h2{
+  font-size:clamp(19px,2.4vw,23px);font-weight:700;line-height:1.2;
+  display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline;
+}
+h2 .num{
+  color:var(--accent);font-variant-numeric:tabular-nums;font-size:.72em;
+  letter-spacing:.02em;
+}
+h3{font-size:16.5px;font-weight:600;margin:26px 0 8px;letter-spacing:-.005em}
+h4{font-size:14px;font-weight:600;margin:18px 0 6px}
+p{margin:0 0 14px;max-width:68ch}
+ul,ol{margin:0 0 14px;padding-left:20px;max-width:68ch}
+li{margin-bottom:6px}
+li::marker{color:var(--muted)}
+strong{font-weight:600}
+a{color:var(--accent-ink);text-underline-offset:2px}
+small{font-size:13px;color:var(--muted)}
+
+section{
+  margin-top:44px;padding-top:26px;border-top:1px solid var(--line);
+  scroll-margin-top:24px;
+}
+section > h2{margin-bottom:18px}
+
+.lede{font-size:17.5px;color:var(--muted);max-width:64ch}
+
+/* ---------- Cartouche ---------- */
+header.doc{
+  background:var(--surface);border:1px solid var(--line);border-radius:3px;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.doc-band{
+  display:flex;flex-wrap:wrap;gap:10px 18px;align-items:baseline;
+  padding:14px 22px;background:var(--accent);color:var(--on-accent);
+  font-family:Archivo,sans-serif;font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;
+}
+.doc-band .sep{opacity:.5}
+.doc-body{padding:26px 22px 4px}
+.doc-body h1{margin-bottom:10px}
+.cartouche{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  border-top:1px solid var(--line);margin-top:18px;
+}
+.cartouche div{
+  padding:12px 22px 14px;border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+.cartouche div:last-child{border-right:0}
+.cartouche dt{
+  font-family:Archivo,sans-serif;font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:3px;font-weight:600;
+}
+.cartouche dd{margin:0;font-size:14.5px;font-variant-numeric:tabular-nums}
+
+/* ---------- Composants ---------- */
+.path{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:3px;
+  padding:1px 6px;white-space:nowrap;
+}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.8px;
+  background:var(--surface-2);border-radius:3px;padding:1px 5px;
+}
+.tag{
+  display:inline-block;font-family:Archivo,sans-serif;font-size:10px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:2px;
+  background:var(--accent-wash);color:var(--accent-ink);vertical-align:2px;
+}
+.todo{
+  background:var(--todo-wash);color:var(--todo);border:1px dashed var(--todo);
+  font-family:Archivo,sans-serif;font-size:11px;font-weight:600;letter-spacing:.06em;
+  padding:0 6px;border-radius:2px;white-space:nowrap;
+}
+
+.note{
+  border-left:3px solid var(--accent);background:var(--surface);
+  padding:14px 18px;margin:18px 0;border-radius:0 3px 3px 0;
+  box-shadow:var(--shadow);
+}
+.note.warn{border-left-color:var(--ochre);background:var(--ochre-wash)}
+.note.stop{border-left-color:var(--brick);background:var(--brick-wash)}
+.note p:last-child{margin-bottom:0}
+.note .label{
+  font-family:Archivo,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent-ink);display:block;margin-bottom:5px;
+}
+.note.warn .label{color:var(--ochre)}
+.note.stop .label{color:var(--brick)}
+
+/* Étapes */
+.steps{counter-reset:step;display:flex;flex-direction:column;gap:14px;margin:22px 0}
+.step{
+  position:relative;background:var(--surface);border:1px solid var(--line);
+  border-radius:3px;padding:18px 22px 14px 62px;box-shadow:var(--shadow);
+}
+.step::before{
+  counter-increment:step;content:counter(step);
+  position:absolute;left:18px;top:18px;
+  width:28px;height:28px;border-radius:50%;
+  background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;
+  font-family:Archivo,sans-serif;font-weight:700;font-size:14px;
+  font-variant-numeric:tabular-nums;
+}
+.step h3{margin:0 0 6px;font-size:16px}
+.step p:last-child,.step ul:last-child,.step ol:last-child{margin-bottom:0}
+
+/* Tableaux */
+.table-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{
+  font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;background:var(--surface-2);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tick{color:var(--accent);font-weight:600}
+
+/* Logigramme */
+.flow{display:flex;flex-direction:column;margin:22px 0 26px;max-width:60ch}
+.flow-box{
+  position:relative;padding:12px 0 14px 26px;
+  border-left:2px solid var(--accent);
+}
+.flow-box::before{
+  content:"";position:absolute;left:-6px;top:17px;width:10px;height:10px;
+  border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--paper);
+}
+.flow-box.cond{border-left-color:var(--ochre)}
+.flow-box.cond::before{background:var(--ochre)}
+.flow-box.end{border-left-color:transparent}
+.flow-box.end::before{background:var(--line-strong)}
+.flow-box b{
+  display:block;font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:3px;font-weight:600;
+}
+.flow-box span{font-size:15px;line-height:1.45;display:block}
+
+/* Check-list */
+.check{list-style:none;padding:0;max-width:none}
+.check li{
+  display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;
+  padding:9px 0;border-bottom:1px solid var(--line);margin:0;
+}
+.check li:last-child{border-bottom:0}
+.check li::before{
+  content:"";width:14px;height:14px;margin-top:5px;
+  border:1.5px solid var(--line-strong);border-radius:2px;background:var(--surface);
+}
+
+footer.doc{
+  margin-top:48px;padding-top:20px;border-top:1px solid var(--line);
+  font-family:Archivo,sans-serif;font-size:11.5px;color:var(--muted);
+  display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;
+}
+
+a:focus-visible,.toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+@media print{
+  body{background:#fff;font-size:10.5pt;line-height:1.4}
+  .layout{display:block;max-width:none;padding:0}
+  .toc{display:none}
+  section{break-inside:auto;page-break-inside:auto;border-top:1px solid #ccc;margin-top:20pt;padding-top:12pt}
+  h2,h3{break-after:avoid}
+  .step,.note,.table-wrap,.flow-box{break-inside:avoid;box-shadow:none}
+  header.doc{box-shadow:none}
+  .doc-band{background:#fff;color:#000;border-bottom:2px solid #000}
+  a{color:#000;text-decoration:none}
+}
+</style>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Sommaire">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#s1"><span>1</span> Objet</a></li>
+    <li><a href="#s2"><span>2</span> Domaine d'application</a></li>
+    <li><a href="#s3"><span>3</span> Rôles</a></li>
+    <li><a href="#s4"><span>4</span> Règles de gestion</a></li>
+    <li><a href="#s5"><span>5</span> Comprendre les comptes</a></li>
+    <li><a href="#s6"><span>6</span> Mode opératoire</a></li>
+    <li><a href="#s7"><span>7</span> Circuit de validation</a></li>
+    <li><a href="#s8"><span>8</span> Réception</a></li>
+    <li><a href="#s9"><span>9</span> Anomalies et retours</a></li>
+    <li><a href="#s10"><span>10</span> Documents</a></li>
+    <li><a href="#s11"><span>11</span> Administration</a></li>
+    <li><a href="#s12"><span>12</span> Pilotage</a></li>
+    <li><a href="#s13"><span>13</span> Contacts</a></li>
+    <li class="toc-sep" aria-hidden="true"></li>
+    <li><a href="#a1"><span>A</span> Check-list</a></li>
+    <li><a href="#a2"><span>B</span> Hiérarchie des comptes</a></li>
+    <li><a href="#a3"><span>C</span> Erreurs fréquentes</a></li>
+    <li><a href="#a4"><span>D</span> Glossaire</a></li>
+    <li><a href="#a5"><span>E</span> Révisions</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<header class="doc">
+  <div class="doc-band">
+    <span>Procédure interne</span><span class="sep">/</span>
+    <span>Achats &amp; services généraux</span><span class="sep">/</span>
+    <span>PRO-ACH-001</span>
+  </div>
+  <div class="doc-body">
+    <h1>Commander des fournitures sur le webshop Lyreco</h1>
+    <p class="lede">Mode opératoire applicable à l'ensemble des centres, directions régionales
+    et services du siège disposant d'un accès au webshop Lyreco : de la connexion à la
+    réception de la livraison, jusqu'au traitement des litiges.</p>
+  </div>
+  <dl class="cartouche">
+    <div><dt>Référence</dt><dd>PRO-ACH-001</dd></div>
+    <div><dt>Version</dt><dd>1.0</dd></div>
+    <div><dt>Date d'application</dt><dd><span class="todo">à compléter</span></dd></div>
+    <div><dt>Rédacteur</dt><dd><span class="todo">à compléter</span></dd></div>
+    <div><dt>Approbateur</dt><dd><span class="todo">à compléter</span></dd></div>
+    <div><dt>Diffusion</dt><dd>Centres, DR, siège</dd></div>
+    <div><dt>Révision</dt><dd>Annuelle</dd></div>
+    <div><dt>Fournisseur</dt><dd>Lyreco France</dd></div>
+  </dl>
+</header>
+
+<div class="note warn">
+  <span class="label">Avant diffusion</span>
+  <p>Les mentions <span class="todo">à compléter</span> correspondent aux paramètres propres à
+  l'entreprise (seuils, fréquences, noms des valideurs, contacts internes). Elles doivent être
+  renseignées par le service achats avant la mise en application. Toutes les autres informations
+  décrivent le fonctionnement réel du webshop Lyreco et des conditions commerciales publiées par
+  le fournisseur.</p>
+</div>
+
+<section id="s1">
+  <h2><span class="num">1</span> Objet</h2>
+  <p>Cette procédure définit les modalités d'achat des fournitures et consommables de
+  fonctionnement auprès de Lyreco, fournisseur référencé de l'entreprise. Elle vise à :</p>
+  <ul>
+    <li>garantir que chaque commande est imputée au bon centre et livrée à la bonne adresse ;</li>
+    <li>sécuriser le circuit de validation et le respect des budgets ;</li>
+    <li>limiter les coûts logistiques en respectant le seuil de franco de port ;</li>
+    <li>assurer la traçabilité des commandes, des livraisons et des litiges ;</li>
+    <li>harmoniser les pratiques entre tous les centres du réseau.</li>
+  </ul>
+</section>
+
+<section id="s2">
+  <h2><span class="num">2</span> Domaine d'application</h2>
+  <h3>Périmètre couvert</h3>
+  <p>Tous les achats réalisés sur le webshop Lyreco par les collaborateurs disposant d'un accès
+  nominatif, quel que soit le compte de rattachement : papier et enveloppes, cartouches et toners,
+  fournitures de bureau, classement, informatique et téléphonie de bureau, mobilier de bureau,
+  alimentation et réception, hygiène et entretien, équipements de protection individuelle,
+  emballage et expédition, services généraux.</p>
+  <h3>Exclusions</h3>
+  <ul>
+    <li>Matériel médical, audiologique et consommables techniques des centres — circuit dédié.</li>
+    <li>Matériel informatique géré par la DSI (postes, écrans professionnels, périphériques normés)
+      — le compte <code>AUDIKA DSI</code> est explicitement paramétré « pas de commandes ».</li>
+    <li>Mobilier et aménagement supérieurs à <span class="todo">seuil à compléter</span>, qui relèvent
+      d'un projet d'aménagement validé par les services généraux.</li>
+    <li>Prestations de montage, produits personnalisés et livraisons spécifiques, qui font l'objet
+      de conditions particulières chez Lyreco et d'un accord préalable du siège.</li>
+  </ul>
+</section>
+
+<section id="s3">
+  <h2><span class="num">3</span> Rôles et responsabilités</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Rôle</th><th>Qui</th><th>Responsabilités</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Demandeur / acheteur</strong></td>
+          <td>Collaborateur du centre désigné <span class="todo">à compléter</span></td>
+          <td>Recense les besoins, vérifie le compte actif, constitue et soumet le panier,
+            réceptionne et contrôle la livraison, signale les anomalies.</td>
+        </tr>
+        <tr>
+          <td><strong>Valideur</strong></td>
+          <td>Responsable de centre / DR <span class="todo">à compléter</span></td>
+          <td>Contrôle la pertinence et le montant de la commande soumise à validation ;
+            valide, modifie ou refuse dans le délai imparti.</td>
+        </tr>
+        <tr>
+          <td><strong>Approbateur final</strong></td>
+          <td><span class="todo">à compléter</span></td>
+          <td>Second niveau de validation déclenché en cas de dépassement de budget ou de produit
+            contrôlé.</td>
+        </tr>
+        <tr>
+          <td><strong>Administrateur webshop</strong></td>
+          <td>Services généraux / achats — siège</td>
+          <td>Crée et désactive les utilisateurs, attribue les droits et les valideurs, paramètre
+            les budgets, fait évoluer le mini-catalogue avec Lyreco, diffuse les messages internes.</td>
+        </tr>
+        <tr>
+          <td><strong>Contrôle de gestion</strong></td>
+          <td><span class="todo">à compléter</span></td>
+          <td>Suit la dépense par centre, analyse les écarts au budget et les indicateurs de la
+            section 12.</td>
+        </tr>
+        <tr>
+          <td><strong>Comptabilité fournisseurs</strong></td>
+          <td><span class="todo">à compléter</span></td>
+          <td>Rapproche factures, bons de livraison et avoirs ; traite les litiges de facturation.</td>
+        </tr>
+        <tr>
+          <td><strong>Lyreco</strong></td>
+          <td>Chargé de compte et Service Clients</td>
+          <td>Tient à jour le mini-catalogue et les tarifs négociés, traite les demandes de retour,
+            d'échange et de SAV, assure la livraison.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="s4">
+  <h2><span class="num">4</span> Règles de gestion</h2>
+  <p>Ces dix règles s'imposent à tout utilisateur du webshop. Elles conditionnent la validation
+  des commandes.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:52px">N°</th><th>Règle</th><th>Contrôle</th></tr></thead>
+      <tbody>
+        <tr><td class="num">R1</td>
+          <td>Les besoins sont regroupés : <strong>une commande par centre et par
+            <span class="todo">période à compléter</span></strong>, hors urgence justifiée.</td>
+          <td>Nombre de commandes par centre et par mois.</td></tr>
+        <tr><td class="num">R2</td>
+          <td>Chaque commande atteint <strong>75 € HT minimum</strong>, seuil de la livraison
+            gratuite chez Lyreco. En dessous, des frais de port sont facturés.</td>
+          <td>Montant du panier avant validation.</td></tr>
+        <tr><td class="num">R3</td>
+          <td>Les achats se font <strong>en priorité dans le mini-catalogue et les listes de
+            favoris</strong>, qui contiennent les produits référencés aux tarifs négociés.</td>
+          <td>Lignes commandées hors mini-catalogue.</td></tr>
+        <tr><td class="num">R4</td>
+          <td>Le <strong>compte actif est vérifié avant chaque commande</strong> : il détermine
+            l'adresse de livraison et l'imputation comptable.</td>
+          <td>Bandeau de compte en haut de l'écran.</td></tr>
+        <tr><td class="num">R5</td>
+          <td>La <strong>référence interne</strong> (code centre, service ou demandeur) est
+            renseignée à la validation du panier.</td>
+          <td>Champ référence de la commande.</td></tr>
+        <tr><td class="num">R6</td>
+          <td>Le webshop est réservé à un <strong>usage strictement professionnel</strong>.
+            Aucune commande à titre personnel n'est autorisée.</td>
+          <td>Historique de commande nominatif.</td></tr>
+        <tr><td class="num">R7</td>
+          <td>Les <strong>familles exclues</strong> (section 2) ne sont pas commandées sur Lyreco.</td>
+          <td>Revue des lignes par le valideur.</td></tr>
+        <tr><td class="num">R8</td>
+          <td>Le <strong>budget du centre</strong> est respecté ; tout dépassement déclenche une
+            validation supplémentaire et doit être justifié.</td>
+          <td>Alerte budget du webshop.</td></tr>
+        <tr><td class="num">R9</td>
+          <td>Toute anomalie de livraison est signalée <strong>sous 48 heures</strong>, réserves
+            portées sur le bon de livraison.</td>
+          <td>Registre des litiges du centre.</td></tr>
+        <tr><td class="num">R10</td>
+          <td>Les <strong>identifiants sont personnels</strong> et ne se partagent pas. Tout départ
+            de collaborateur donne lieu à désactivation de son accès.</td>
+          <td>Revue trimestrielle des utilisateurs actifs.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="label">Bon à savoir</span>
+    <p>Une commande passée avant 18 h est livrée sous 24 h dans 99 % des cas. Il est donc inutile
+    de fractionner les commandes pour « aller plus vite » : le regroupement (R1) n'allonge pas le
+    délai de livraison, il réduit les frais de port et l'empreinte logistique.</p>
+  </div>
+</section>
+
+<section id="s5">
+  <h2><span class="num">5</span> Comprendre l'organisation des comptes</h2>
+  <p>C'est le point qui génère le plus d'erreurs. Le webshop reproduit la structure juridique et
+  logistique de l'entreprise sous forme d'arborescence. Deux natures de comptes coexistent :</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nature</th><th>Repérage à l'écran</th><th>Peut commander ?</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Nœud / donneur d'ordre</strong></td>
+          <td>Libellé en <strong>texte noir</strong> dans la hiérarchie</td>
+          <td>Non</td>
+          <td>Niveau d'organisation (administrateur, siège, réseau, direction régionale). Sert au
+            regroupement, au pilotage et au paramétrage.</td>
+        </tr>
+        <tr>
+          <td><strong>Adresse de livraison</strong></td>
+          <td>Libellé en <strong>texte bleu</strong>, bouton « Sélectionner »</td>
+          <td>Oui</td>
+          <td>Compte d'un centre ou d'un site. C'est l'adresse où la marchandise est livrée et
+            l'entité à laquelle la dépense est imputée.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note stop">
+    <span class="label">Message bloquant</span>
+    <p>« <em>Vous êtes connecté sur un compte qui ne peut pas commander. De ce fait vous ne pourrez
+    pas passer de commande ou vérifier de prix.</em> » — vous êtes positionné sur un nœud
+    administratif (comptes marqués <code>PAS DE COMMANDES</code>). Il ne s'agit pas d'une panne :
+    utilisez <span class="path">Changer de compte</span> pour basculer sur le compte de livraison
+    du centre concerné avant toute action.</p>
+  </div>
+  <p>Le compte actif est toujours affiché en haut de l'écran, sous la forme
+  <span class="path">Compte : 4765875 · AUDIKA · C0092 · 1 rue du Général Fauconnet · 21000 DIJON</span>.
+  Chaque centre possède son numéro de compte à sept chiffres et son code interne
+  <code>Cxxxx</code>. L'annexe B détaille les niveaux de l'arborescence.</p>
+</section>
+
+<section id="s6">
+  <h2><span class="num">6</span> Mode opératoire</h2>
+  <p>Les huit étapes ci-dessous décrivent le déroulement complet d'une commande, de la connexion
+  à la réception. Elles s'enchaînent dans cet ordre.</p>
+
+  <div class="steps">
+
+    <div class="step">
+      <h3>Se connecter au webshop</h3>
+      <p>Accédez à <span class="path">www.lyreco.com/webshop</span> puis à l'espace
+      <span class="path">Utilisateur</span>. Saisissez votre identifiant et votre mot de passe.
+      L'identifiant est construit à partir du numéro de compte de rattachement suivi de vos
+      initiales (par exemple <code>4765875XY</code>).</p>
+      <ul>
+        <li>Mot de passe oublié : utilisez le lien de réinitialisation de la page de connexion.
+          En cas d'échec, sollicitez l'administrateur webshop.</li>
+        <li>Vérifiez que la langue est bien <span class="path">Français – FR</span> et la devise
+          en euros HT.</li>
+        <li>Déconnectez-vous en fin de session, en particulier sur un poste partagé à l'accueil
+          d'un centre.</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>Vérifier — et si besoin changer — le compte actif</h3>
+      <p><strong>Étape obligatoire avant toute mise au panier.</strong> Contrôlez le bandeau de
+      compte en haut de l'écran : numéro, enseigne, code centre et adresse doivent correspondre au
+      lieu de livraison souhaité.</p>
+      <ol>
+        <li>Cliquez sur <span class="path">Changer de compte</span>.</li>
+        <li>Parcourez la hiérarchie (les flèches déplient ou replient chaque niveau) ou saisissez
+          directement le numéro dans <span class="path">Chercher un numéro de compte</span> puis
+          <span class="path">Chercher</span>.</li>
+        <li>Sur la ligne du centre voulu — affichée en bleu — cliquez sur
+          <span class="path">Sélectionner</span>.</li>
+        <li>Vérifiez que le bandeau affiche bien le nouveau compte avant de continuer.</li>
+      </ol>
+      <div class="note warn">
+        <span class="label">Point de vigilance</span>
+        <p>Changer de compte en cours de commande peut vider ou recalculer le panier : les tarifs,
+        le mini-catalogue et les budgets sont propres à chaque compte. Sélectionnez toujours le
+        compte <em>avant</em> de constituer le panier.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Constituer le panier</h3>
+      <p>Trois voies d'accès aux produits, par ordre de priorité :</p>
+      <h4>a. Listes de favoris <span class="tag">voie recommandée</span></h4>
+      <p>Menu <span class="path">Mes favoris › Produits préférés</span>. Les listes partagées du
+      réseau contiennent les produits validés par le siège, par exemple
+      <em>Équipement réseau électroménager</em>, <em>Pack électroménager</em>,
+      <em>Pack purificateur</em> et <em>Pack destructeur</em>. Ouvrez la liste, saisissez les
+      quantités, ajoutez au panier.</p>
+      <h4>b. Commande rapide</h4>
+      <p>Menu <span class="path">Commande rapide</span> (icône chronomètre à droite de la barre
+      de recherche) :</p>
+      <ul>
+        <li><span class="path">Via les références produits</span> : saisissez les références
+          Lyreco et les quantités, puis <span class="path">Ajouter au panier</span>. Idéal pour un
+          réapprovisionnement récurrent à partir d'une liste papier ou d'une commande précédente.</li>
+        <li><span class="path">Via un fichier</span> : importez un fichier Excel/CSV contenant les
+          références et les quantités, puis <span class="path">Envoyer</span>. Le panier est
+          alimenté automatiquement.</li>
+      </ul>
+      <h4>c. Catalogue et moteur de recherche</h4>
+      <p>Recherche par mot-clé, par référence ou navigation dans les familles de produits. Pour les
+      consommables d'impression, l'<span class="path">Outil de recherche de cartouche</span> permet
+      de retrouver la référence exacte à partir du modèle d'imprimante.</p>
+      <p>Une commande déjà passée peut être rejouée depuis
+      <span class="path">Mon historique de commande</span> : ouvrez la commande, puis ajoutez tous
+      les produits au panier.</p>
+      <div class="note warn">
+        <span class="label">Point de vigilance</span>
+        <p>Contrôlez systématiquement <strong>l'unité de vente</strong> : boîte de 100, lot de 12,
+        carton de 5 ramettes. La quantité saisie porte sur le conditionnement affiché, pas sur
+        l'unité. C'est la première cause de sur-commande.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Mettre le panier en attente si nécessaire</h3>
+      <p>Une commande peut être préparée puis reprise plus tard : dans le panier, cliquez sur
+      <span class="path">Mettre la commande en attente</span>, donnez-lui un titre explicite
+      (par exemple <em>C0092 – réappro mars</em>) puis <span class="path">Envoyer</span>.
+      Vous la retrouverez via <span class="path">Commande rapide</span> ou le bandeau
+      <span class="path">Commande(s) en attente</span>.</p>
+      <p>Utilisez cette fonction pour laisser un panier ouvert pendant la période de collecte des
+      besoins du centre, plutôt que de multiplier les petites commandes.</p>
+    </div>
+
+    <div class="step">
+      <h3>Contrôler le panier</h3>
+      <p>Ouvrez le panier et procédez aux vérifications de la check-list (annexe A) : compte actif,
+      quantités et conditionnements, montant total supérieur ou égal à 75 € HT, absence de produits
+      relevant des familles exclues, cohérence avec le budget du centre. Les quantités se modifient
+      et les lignes se suppriment directement dans le panier.</p>
+      <p>Un produit signalé comme <strong>contrôlé</strong> (mention affichée sous le prix)
+      déclenchera une validation supplémentaire : anticipez le délai.</p>
+    </div>
+
+    <div class="step">
+      <h3>Valider la commande</h3>
+      <ol>
+        <li>Dans le panier, cliquez sur <span class="path">Afficher</span> puis sur
+          <span class="path">Voir mes offres et valider ma commande</span>.</li>
+        <li>Cliquez sur <span class="path">Suivant</span> pour accéder aux informations de
+          livraison.</li>
+        <li>Vérifiez l'adresse de livraison, renseignez le <strong>nom du contact du centre</strong>
+          et un <strong>numéro de téléphone joignable</strong> (indispensable pour le chauffeur),
+          puis confirmez.</li>
+        <li>Renseignez la <strong>référence interne</strong> de commande (règle R5).</li>
+        <li>Confirmez la commande. Un e-mail de confirmation vous est adressé, avec le numéro de
+          commande Lyreco et la date de livraison estimée.</li>
+      </ol>
+      <p>Si un contrôle interne s'applique, le message « <em>reçu, en attente de validation</em> »
+      s'affiche : la commande n'est pas encore transmise à Lyreco (voir section 7).</p>
+    </div>
+
+    <div class="step">
+      <h3>Suivre la commande</h3>
+      <ul>
+        <li><span class="path">Commandes en cours</span> : commandes transmises ou en attente de
+          validation, avec leur statut.</li>
+        <li><span class="path">Mon historique de commande</span> : recherche par numéro, par date
+          ou par produit ; sert aussi de base au réapprovisionnement.</li>
+        <li>Le lien de suivi figure dans l'e-mail de confirmation.</li>
+      </ul>
+      <p>Une commande validée avant 18 h est livrée sous 24 h dans la très grande majorité des cas.
+      Toute modification ou annulation doit être demandée <strong>immédiatement</strong> au Service
+      Clients Lyreco : passé le lancement de la préparation, elle n'est plus possible et relèvera
+      d'un retour.</p>
+    </div>
+
+    <div class="step">
+      <h3>Réceptionner et contrôler</h3>
+      <p>Voir la section 8 : le contrôle à la livraison conditionne l'acceptation des réclamations.</p>
+    </div>
+
+  </div>
+</section>
+
+<section id="s7">
+  <h2><span class="num">7</span> Circuit de validation</h2>
+  <p>Le webshop applique automatiquement le circuit paramétré par l'administrateur. Trois éléments
+  peuvent déclencher une validation :</p>
+  <ul>
+    <li><strong>Dépassement de budget</strong> : lorsqu'un budget est défini sur le compte et que la
+      commande le dépasse, une double validation devient obligatoire.</li>
+    <li><strong>Produit contrôlé</strong> : certains articles du mini-catalogue sont marqués comme
+      contrôlés et imposent une validation, quel que soit le montant.</li>
+    <li><strong>Profil utilisateur</strong> : un acheteur peut être rattaché à un valideur et,
+      le cas échéant, à un approbateur final.</li>
+  </ul>
+
+  <div class="flow">
+    <div class="flow-box"><b>Étape 1 — Acheteur</b><span>Confirmation de la commande dans le webshop.</span></div>
+    <div class="flow-box cond"><b>Contrôle automatique</b><span>Budget dépassé, produit contrôlé ou profil soumis à validation ?</span></div>
+    <div class="flow-box"><b>Étape 2 — Valideur</b><span>Réception d'un e-mail contenant un lien vers la commande : il valide, modifie ou refuse après connexion.</span></div>
+    <div class="flow-box"><b>Étape 3 — Approbateur final</b><span>En cas de double validation, second contrôle et validation définitive.</span></div>
+    <div class="flow-box end"><b>Étape 4 — Transmission</b><span>Commande transmise à Lyreco ; l'acheteur est notifié par e-mail.</span></div>
+  </div>
+
+
+  <h3>Règles internes</h3>
+  <ul>
+    <li>Délai de traitement attendu du valideur : <span class="todo">à compléter</span> (recommandé :
+      48 heures ouvrées). Au-delà, l'acheteur relance ; la commande non validée n'est jamais
+      transmise à Lyreco.</li>
+    <li>En cas d'absence du valideur, la suppléance est assurée par
+      <span class="todo">à compléter</span>.</li>
+    <li>Un refus doit être motivé auprès du demandeur ; le panier peut être corrigé puis resoumis.</li>
+    <li>Toute demande de modification d'un budget ou d'un circuit de validation passe par
+      l'administrateur webshop, jamais par le Service Clients Lyreco.</li>
+  </ul>
+  <div class="note">
+    <span class="label">Délai de prise en compte</span>
+    <p>Les modifications de droits, de valideurs et de budgets réalisées dans
+    <span class="path">Gestion avancée</span> ne sont effectives que <strong>le lendemain</strong>.
+    Anticipez les arrivées, départs et remplacements en conséquence.</p>
+  </div>
+</section>
+
+<section id="s8">
+  <h2><span class="num">8</span> Réception et contrôle de la livraison</h2>
+  <ol>
+    <li><strong>Avant de signer</strong> : comptez les colis et comparez avec le bon de livraison
+      (BL) présenté par le chauffeur.</li>
+    <li><strong>Colis endommagé</strong> : refusez-le, ou acceptez-le en portant une réserve écrite
+      précise sur le BL — « carton n° 2 éventré, contenu à vérifier » et non « sous réserve de
+      déballage », mention sans valeur.</li>
+    <li><strong>Après déballage</strong> : vérifiez les références et les quantités reçues ligne
+      à ligne. Photographiez tout produit manquant, cassé ou non conforme.</li>
+    <li><strong>Livraison sans contact</strong> : il n'y a pas de signature manuscrite ; la preuve
+      de livraison prend la forme d'une photo du lieu de dépose et du nom de la personne ayant
+      réceptionné.</li>
+    <li><strong>Conservez le BL</strong> : il est exigé pour toute réclamation et pour tout retour.
+      Classement au centre pendant <span class="todo">durée à compléter</span>.</li>
+  </ol>
+  <div class="note stop">
+    <span class="label">Délai impératif</span>
+    <p>Toute anomalie (manquant, casse, erreur de référence) doit être signalée dans les
+    <strong>48 heures</strong> suivant la livraison. Passé ce délai, la réclamation devient
+    difficile à faire aboutir.</p>
+  </div>
+</section>
+
+<section id="s9">
+  <h2><span class="num">9</span> Anomalies, retours et service après-vente</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Situation</th><th>Action</th><th>Délai</th><th>Interlocuteur</th></tr></thead>
+      <tbody>
+        <tr><td>Produit manquant ou colis non livré</td>
+          <td>Réserve sur le BL, puis déclaration avec le numéro de commande et le numéro de BL</td>
+          <td>48 h</td><td>Service Clients Lyreco</td></tr>
+        <tr><td>Produit cassé ou détérioré</td>
+          <td>Photos, conservation de l'emballage, déclaration</td>
+          <td>48 h</td><td>Service Clients Lyreco</td></tr>
+        <tr><td>Erreur de référence livrée</td>
+          <td>Demande d'échange ; le produit est repris par un chauffeur Lyreco</td>
+          <td>48 h</td><td>Service Clients Lyreco</td></tr>
+        <tr><td>Produit non conforme au besoin, erreur de commande interne</td>
+          <td>Demande de reprise : produit non utilisé, non marqué, dans son emballage d'origine
+            intact, copie du BL jointe</td>
+          <td>30 jours après livraison</td><td>Service Clients Lyreco</td></tr>
+        <tr><td>Panne d'un équipement sous garantie</td>
+          <td>Demande SAV avec la référence, le numéro de série et la date de livraison</td>
+          <td>Durée de garantie</td><td>SAV Lyreco</td></tr>
+        <tr><td>Erreur de compte de livraison</td>
+          <td>Signalement interne, puis reprise ou transfert selon le cas</td>
+          <td>Immédiat</td><td>Administrateur webshop</td></tr>
+        <tr><td>Écart de facturation</td>
+          <td>Rapprochement facture / BL / commande, puis demande d'avoir</td>
+          <td>À réception de la facture</td><td>Comptabilité fournisseurs</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Conditions de retour</h3>
+  <ul>
+    <li>Reprise gratuite dans un délai maximum de <strong>30 jours après la livraison</strong>.</li>
+    <li>Produit dans son emballage d'origine, intact, sans marquage, non utilisé et non endommagé.</li>
+    <li>Certains produits ne sont pas retournables (articles personnalisés, denrées alimentaires,
+      produits d'hygiène ouverts) ; vérifiez la fiche produit avant de commander.</li>
+    <li>Lyreco établit un avoir ou une commande d'échange ; la marchandise est reprise par un
+      chauffeur lors d'un passage suivant.</li>
+    <li>Au-delà de 30 jours, aucun retour ni avoir ne peut être obtenu : la vigilance à la
+      réception (section 8) est donc déterminante.</li>
+  </ul>
+</section>
+
+<section id="s10">
+  <h2><span class="num">10</span> Documents, justificatifs et archivage</h2>
+  <p>Tous les justificatifs sont disponibles en autonomie dans
+  <span class="path">Mon Espace › Mes documents</span> :</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Document</th><th>Où le trouver</th><th>Critères de recherche</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Bon de livraison</strong></td>
+          <td><span class="path">Mes documents › Bon de Livraison</span></td>
+          <td>Numéro de livraison, numéro de commande Lyreco, période</td></tr>
+        <tr><td><strong>Bon de livraison émargé</strong><br><small>preuve de réception</small></td>
+          <td><span class="path">Mes documents › Bons de Livraison émargés</span>, ou depuis
+            <span class="path">Mon historique de commande</span> en ouvrant la commande puis
+            <span class="path">Voir les BL émargés</span></td>
+          <td>Mêmes critères</td></tr>
+        <tr><td><strong>Factures et avoirs</strong></td>
+          <td><span class="path">Mes documents</span></td>
+          <td>Numéro de facture ou d'avoir, numéro payeur, adresse de livraison, période</td></tr>
+        <tr><td><strong>Liste de prix</strong><br><small>tarifs négociés à jour</small></td>
+          <td><span class="path">Mes documents</span></td>
+          <td>Envoi sous 48 h maximum</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Après recherche, sélectionnez les documents souhaités puis cliquez sur
+  <span class="path">Demande</span> : ils sont envoyés au format PDF à votre adresse e-mail ou à
+  une autre adresse de votre choix.</p>
+  <div class="note">
+    <span class="label">Cas particulier</span>
+    <p>Les BL émargés ne sont pas disponibles lorsque la livraison n'est pas assurée par un
+    chauffeur Lyreco. En livraison sans contact, la preuve consiste en une photo du lieu de dépose
+    et le nom du réceptionnaire.</p>
+  </div>
+  <h3>Archivage interne</h3>
+  <ul>
+    <li>Bons de livraison : classés au centre, <span class="todo">durée à compléter</span>.</li>
+    <li>Factures et avoirs : transmis à la comptabilité fournisseurs
+      <span class="todo">modalités à compléter</span>.</li>
+    <li>Preuves de litige (photos, échanges) : conservées jusqu'au règlement complet du dossier.</li>
+  </ul>
+</section>
+
+<section id="s11">
+  <h2><span class="num">11</span> Administration du compte <span class="tag">siège</span></h2>
+  <p>Réservé aux détenteurs du profil administrateur, via
+  <span class="path">Mon Espace › Gestion avancée</span>.</p>
+  <h3>Gestion des utilisateurs</h3>
+  <ul>
+    <li><strong>Arrivée d'un collaborateur</strong> : créer l'utilisateur dans
+      <span class="path">Utilisateurs</span>, le rattacher au compte de livraison de son centre,
+      lui attribuer le profil acheteur et son valideur. Prise d'effet le lendemain.</li>
+    <li><strong>Départ ou mutation</strong> : désactiver l'accès sous
+      <span class="todo">délai à compléter</span> (recommandé : le jour même), et réaffecter les
+      paniers en attente éventuels.</li>
+    <li><strong>Revue périodique</strong> : contrôler la liste des utilisateurs actifs par centre
+      <span class="todo">fréquence à compléter</span>.</li>
+  </ul>
+  <h3>Budgets</h3>
+  <p>La rubrique <span class="path">Budgets</span> permet de créer ou modifier un budget sur un ou
+  plusieurs comptes. Un dépassement déclenche automatiquement une double validation. Un montant
+  minimum de commande peut également y être paramétré pour appuyer la règle R2.</p>
+  <h3>Mini-catalogue et listes partagées</h3>
+  <p><span class="path">Gestion des produits › Mini catalogue</span> restreint l'offre visible aux
+  produits négociés. Sa construction et sa mise à jour se font avec le chargé de compte Lyreco, à
+  la demande du service achats. Les listes de favoris partagées complètent ce dispositif pour les
+  besoins récurrents du réseau.</p>
+  <h3>Messages</h3>
+  <p>La rubrique <span class="path">Messages</span> permet de diffuser une information à tous les
+  utilisateurs de la hiérarchie (campagne de commande, gel budgétaire, changement de procédure).</p>
+</section>
+
+<section id="s12">
+  <h2><span class="num">12</span> Pilotage et indicateurs</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Indicateur</th><th>Source</th><th>Fréquence</th><th>Cible</th></tr></thead>
+      <tbody>
+        <tr><td>Dépense HT par centre</td><td>Historique de commande / factures</td><td>Mensuelle</td>
+          <td><span class="todo">à compléter</span></td></tr>
+        <tr><td>Part des commandes inférieures à 75 € HT</td><td>Historique de commande</td>
+          <td>Mensuelle</td><td>0 %</td></tr>
+        <tr><td>Nombre de commandes par centre et par mois</td><td>Historique de commande</td>
+          <td>Mensuelle</td><td><span class="todo">à compléter</span></td></tr>
+        <tr><td>Lignes commandées hors mini-catalogue</td><td>Historique de commande</td>
+          <td>Trimestrielle</td><td>&lt; 5 %</td></tr>
+        <tr><td>Délai moyen de validation</td><td>Commandes en cours</td><td>Mensuelle</td>
+          <td>&lt; 48 h ouvrées</td></tr>
+        <tr><td>Nombre de litiges livraison</td><td>Registre des litiges</td><td>Trimestrielle</td>
+          <td>En baisse</td></tr>
+        <tr><td>Utilisateurs actifs sans commande sur 6 mois</td><td>Gestion avancée</td>
+          <td>Semestrielle</td><td>Accès désactivés</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="s13">
+  <h2><span class="num">13</span> Contacts</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Besoin</th><th>Contact</th></tr></thead>
+      <tbody>
+        <tr><td>Accès, droits, valideurs, budgets, mini-catalogue</td>
+          <td>Administrateur webshop — <span class="todo">nom et e-mail à compléter</span></td></tr>
+        <tr><td>Question sur la procédure, besoin hors catalogue</td>
+          <td>Service achats / services généraux — <span class="todo">à compléter</span></td></tr>
+        <tr><td>Litige de facturation</td>
+          <td>Comptabilité fournisseurs — <span class="todo">à compléter</span></td></tr>
+        <tr><td>Livraison, retour, échange, SAV</td>
+          <td>Service Clients Lyreco — 0825 09 08 07 (service 0,15 €/min + prix appel), ou
+            <span class="path">Contactez-nous</span> depuis le webshop</td></tr>
+        <tr><td>Conditions commerciales, mini-catalogue, nouveaux produits</td>
+          <td>Chargé de compte Lyreco — <span class="todo">nom et e-mail à compléter</span></td></tr>
+        <tr><td>Aide en ligne</td>
+          <td><span class="path">Accès au centre d'aide</span> et
+            <span class="path">Guide utilisateur</span>, en pied de page du webshop</td></tr>
+        <tr><td>Adresse fournisseur</td>
+          <td>Lyreco France — Rue Alphonse Terroir, 59770 Marly</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="a1">
+  <h2><span class="num">A</span> Check-list avant validation</h2>
+  <p>À dérouler systématiquement avant de confirmer une commande.</p>
+  <ul class="check">
+    <li>Le compte affiché en haut de l'écran est bien celui du centre à livrer (numéro, code
+      <code>Cxxxx</code>, adresse).</li>
+    <li>Les besoins du centre ont été regroupés sur cette commande.</li>
+    <li>Chaque ligne a été vérifiée : bonne référence, bonne unité de vente, bonne quantité.</li>
+    <li>Les produits proviennent du mini-catalogue ou des listes de favoris.</li>
+    <li>Aucun article ne relève des familles exclues (matériel médical, informatique DSI, mobilier
+      hors seuil).</li>
+    <li>Le montant total atteint au moins 75 € HT.</li>
+    <li>Le montant reste dans le budget du centre, ou le dépassement est justifié.</li>
+    <li>La référence interne de commande est renseignée.</li>
+    <li>L'adresse, le nom du contact et le numéro de téléphone sont corrects.</li>
+    <li>La commande est passée avant 18 h si la livraison est attendue le lendemain.</li>
+  </ul>
+</section>
+
+<section id="a2">
+  <h2><span class="num">B</span> Hiérarchie des comptes</h2>
+  <p>L'arborescence comporte quatre niveaux. Seuls les comptes de livraison — les centres — peuvent
+  passer commande.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Niveau</th><th class="num">Compte</th><th>Libellé</th><th>Localisation</th><th>Commande</th></tr></thead>
+      <tbody>
+        <tr><td>Leader</td><td class="num">—</td><td>Groupe DEMANT</td><td>—</td><td>Non</td></tr>
+        <tr><td>Administrateur</td><td class="num">4757169</td><td>AUDIKA ADMINISTRATEUR</td><td>Saint-Ouen (93400)</td><td>Non</td></tr>
+        <tr><td>Sous-leader</td><td class="num">4757170</td><td>AUDIKA SIEGE</td><td>Saint-Ouen</td><td>Oui</td></tr>
+        <tr><td>Sous-leader</td><td class="num">4757171</td><td>AUDIKA OUVERTURE CENTRE</td><td>Saint-Ouen</td><td>Oui</td></tr>
+        <tr><td>Sous-leader</td><td class="num">4757172</td><td>AUDIKA RESEAU</td><td>Saint-Ouen</td><td>Oui</td></tr>
+        <tr><td>Sous-leader</td><td class="num">4770148</td><td>AUDIKA GROUPE</td><td>Paris (75819)</td><td>Oui</td></tr>
+        <tr><td>Sous-leader</td><td class="num">5096071</td><td>AUDIKA INFORMATIQUE</td><td>Saint-Ouen</td><td>Oui</td></tr>
+        <tr><td>Sous-leader</td><td class="num">6021462</td><td>AUDIKA DSI</td><td>Saint-Ouen</td><td>Non</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757204</td><td>AUDIKA DR OUEST</td><td>Bruz (35170)</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757205</td><td>AUDIKA DR EST</td><td>Schiltigheim (67300)</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757173</td><td>AUDIKA DR SUD EST</td><td>Avignon (84000)</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757206</td><td>AUDIKA DR SUD OUEST</td><td>Clermont-Ferrand (63000)</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757207</td><td>AUDIKA DR PARIS PR</td><td>Saint-Ouen</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757208</td><td>AUDIKA DR6 CDS MAZZON</td><td>Bordeaux (33000)</td><td>Oui</td></tr>
+        <tr><td>Direction régionale</td><td class="num">4757379</td><td>AUDIKA DR7 CDS FOUREZ</td><td>Valenciennes (59300)</td><td>Oui</td></tr>
+        <tr><td>Centres</td><td class="num">Cxxxx</td><td>Environ 160 comptes de livraison, sous
+          les enseignes AUDIKA, SOLUTIONS AUDITIVES, 2G-AUDITION, AUDIO PROTHÈSE GENY, AUDIKA ALPES
+          et les CFA</td><td>France entière</td><td>Oui</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><small>La liste complète et à jour des centres est consultable dans le webshop, via
+  <span class="path">Changer de compte</span>. Elle n'est volontairement pas reproduite ici pour
+  éviter toute divergence avec la source.</small></p>
+</section>
+
+<section id="a3">
+  <h2><span class="num">C</span> Erreurs fréquentes</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Symptôme</th><th>Cause</th><th>Solution</th></tr></thead>
+      <tbody>
+        <tr><td>« Vous êtes connecté sur un compte qui ne peut pas commander »</td>
+          <td>Compte positionné sur un nœud administratif</td>
+          <td><span class="path">Changer de compte</span> vers le compte du centre (texte bleu)</td></tr>
+        <tr><td>Les prix ne s'affichent pas</td>
+          <td>Même cause, ou session expirée</td>
+          <td>Se reconnecter, puis sélectionner un compte de livraison</td></tr>
+        <tr><td>Alerte budget au moment de valider</td>
+          <td>Le montant dépasse le budget du compte</td>
+          <td>Réduire le panier ou justifier le dépassement auprès du valideur</td></tr>
+        <tr><td>Un produit connu est introuvable</td>
+          <td>Article hors mini-catalogue</td>
+          <td>Demande au service achats ; ne pas contourner par une autre référence approchante</td></tr>
+        <tr><td>La commande reste « en attente de validation »</td>
+          <td>Le valideur n'a pas traité la demande</td>
+          <td>Relancer le valideur ; la commande n'est pas partie chez Lyreco</td></tr>
+        <tr><td>Livraison arrivée dans un autre centre</td>
+          <td>Mauvais compte actif au moment de la validation</td>
+          <td>Prévenir les deux centres et l'administrateur ; appliquer la règle R4 à l'avenir</td></tr>
+        <tr><td>Quantité reçue dix fois supérieure au besoin</td>
+          <td>Confusion entre unité et conditionnement</td>
+          <td>Demande de reprise sous 30 jours, emballages intacts</td></tr>
+        <tr><td>Les droits modifiés ne sont pas actifs</td>
+          <td>Prise en compte différée</td>
+          <td>Attendre le lendemain ; anticiper les changements</td></tr>
+        <tr><td>Panier perdu après un changement de compte</td>
+          <td>Le panier est propre à chaque compte</td>
+          <td>Sélectionner le compte avant de constituer le panier ; utiliser la mise en attente</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="a4">
+  <h2><span class="num">D</span> Glossaire</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Terme</th><th>Définition</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Compte</strong></td><td>Identifiant à sept chiffres attribué par Lyreco à une entité : nœud d'organisation ou adresse de livraison.</td></tr>
+        <tr><td><strong>Nœud / donneur d'ordre</strong></td><td>Niveau d'organisation dans l'arborescence, affiché en noir. Ne reçoit pas de livraison.</td></tr>
+        <tr><td><strong>Adresse de livraison</strong></td><td>Compte livrable, affiché en bleu. Un compte = une adresse de livraison.</td></tr>
+        <tr><td><strong>Leader / sous-leader</strong></td><td>Entité de tête du contrat et ses entités rattachées.</td></tr>
+        <tr><td><strong>Mini-catalogue</strong></td><td>Sélection restreinte de produits négociés, affectée à un ou plusieurs comptes.</td></tr>
+        <tr><td><strong>Produit contrôlé</strong></td><td>Article du mini-catalogue signalé sous son prix, dont la commande déclenche une validation.</td></tr>
+        <tr><td><strong>Budget</strong></td><td>Montant paramétré sur un compte ; son dépassement impose une double validation.</td></tr>
+        <tr><td><strong>Valideur / approbateur final</strong></td><td>Utilisateurs habilités à valider, modifier ou refuser une commande soumise à contrôle.</td></tr>
+        <tr><td><strong>Franco de port</strong></td><td>Seuil de commande à partir duquel la livraison est gratuite : 75 € HT.</td></tr>
+        <tr><td><strong>Commande rapide</strong></td><td>Saisie directe de références ou import d'un fichier, sans passer par le catalogue.</td></tr>
+        <tr><td><strong>Panier en attente</strong></td><td>Panier sauvegardé sous un titre, repris ultérieurement.</td></tr>
+        <tr><td><strong>BL</strong></td><td>Bon de livraison, document remis avec la marchandise.</td></tr>
+        <tr><td><strong>BL émargé</strong></td><td>Bon de livraison signé à la réception, valant preuve de livraison.</td></tr>
+        <tr><td><strong>Avoir</strong></td><td>Document comptable émis par Lyreco à la suite d'un retour ou d'une erreur.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="a5">
+  <h2><span class="num">E</span> Historique des révisions</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="num">Version</th><th>Date</th><th>Objet</th><th>Rédacteur</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1.0</td><td><span class="todo">à compléter</span></td>
+          <td>Création de la procédure</td><td><span class="todo">à compléter</span></td></tr>
+        <tr><td class="num">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        <tr><td class="num">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="doc">
+  <span>PRO-ACH-001 · Version 1.0 · Document interne</span>
+  <span>Révision annuelle · Propriétaire : service achats</span>
+</footer>
+
+</main>
+</div>
