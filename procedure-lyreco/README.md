@@ -1,25 +1,33 @@
-# PRO-ACH-001 — Commander des fournitures sur le webshop Lyreco
+# PRO-ACH-001 — Commander sur le webshop Lyreco
 
-Procédure interne décrivant le processus d'achat sur le webshop Lyreco : connexion,
-sélection du compte de livraison, constitution du panier, circuit de validation,
-réception, litiges et retours, documents et administration du compte.
+Procédure interne en **3 pages**, à l'usage des collaborateurs des centres : passer une
+commande, la suivre, réceptionner la livraison et traiter les anomalies. Le paramétrage
+de la plateforme (utilisateurs, droits, budgets, mini-catalogue) n'entre pas dans son
+périmètre : il relève de l'administrateur webshop.
 
 ## Contenu
 
 | Fichier | Usage |
 |---|---|
-| `procedure-lyreco.html` | Version web de la procédure (mise en page imprimable, thème clair/sombre) |
-| `PRO-ACH-001_Procedure_Lyreco.docx` | Version Word éditable pour diffusion interne |
-| `build-docx.js` | Script de génération du .docx (`npm install docx && node build-docx.js`) |
+| `PRO-ACH-001_Procedure_Lyreco.docx` | Version Word éditable, pour diffusion interne |
+| `PRO-ACH-001_Procedure_Lyreco.pdf` | Rendu de contrôle, 3 pages A4 |
+| `procedure-lyreco.html` | Version web (thème clair/sombre, impression 3 pages A4) |
+| `build-docx.js` | Génération du .docx (`npm install docx && node build-docx.js`) |
+
+## Plan
+
+1. Ce que couvre la procédure · 2. Les six règles · 3. Se connecter et choisir le bon compte
+· 4. Constituer le panier · 5. Valider · 6. Suivre · 7. Réceptionner · 8. Anomalies et retours
+· 9. Retrouver ses documents · 10. Que faire si… · 11. Qui contacter · check-list.
 
 ## À compléter avant diffusion
 
-Les mentions surlignées (Word) ou encadrées en jaune (HTML) correspondent aux paramètres
-propres à l'entreprise : date d'application, rédacteur, approbateur, fréquence de commande,
-seuils, noms des valideurs, délais d'archivage et contacts internes.
+Champs surlignés en jaune (Word) ou encadrés (HTML) : date d'application, fréquence de
+commande, seuil mobilier, délai de validation, contacts internes.
 
 ## Sources
 
-Le fonctionnement décrit provient du webshop Lyreco (libellés de menus, arborescence des
-comptes) et de la documentation publiée par Lyreco : guide utilisateur, centre d'aide et
-conditions commerciales (franco de port à 75 € HT, livraison sous 24 h, retour sous 30 jours).
+Libellés de menus et arborescence des comptes relevés sur le webshop Lyreco ; guide
+utilisateur et centre d'aide Lyreco pour le circuit de validation, les documents et les
+retours ; conditions commerciales publiées (franco de port 75 € HT, livraison sous 24 h
+pour toute commande avant 18 h, reprise sous 30 jours).
