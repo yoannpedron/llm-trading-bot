@@ -10,6 +10,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Commander sur le webshop Lyreco | PRO-ACH-001 | `PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx` | 1 |
 | Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
+| Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
@@ -45,5 +46,8 @@ Procédure Lyreco : webshop Lyreco (libellés de menus, arborescence des comptes
 utilisateur et centre d'aide Lyreco, conditions commerciales publiées.
 Procédure cloisons : SOP existant des Services Généraux, repris mot pour mot — gestes,
 courses des plinthes et ordre des zones inchangés.
+Procédure accès : brouillon « Carte procédure » des Services Généraux, complété par le guide
+d'utilisation VISOR V2.0.0.36 pour les libellés d'écrans, les statuts d'identifiant, la limite
+de dix groupes d'accès et le comportement de la suppression.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, repris à l'identique —
 écrans VISOR, convention de nommage et règle de validation des permissions inchangés.

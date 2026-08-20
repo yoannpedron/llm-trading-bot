@@ -309,23 +309,23 @@ P3.push(BUL("**Champ Prénom** : saisir le numéro de la carte, figurant sur le 
 P3.push(CAPTURE("capture à insérer : Teams et création de la fiche"));
 
 P3.push(...STEP(3, 'Création du badge (identifiants)'));
-P3.push(P("Toujours dans la fiche de l'utilisateur, se rendre dans l'onglet `Identifiants` et cliquer sur `Ajouter`. Deux méthodes permettent d'associer un badge vierge."));
+P3.push(P("Toujours dans la fiche de l'utilisateur, se rendre dans l'onglet `Identifiants` et cliquer sur `Ajouter` : seuls les identifiants **non attribués** apparaissent, un badge ne pouvant être associé qu'à un seul utilisateur. Deux méthodes permettent d'associer un badge vierge."));
 P3.push(H3('Option A — mode apprentissage'));
 P3.push(BUL("Dans la fenêtre d'ajout d'identifiant, cliquer sur l'option `Apprentissage`."));
 P3.push(BUL("Prendre le badge vierge."));
 P3.push(BUL("Passer le badge sur le lecteur du contrôle d'accès situé juste devant la porte de la salle serveur."));
 P3.push(BUL("Le système lit et enregistre le numéro automatiquement."));
-P3.push(BUL("Sélectionner le type d'identifiant approprié et vérifier que le statut est bien sur `En service` avant de valider."));
+P3.push(BUL("Sélectionner le type d'identifiant approprié et vérifier que le statut est bien sur `En service` — les autres valeurs possibles étant `Suspendu` et `Volé` — avant de valider."));
 P3.push(H3('Option B — saisie via les logs de passage'));
 P3.push(BUL("Prendre le badge vierge et le badger sur le lecteur situé juste devant la porte."));
-P3.push(BUL("Dans VISOR, afficher la liste des événements récents en bas de l'écran, ou via `Événements › Voir la liste`."));
+P3.push(BUL("Dans VISOR, afficher la liste des évènements en bas de l'écran via `Affichage › Liste des évènements`, onglet `Évènement`. Cette liste ne contient que les évènements survenus depuis le démarrage du logiciel ; sinon passer par `Évènements › Voir la liste`, qui donne les 2 000 derniers."));
 P3.push(BUL("Repérer l'événement de refus d'accès et copier l'UUID du badge, un identifiant d'environ 10 chiffres."));
 P3.push(BUL("Coller cet UUID dans le champ identifiant de la nouvelle fiche."));
 
 P3.push(...STEP(4, 'Profil, autorisations et permissions'));
 P3.push(BUL("Se rendre dans l'onglet `Autorisations` de la fiche utilisateur."));
 P3.push(BUL("Dans la section dédiée aux groupes d'accès, cliquer sur `Ajouter`."));
-P3.push(BUL("Double-cliquer sur le groupe correspondant à la personne et à son statut pour l'attribuer."));
+P3.push(BUL("Double-cliquer sur le groupe correspondant à la personne et à son statut pour l'attribuer. Un utilisateur peut cumuler jusqu'à dix groupes d'accès."));
 P3.push(GAP(70));
 P3.push(note('Règle impérative', "Ne jamais présumer des permissions à accorder. En cas de doute, demander validation au responsable des services généraux.", 'stop'));
 P3.push(CAPTURE("capture à insérer : onglet Autorisations"));
@@ -336,7 +336,7 @@ P3.push(BUL("Insérer le badge validé dans sa protection plastique."));
 P3.push(BUL("Procéder obligatoirement à la remise en main propre du badge à l'utilisateur."));
 
 P3.push(H2('4', "Suppression et révocation d'un accès"));
-P3.push(P("Ouvrir `Utilisateurs › Utilisateurs`, sélectionner la fiche du collaborateur concerné et cliquer sur `Supprimer`. Confirmer la suppression de la fiche ainsi que le détachement des identifiants associés."));
+P3.push(P("Ouvrir `Utilisateurs › Utilisateurs`, sélectionner la fiche du collaborateur concerné et cliquer sur `Supprimer`. Confirmer la suppression, puis répondre à la seconde question : VISOR demande si les identifiants rattachés doivent être supprimés eux aussi. Répondre **oui** pour un départ définitif, **non** pour réattribuer le badge à quelqu'un d'autre."));
 P3.push(CAPTURE("capture à insérer : suppression d'une fiche"));
 
 /* ================= GÉNÉRATION ================= */
