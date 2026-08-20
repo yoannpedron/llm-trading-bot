@@ -1,7 +1,9 @@
 # Procédures — Services Généraux Audika
 
-Un document par procédure, même charte : bandeau de référence, titre, chapô, ligne
-Version / Diffusion sous filet turquoise, sections numérotées, pied de page paginé.
+Un document par procédure, **générés par le même script** pour que la mise en forme soit
+strictement identique : Arial pour les titres et libellés, Cambria pour le corps de texte,
+turquoise 0D5C63 en accent, bandeau « PROCÉDURE INTERNE », ligne Version / Diffusion sous
+filet d'accent, sections numérotées, pied de page « Document interne » suivi de la pagination.
 
 | Procédure | Réf. | Fichier | Pages |
 |---|---|---|---|
@@ -10,17 +12,23 @@ Version / Diffusion sous filet turquoise, sections numérotées, pied de page pa
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
-## Maintenance
+## Régénérer
 
-`PRO-ACH-001` se met à jour directement dans Word : c'est la version raccourcie par le
-service achats, il n'y a pas de générateur.
+```
+npm install docx && node build-procedures.js
+```
 
-`PRO-SG-002` est produit par `build-cloisons.js` (`npm install docx && node build-cloisons.js`),
-qui intègre `plan.jpg`. Une correction faite à la main dans le `.docx` serait écrasée au
-prochain lancement du script : modifiez le script, ou abandonnez-le et passez au tout-Word.
+Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
+`P1` et `P2` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
-`procedure-lyreco.html` est la version web longue de la procédure Lyreco (3 pages à
-l'impression), conservée pour référence.
+## Attention aux retouches dans Word
+
+Enregistrer dans Word réécrit les valeurs par défaut du document : c'est ce qui avait fait
+passer le corps de texte de Cambria à Calibri sur une version précédente. La police est
+désormais posée explicitement sur chaque bloc, mais si vous retouchez un `.docx` à la main,
+la modification sera perdue au prochain lancement du script. Corrigez plutôt dans
+`build-procedures.js`.
 
 ## À compléter
 
