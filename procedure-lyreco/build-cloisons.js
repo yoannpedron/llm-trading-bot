@@ -290,8 +290,7 @@ const P2 = [];
 P2.push(EYEBROW('PROCÉDURE INTERNE · PRO-SG-002'));
 P2.push(TITLE('Déverrouillage et manutention des cloisons mobiles'));
 P2.push(LEDE("Mode opératoire pour replier, déplacer et remiser les murs de cloisons mobiles d'une salle de réunion, dans l'ordre imposé par le plan d'implantation."));
-P2.push(META([['Version', '1.0'], ['Application', '{{à compléter}}'], ['Site', '{{à compléter}}'],
-              ['Révision', 'annuelle'], ['Contact', '{{services généraux}}']]));
+P2.push(META([['Version', '1.0'], ['Site', '{{à compléter}}'], ['Diffusion', 'services généraux']]));
 
 P2.push(H2('1', 'Plan, outillage et prérequis'));
 P2.push(P("Avant toute manipulation, se référer au plan d'implantation ci-dessous pour identifier les zones d'intervention."));
@@ -370,17 +369,18 @@ const pageProps = {
 
 const doc = new Document({
   creator: 'Services Généraux Audika',
-  title: 'Procédures — Services Généraux Audika',
-  description: 'Recueil de procédures internes',
+  title: 'Déverrouillage et manutention des cloisons mobiles',
+  description: 'Procédure interne PRO-SG-002',
   numbering,
   styles: { default: { document: { run: { font: SERIF, size: BODY, color: INK } } } },
-  sections: [
-    { properties: pageProps, footers: { default: foot('PRO-ACH-001 · Commander sur le webshop Lyreco', 'Document interne') }, children: P1 },
-    { properties: pageProps, footers: { default: foot('PRO-SG-002 · Cloisons mobiles', 'Propriété exclusive des Services Généraux Audika') }, children: P2 },
-  ],
+  sections: [{
+    properties: pageProps,
+    footers: { default: foot('PRO-SG-002 · Version 1.0', 'Propriété exclusive des Services Généraux Audika') },
+    children: P2,
+  }],
 });
 
 Packer.toBuffer(doc).then((buf) => {
-  fs.writeFileSync('Procedures_Services_Generaux_Audika.docx', buf);
+  fs.writeFileSync('PRO-SG-002_Cloisons_mobiles.docx', buf);
   console.log('OK —', Math.round(buf.length / 1024), 'Ko');
 });

@@ -1,32 +1,34 @@
 # Procédures — Services Généraux Audika
 
-Recueil de procédures internes, mis en page dans une charte commune : titres numérotés,
-encadrés de vigilance, tableaux, check-lists, champs à compléter surlignés.
+Un document par procédure, même charte : bandeau de référence, titre, chapô, ligne
+Version / Diffusion sous filet turquoise, sections numérotées, pied de page paginé.
 
-| Procédure | Réf. | Pages |
-|---|---|---|
-| Commander sur le webshop Lyreco | PRO-ACH-001 | 1 à 3 |
-| Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | 4 et 5 |
+| Procédure | Réf. | Fichier | Pages |
+|---|---|---|---|
+| Commander sur le webshop Lyreco | PRO-ACH-001 | `PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx` | 1 |
+| Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
 
-## Contenu du dossier
+Les `.pdf` du même nom sont les rendus de contrôle.
 
-| Fichier | Usage |
-|---|---|
-| `Procedures_Services_Generaux_Audika.docx` | Le recueil complet, éditable dans Word |
-| `Procedures_Services_Generaux_Audika.pdf` | Rendu de contrôle (5 pages A4) |
-| `procedure-lyreco.html` | Version web de la seule procédure Lyreco (impression 3 pages A4) |
-| `build-word.js` | Génération du .docx (`npm install docx && node build-word.js`) |
-| `plan.jpg` | Plan d'implantation des six zones de cloisons mobiles |
+## Maintenance
 
-## À compléter avant diffusion
+`PRO-ACH-001` se met à jour directement dans Word : c'est la version raccourcie par le
+service achats, il n'y a pas de générateur.
 
-Champs surlignés en jaune : date d'application, fréquence de commande, seuil mobilier,
-délai de validation, site concerné et contacts internes.
+`PRO-SG-002` est produit par `build-cloisons.js` (`npm install docx && node build-cloisons.js`),
+qui intègre `plan.jpg`. Une correction faite à la main dans le `.docx` serait écrasée au
+prochain lancement du script : modifiez le script, ou abandonnez-le et passez au tout-Word.
+
+`procedure-lyreco.html` est la version web longue de la procédure Lyreco (3 pages à
+l'impression), conservée pour référence.
+
+## À compléter
+
+`PRO-SG-002` : le site concerné, surligné en jaune.
 
 ## Sources
 
-Procédure Lyreco : libellés de menus et arborescence des comptes relevés sur le webshop,
-guide utilisateur et centre d'aide Lyreco, conditions commerciales publiées (franco de port
-75 € HT, livraison sous 24 h avant 18 h, reprise sous 30 jours).
-Procédure cloisons : SOP existant des Services Généraux, repris intégralement — gestes,
+Procédure Lyreco : webshop Lyreco (libellés de menus, arborescence des comptes), guide
+utilisateur et centre d'aide Lyreco, conditions commerciales publiées.
+Procédure cloisons : SOP existant des Services Généraux, repris mot pour mot — gestes,
 courses des plinthes et ordre des zones inchangés.
