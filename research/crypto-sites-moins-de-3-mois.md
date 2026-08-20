@@ -217,6 +217,54 @@ PayBox si MoonPay rouvre une vague — et rien de ce qui demande un dépôt.
 
 ---
 
+## 7. Claims de jeux ouverts depuis moins d'un mois (au 20/08/2026)
+
+Précision de vocabulaire : un **jeu** sorti depuis moins d'un mois et un **claim** ouvert depuis
+moins d'un mois sont deux choses différentes, et elles coïncident rarement. Ce qui existe
+réellement sur les 30 derniers jours :
+
+### Claims ouverts
+
+| Jeu | Claim | Depuis | Gratuit ? |
+|---|---|---|---|
+| **Cambria** (Ronin/Solana/Abstract) | Loot Drop **$RSGP** : coffres à ouvrir, fenêtre de 14 j, distribution automatique aux wallets liés au TGE | 25/07/2026 | **oui** pour les coffres |
+| **Shard Legends: Clan Wars** | **TGE $SLCW le 25/08** sur un CEX du top 10 (partenaire dévoilé le 24), 83 % du supply aux joueurs | annoncé 14/08 | réservé aux mineurs d'Imperial Tickets |
+| **Cap'n Company** (KAP Games) × Enjin | Enjin Pass soulbound + **100 000 ENJ** répartis entre 50 gagnants via des NFT Pirate Blob | 30/07/2026 | oui |
+| **MapleStory Universe** – Vibe Camp S2 | **15 000 $ de NXPC**, concours de création | 18/08/2026 | oui |
+| **Gigaverse** – The Awakening | prize pool porté à **30 000 $** | 14/08/2026 | non — « real stakes » |
+
+**Cambria en détail** : l'éligibilité est rétroactive, calculée sur un an — *Degen Score* (activité
+on-chain, surtout Solana) et *Chad Score* (détentions), plus, côté Ronin, Axie Score, staking RON,
+Mystic Axies, Pixels Lands, Fableborne Kingdoms, Mokis et Fishing Frenzy Passes. Vérifier son
+éligibilité au portail officiel ne coûte rien. En revanche, farmer les Genesis Points est **payant**
+(Risk Keys, Royal Charter) et Cambria est un « risk-to-earn » où les joueurs ont déjà risqué
+**5 M$ en Keys** : le claim gratuit et le mode payant sont deux choses à ne pas confondre.
+
+### Jeux réellement sortis dans la fenêtre
+
+- **Frost Kingdom** (23/07, Nexus) — free-to-play, $RDIA.
+- **Cambria – Dungeon Fishing** (02/08) — bêta d'un mode idle, jusqu'à **30 000 Grub gratuits** pour
+  les nouveaux venus, échangeables contre des NFT et des Keys.
+- **ONEstore AI Games Hub** (12/08) — 20 titres construits avec Verse8, câblés sur ONEchain.
+- **Pixie Chess** (07/08) — échecs on-chain jouables en navigateur mobile.
+- **Idle Tactics: Ascension** (11/08) — vainqueur du game jam VibeBlitz de YGG.
+
+### À ne pas confondre avec des entrées
+
+- **MetaKing Studios** : BLOCKLORDS a été débranché et rebaptisé BLOCKLORE AI Canvas ; le « LRDS
+  Loyalty Airdrop » (11/08) est une sortie de route pour les détenteurs, pas une opportunité.
+- **Proof of Play** est en cours de fermeture (annonce du 05/08).
+
+### ⚠️ Alerte sécurité Yakkamon
+
+Le compte X **@playyakkamon a été piraté** (08/08) et diffuse depuis le 18/08 un **faux airdrop
+$FLOWER « désormais live sur Solana »**. C'est un phishing : $FLOWER est un ERC-20 déployé
+**uniquement sur Base et Ronin** (`0x3E12b9d6A4D12cd9b4a6d613872d0Eb32f68b380`), il n'existe aucune
+version Solana, et Yakkamon n'a jamais émis de token. Le compte officiel est désormais
+**@yakkamon_game**. Ne connecter aucun wallet à un lien de claim FLOWER.
+
+---
+
 ## Sources
 
 - Campagnes récentes et dates de listage — API airdrops.io (`/wp-json/wp/v2/airdrop`, tri par date) et fiches https://airdrops.io/latest/
@@ -227,3 +275,5 @@ PayBox si MoonPay rouvre une vague — et rien de ce qui demande un dépôt.
 - MapleStory Vibe Camp S2, Chainers, Parallel — https://egamers.io/
 - Faucets et changelog des annuaires — https://www.webopedia.com/crypto/learn/free-crypto-faucets/ · https://cryptofaucets.cash/
 - Dates de création de domaines — requêtes RDAP via https://rdap.org, le 19/08/2026
+- Actualité jeux et claims (août 2026) — API egamers.io (`/wp-json/wp/v2/posts`) et articles liés · https://egamers.io/fake-flower-solana-airdrop-spreads-from-yakkamons-stolen-x-account/ · https://egamers.io/shard-legends-locks-in-august-25-date-for-slcw-token-generation-event/ · https://egamers.io/enjin-welcomes-pirate-mmorpg-capn-company-with-soulbound-passes-and-a-100000-enj-reward-pool/
+- Cambria RSGP — https://blog.cambria.gg/rsgp-is-coming/ · https://blog.roninchain.com/p/ronin-holders-can-now-claim-rsgp · https://airdrops.io/cambria/
