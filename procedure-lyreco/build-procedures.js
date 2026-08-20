@@ -157,6 +157,11 @@ function note(label, text, tone) {
     })],
   });
 }
+const CAPTURE = (t) => new Paragraph({
+  children: runs('{{' + t + '}}', { size: 16 }),
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 60, after: 120 },
+});
 const GAP = (h = 90) => new Paragraph({ text: '', spacing: { after: h } });
 const STEP = (n, t) => [
   new Paragraph({
@@ -274,6 +279,66 @@ P2.push(BUL("Empiler les éléments selon le calepinage prévu afin d'éviter to
 P2.push(GAP(120));
 P2.push(note('Point critique', "L'infrastructure ne comporte **aucun rail au sol** : les panneaux sont suspendus au rail plafonnier. Aucun mouvement latéral ne doit être engagé tant que le panneau n'est pas totalement désolidarisé du sol.", 'stop'));
 
+
+/* ================= PROCÉDURE 3 — GESTION DES ACCÈS ================= */
+const P3 = [];
+P3.push(EYEBROW('PROCÉDURE INTERNE'));
+P3.push(TITLE('Gestion des accès au siège social'));
+P3.push(LEDE("Créer, enrôler et révoquer les badges qui sécurisent l'accès des collaborateurs aux différentes zones du bâtiment."));
+P3.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'services généraux']]));
+
+P3.push(H2('1', 'Objet et contact'));
+P3.push(P("L'objectif principal est de créer et délivrer les badges pour sécuriser l'accès des collaborateurs aux différentes zones du bâtiment. La procédure couvre trois opérations : la création d'une étiquette, la création et l'enrôlement du badge, la suppression et la révocation d'un accès."));
+P3.push(P("Contact : **Sébastien Bourbon**, responsable des services généraux — {{numéro à compléter}}"));
+
+P3.push(H2('2', "Création d'une étiquette"));
+P3.push(P("{{mode opératoire à rédiger}}"));
+
+P3.push(H2('3', "Création et enrôlement du badge"));
+
+P3.push(...STEP(1, 'Connexion au système VISOR'));
+P3.push(BUL("Se rendre physiquement sur le PC situé dans la salle serveur, au 3ᵉ étage."));
+P3.push(BUL("Ouvrir le logiciel VISOR, qui centralise la gestion des badges d'accès."));
+P3.push(BUL("Saisir le code d'authentification pour entrer dans le logiciel."));
+P3.push(CAPTURE("capture à insérer : icône VISOR"));
+
+P3.push(...STEP(2, "Création de l'utilisateur et convention de nommage"));
+P3.push(P("Dans le menu principal de VISOR, cliquer sur `Utilisateurs` puis sur `Ajouter` (ou `Créer des utilisateurs` pour lancer l'assistant). Dans l'onglet `Identité`, appliquer strictement le format suivant :"));
+P3.push(BUL("**Champ Nom** : NOM Prénom (4 initiales Teams). Les initiales exactes se récupèrent dans Microsoft Teams. Exemple : DUPONT Jean (JDSE)."));
+P3.push(BUL("**Champ Prénom** : saisir le numéro de la carte, figurant sur le badge."));
+P3.push(CAPTURE("capture à insérer : Teams et création de la fiche"));
+
+P3.push(...STEP(3, 'Création du badge (identifiants)'));
+P3.push(P("Toujours dans la fiche de l'utilisateur, se rendre dans l'onglet `Identifiants` et cliquer sur `Ajouter`. Deux méthodes permettent d'associer un badge vierge."));
+P3.push(H3('Option A — mode apprentissage'));
+P3.push(BUL("Dans la fenêtre d'ajout d'identifiant, cliquer sur l'option `Apprentissage`."));
+P3.push(BUL("Prendre le badge vierge."));
+P3.push(BUL("Passer le badge sur le lecteur du contrôle d'accès situé juste devant la porte de la salle serveur."));
+P3.push(BUL("Le système lit et enregistre le numéro automatiquement."));
+P3.push(BUL("Sélectionner le type d'identifiant approprié et vérifier que le statut est bien sur `En service` avant de valider."));
+P3.push(H3('Option B — saisie via les logs de passage'));
+P3.push(BUL("Prendre le badge vierge et le badger sur le lecteur situé juste devant la porte."));
+P3.push(BUL("Dans VISOR, afficher la liste des événements récents en bas de l'écran, ou via `Événements › Voir la liste`."));
+P3.push(BUL("Repérer l'événement de refus d'accès et copier l'UUID du badge, un identifiant d'environ 10 chiffres."));
+P3.push(BUL("Coller cet UUID dans le champ identifiant de la nouvelle fiche."));
+
+P3.push(...STEP(4, 'Profil, autorisations et permissions'));
+P3.push(BUL("Se rendre dans l'onglet `Autorisations` de la fiche utilisateur."));
+P3.push(BUL("Dans la section dédiée aux groupes d'accès, cliquer sur `Ajouter`."));
+P3.push(BUL("Double-cliquer sur le groupe correspondant à la personne et à son statut pour l'attribuer."));
+P3.push(GAP(70));
+P3.push(note('Règle impérative', "Ne jamais présumer des permissions à accorder. En cas de doute, demander validation au responsable des services généraux.", 'stop'));
+P3.push(CAPTURE("capture à insérer : onglet Autorisations"));
+
+P3.push(...STEP(5, 'Vérification et remise en main propre'));
+P3.push(BUL("Une fois la programmation terminée et la fiche validée par `OK`, tester personnellement le badge sur un lecteur pour vérifier que les accès sont valides."));
+P3.push(BUL("Insérer le badge validé dans sa protection plastique."));
+P3.push(BUL("Procéder obligatoirement à la remise en main propre du badge à l'utilisateur."));
+
+P3.push(H2('4', "Suppression et révocation d'un accès"));
+P3.push(P("Ouvrir `Utilisateurs › Utilisateurs`, sélectionner la fiche du collaborateur concerné et cliquer sur `Supprimer`. Confirmer la suppression de la fiche ainsi que le détachement des identifiants associés."));
+P3.push(CAPTURE("capture à insérer : suppression d'une fiche"));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -301,4 +366,5 @@ function build(children, title, file) {
 }
 
 build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx')
-  .then(() => build(P2, 'Déverrouillage et manutention des cloisons mobiles', 'PRO-SG-002_Cloisons_mobiles.docx'));
+  .then(() => build(P2, 'Déverrouillage et manutention des cloisons mobiles', 'PRO-SG-002_Cloisons_mobiles.docx'))
+  .then(() => build(P3, 'Gestion des accès au siège social', 'PRO-SG-003_Gestion_des_acces_au_siege.docx'));

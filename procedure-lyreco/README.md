@@ -9,6 +9,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 |---|---|---|---|
 | Commander sur le webshop Lyreco | PRO-ACH-001 | `PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx` | 1 |
 | Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
+| Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
@@ -19,7 +20,7 @@ npm install docx && node build-procedures.js
 ```
 
 Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
-`P1` et `P2` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+`P1`, `P2` et `P3` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
 les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
 ## Attention aux retouches dans Word
@@ -32,7 +33,11 @@ la modification sera perdue au prochain lancement du script. Corrigez plutôt da
 
 ## À compléter
 
-`PRO-SG-002` : le site concerné, surligné en jaune.
+Surligné en jaune dans les documents :
+
+- `PRO-SG-002` : le site concerné.
+- `PRO-SG-003` : le numéro de téléphone du responsable, le mode opératoire de la création
+  d'étiquette (section 2, non rédigé dans la source), et quatre emplacements de captures d'écran.
 
 ## Sources
 
@@ -40,3 +45,5 @@ Procédure Lyreco : webshop Lyreco (libellés de menus, arborescence des comptes
 utilisateur et centre d'aide Lyreco, conditions commerciales publiées.
 Procédure cloisons : SOP existant des Services Généraux, repris mot pour mot — gestes,
 courses des plinthes et ordre des zones inchangés.
+Procédure accès : brouillon « Carte procédure » des Services Généraux, repris à l'identique —
+écrans VISOR, convention de nommage et règle de validation des permissions inchangés.
