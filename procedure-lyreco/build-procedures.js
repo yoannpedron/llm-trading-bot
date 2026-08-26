@@ -498,6 +498,40 @@ P6.push(BUL("Conserver les originaux, **classés par date**, dans l'enveloppe pr
 P6.push(BUL("Les garder **trois mois**."));
 P6.push(BUL("Détruire les enveloppes avec la machine prévue à cet effet."));
 
+
+/* ================= PROCÉDURE 7 — PARKINGS ================= */
+const P7 = [];
+P7.push(EYEBROW('PROCÉDURE INTERNE'));
+P7.push(TITLE('Accès aux parkings P1 et P2'));
+P7.push(LEDE("Donner accès aux deux parkings du site : inscription du collaborateur sur Sharvy pour le P1, fabrication du badge parking pour le P2."));
+P7.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P7.push(H2('1', 'Deux parkings, deux modes d’accès'));
+P7.push(table(['Parking', "Mode d'accès", 'Qui fait la démarche'], [
+  ['P1', "Lecture automatique de la plaque d'immatriculation", "Le collaborateur s'inscrit lui-même sur Sharvy"],
+  ['P2', 'Badge parking', 'Les services généraux fabriquent le badge'],
+], cols([0.13, 0.44, 0.43])));
+
+P7.push(H2('2', 'Parking P1 — inscription sur Sharvy'));
+P7.push(P("L'accès se fait par lecture de plaque : le collaborateur doit donc être enregistré avant sa première venue. La démarche lui appartient, les services généraux n'interviennent qu'en cas de difficulté."));
+P7.push(BUL("Se rendre sur le site Sharvy et saisir ses identifiants."));
+P7.push(BUL("Ouvrir **Parking P1** et **saisir sa plaque d'immatriculation**."));
+P7.push(BUL("La place est réservée pour son arrivée ; l'application lui communique son **numéro de place**."));
+P7.push(GAP(70));
+P7.push(note('Place déjà occupée', "Le collaborateur **prend la place en photo**, se gare sur une autre place, puis transmet la photo aux services généraux pour signalement. Sans photo, le litige ne peut pas être tranché.", 'warn'));
+
+P7.push(H2('3', 'Parking P2 — badge parking'));
+P7.push(P("Le badge parking est fabriqué **en même temps que le badge d'accès au bâtiment** (voir la procédure de gestion des accès)."));
+P7.push(BUL("Prendre un badge parmi les badges parking prévus à cet effet."));
+P7.push(BUL("Ajouter les accès correspondants."));
+P7.push(BUL("Imprimer l'étiquette portant le **nom, le prénom et le numéro de badge Optik**."));
+P7.push(BUL("Remettre **les deux badges** — accès bâtiment et parking — au collaborateur, en main propre."));
+
+P7.push(H2('4', 'Izix'));
+P7.push(P("{{à documenter : périmètre couvert par Izix, qui crée les comptes, articulation avec Sharvy et avec les badges P2}}"));
+P7.push(GAP(70));
+P7.push(note('Section à compléter', "Izix n'apparaît pas dans le cahier de consignes du site : cette section reste vide tant que son usage réel n'a pas été décrit par les services généraux.", 'info'));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -529,4 +563,5 @@ build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_websh
   .then(() => build(P3, 'Gestion des accès au siège social', 'PRO-SG-003_Gestion_des_acces_au_siege.docx'))
   .then(() => build(P4, 'Gestion du courrier, des plis et des colis', 'PRO-SG-004_Gestion_du_courrier.docx'))
   .then(() => build(P5, 'Welcome by : visiteurs, plis et colis', 'PRO-SG-005_Welcome_by.docx'))
-  .then(() => build(P6, 'Contraventions et courrier de la flotte automobile', 'PRO-SG-006_Contraventions_flotte_auto.docx'));
+  .then(() => build(P6, 'Contraventions et courrier de la flotte automobile', 'PRO-SG-006_Contraventions_flotte_auto.docx'))
+  .then(() => build(P7, 'Accès aux parkings P1 et P2', 'PRO-SG-007_Acces_parkings.docx'));
