@@ -44,7 +44,7 @@ SECTIONS = [
  dict(key="centre", title="Votre centre", desc="", questions=[
    q("nom", SHORT, "Nom / ville du centre Audika", required=True),
    q("code", SHORT, "Code centre", help="Si vous ne le connaissez pas, laissez vide.",
-      doc="Code centre (réponse libre — laissez vide si vous ne le connaissez pas)"),
+      doc="Code centre (laissez vide si vous ne le connaissez pas)"),
    q("region", DROPDOWN, "Région / secteur", [
       "Île-de-France", "Nord / Hauts-de-France", "Grand Est", "Bretagne / Pays de la Loire",
       "Normandie", "Centre-Val de Loire / Bourgogne-Franche-Comté", "Nouvelle-Aquitaine",
@@ -181,7 +181,7 @@ SECTIONS = [
       ["Oui", "Non"], branch=[("Oui", "Q:syn_mail"), ("Non", "Fin du formulaire")]),
    q("syn_mail", SHORT, "Votre email professionnel",
       help="Validation « adresse e-mail » à activer dans Forms.",
-      doc="Votre email professionnel (réponse libre)"),
+      doc="Votre email professionnel"),
  ]),
 ]
 
@@ -386,12 +386,10 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 3. Description : coller le texte d'introduction de `01-enquete-menage-audika.md`.
 4. Saisie des questions — par ordre de préférence :
 
-   **a. Import du fichier Word (recommandé)** — c'est la voie disponible dans la plupart des
-   locataires : *Nouveau formulaire* → **Importer un fichier / Import your file** →
-   **Upload from this device** → choisir **`05-formulaire-a-importer.docx`** (15 Ko, très en
-   dessous de la limite de 10 Mo). Forms lit le document et crée les questions avec leurs
-   propositions de réponses. `06-formulaire-a-importer.pdf` contient exactement la même chose
-   au format PDF, si l'import du .docx donne un résultat imparfait.
+   **a. Import du fichier Word (recommandé)** — *Nouveau formulaire* → **Importer un fichier /
+   Import your file** → **Upload from this device** → **`05-formulaire-a-importer.docx`**
+   (12 Ko, loin de la limite de 10 Mo). `06-formulaire-a-importer.pdf` contient exactement la
+   même chose, à essayer si le Word donne un résultat imparfait.
 
    **b. Importation rapide (collage de texte)** — si votre locataire propose ce bouton :
    coller `02-import-microsoft-forms.txt`, puis supprimer les lignes entre crochets `[...]`
@@ -400,21 +398,37 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 
    **c. Manuel** — recréer les %d questions à partir de `01-enquete-menage-audika.md`.
 
-### À vérifier systématiquement après l'import
+### Ce que contient — et ne contient pas — le fichier d'import
 
-L'import est une reconnaissance automatique : il fait gagner la saisie, pas la relecture.
+Le convertisseur de Forms ne sait faire que deux choses : des **questions à choix** et des
+**questions à texte libre**. Tout le reste (grille Likert, notation, tableau, titre de section)
+est soit ignoré, soit transformé en question fantôme. Et tout paragraphe libre du document
+devient une question : lors d'un premier essai, l'introduction et les descriptions de section
+sont ressorties en questions à texte libre.
 
-- **Les %d questions sont-elles toutes là**, dans l'ordre, sans question fantôme créée à partir
-  de l'introduction, du rappel de process ou du message de fin ? Supprimer les intrus : ces
-  textes doivent être respectivement la **description du formulaire**, la **description de la
-  section 8** et le **message de confirmation** (voir §6), pas des questions.
-- **Les titres de section** (« Section 1 — … ») sont probablement importés comme du texte ou
-  ignorés : recréer les vraies sections à l'étape 2, elles conditionnent les branchements.
-- **La grille Likert** (question %s) est le point le plus fragile de l'import : si elle arrive
-  sous forme de tableau cassé ou de questions séparées, la supprimer et la recréer à la main
-  en type **Likert** (%d lignes / %d colonnes, voir §4).
-- **Les types de questions** : tout arrive généralement en « Choix » ou « Texte ». Appliquer
-  les corrections du §4, puis cocher les %d questions obligatoires listées plus bas.
+`05-formulaire-a-importer.docx` ne contient donc **que le titre et les %d questions numérotées**,
+en texte brut, sans puce Word, sans tableau et sans titre de section — la numérotation `1.` et
+les marqueurs `a.` `b.` des propositions sont de vrais caractères saisis, seule forme que le
+convertisseur reconnaît. À saisir à la main après l'import (le contenu est dans
+`01-enquete-menage-audika.md`) :
+
+- l'**introduction**, dans la description du formulaire ;
+- les **%d sections** et leurs descriptions (étape 2) ;
+- le **bloc de rappel du process**, en description de la section %d ;
+- le **message de fin**, dans le message de confirmation (§6).
+
+### À vérifier après l'import
+
+- **Les %d questions sont-elles toutes là**, dans l'ordre, avec leurs propositions séparées du
+  libellé ? Si des propositions se retrouvent collées à la fin du libellé, c'est que le
+  convertisseur a fusionné les lignes : recréer ces questions à la main. Microsoft signale que
+  la conversion est **moins fiable en français qu'en anglais**, une relecture complète est donc
+  indispensable.
+- **%s (grille Likert)** et **%s (note sur 10)** arriveront en texte libre : ces deux types ne
+  sont pas convertibles. Les supprimer et les recréer à la main en **Likert**
+  (%d lignes / %d colonnes) et en **Notation** (10 niveaux) — voir §4.
+- **Les types de questions** : appliquer les corrections du §4 (liste déroulante, réponses
+  longues, choix multiples), puis cocher les %d questions obligatoires listées plus bas.
 
 ---
 
@@ -424,7 +438,8 @@ Forms → **+ Ajouter nouveau** → **Section**. Créer %d sections :
 
 | # | Titre de section | Questions |
 |---|---|---|
-""" % (TITLE, TITLE, NQ, NQ, NUM["men_zones"], len(LIKERT_ROWS), len(LIKERT_COLS),
+""" % (TITLE, TITLE, NQ, NQ, len(SECTIONS), SEC_BY["process"]["num"], NQ,
+       NUM["men_zones"], NUM["syn_note"], len(LIKERT_ROWS), len(LIKERT_COLS),
        sum(1 for _q in ALL_Q if _q["required"]), len(SECTIONS)))
     for s in SECTIONS:
         qs = s["questions"]
@@ -472,6 +487,9 @@ Forms → **+ Ajouter nouveau** → **Section**. Créer %d sections :
 ---
 
 ## 4. Types de questions à corriger après import
+
+Forms ne permet pas de changer le type d'une question existante : les deux dernières lignes du
+tableau demandent de supprimer la question importée et de la recréer.
 
 | Question | Type Forms à appliquer |
 |---|---|
@@ -761,42 +779,47 @@ def plain(md):
     return [t for t in out if t]
 
 
-# Reformulations pour l'import Word : Forms déduit le type de question du libellé,
-# on remplace donc les annotations entre crochets par des indices en langage naturel.
-DOC_HINT = {
-    CHECK: " (plusieurs réponses possibles)",
-    LONG: " (réponse libre)",
-    SHORT: " (réponse libre)",
-}
+# Libellés pour les fichiers d'import Word/PDF.
+# Microsoft Forms ne sait convertir que deux types de questions — choix multiple et texte
+# libre — et déduit le type de la présence ou non de propositions de réponses. On n'ajoute
+# donc qu'un indice utile au répondant pour le choix multiple et pour la note sur 10.
+DOC_HINT = {CHECK: " (plusieurs réponses possibles)"}
+
+
+def doc_text(qq):
+    if qq["doc"]:
+        return qq["doc"]
+    if qq["typ"] == SCALE:
+        return qq["text"] + " (note de 1 à 10 : 1 = très insatisfaisant, 10 = excellent)"
+    return qq["text"] + DOC_HINT.get(qq["typ"], "")
+
+
+def build_import_lines():
+    """Séquence de lignes du fichier d'import, en format plat.
+
+    Le convertisseur de Forms ne voit que du texte : les listes à puces de Word sont
+    aplaties et fusionnées dans le libellé de la question. Les propositions doivent donc
+    porter un marqueur réellement saisi (« a. », « b. »…), les questions une numérotation
+    saisie (« 1. », « 2. »…), et le document ne doit contenir ni tableau, ni titre de
+    section, ni paragraphe libre — tout paragraphe non reconnu devient une question
+    fantôme. Titres de sections, introduction, rappel du process et message de fin sont
+    donc volontairement absents : ils se saisissent à la main (voir §1 et §6 du
+    paramétrage).
+    """
+    lines = [TITLE, ""]
+    for s_ in SECTIONS:
+        for qq in s_["questions"]:
+            lines.append("%s. %s" % (qq["id"][1:], doc_text(qq)))
+            if qq["typ"] in (RADIO, CHECK, DROPDOWN):
+                for i, opt in enumerate(qq["options"]):
+                    lines.append("%s. %s" % (chr(ord("a") + i), opt))
+            lines.append("")
+    return lines
 
 
 def build_form_json():
-    data = {
-        "title": TITLE,
-        "intro": plain(INTRO_MD) + plain(PROCESS_MD),
-        "fin": plain(FIN_MD),
-        "process": PROCESS_DOC,
-        "likert": {"rows": LIKERT_ROWS, "cols": LIKERT_COLS},
-        "sections": [],
-    }
-    for s_ in SECTIONS:
-        sec = {"num": s_["num"], "title": s_["title"],
-               "desc": "" if s_["desc"] == "__PROCESS__" else s_["desc"],
-               "process": s_["desc"] == "__PROCESS__", "questions": []}
-        for qq in s_["questions"]:
-            text = qq["doc"] or qq["text"]
-            if qq["doc"]:
-                pass
-            elif qq["typ"] == SCALE:
-                text += " (note de 1 à 10 : 1 = très insatisfaisant, 10 = excellent)"
-            elif qq["typ"] in DOC_HINT:
-                text += DOC_HINT[qq["typ"]]
-            sec["questions"].append({
-                "id": qq["id"], "n": int(qq["id"][1:]), "typ": qq["typ"],
-                "text": text, "options": qq["options"],
-            })
-        data["sections"].append(sec)
-    return json.dumps(data, ensure_ascii=False, indent=1)
+    return json.dumps({"title": TITLE, "lines": build_import_lines()},
+                      ensure_ascii=False, indent=1)
 
 
 def write(name, content):

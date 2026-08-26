@@ -7,7 +7,7 @@ et ajustements contractuels).
 | Fichier | À quoi ça sert |
 |---|---|
 | `01-enquete-menage-audika.md` | Le contenu intégral du formulaire : intro, 9 sections, 52 questions, propositions de réponses, message de fin. C'est le document à faire valider en interne. |
-| `05-formulaire-a-importer.docx` | **Le fichier à charger dans Forms** (*Importer un fichier → Upload from this device*). C'est la voie d'import disponible dans la plupart des locataires. |
+| `05-formulaire-a-importer.docx` | **Le fichier à charger dans Forms** (*Importer un fichier → Upload from this device*). Texte brut, titre + 52 questions numérotées, propositions marquées `a.` `b.` : c'est le seul format que le convertisseur de Forms sait lire. |
 | `06-formulaire-a-importer.pdf` | Le même contenu en PDF, si l'import du .docx donne un résultat imparfait. |
 | `02-import-microsoft-forms.txt` | La même chose au format collable dans l'**Importation rapide**, quand le locataire propose ce bouton (ce n'est pas toujours le cas). |
 | `03-parametrage-microsoft-forms.md` | Le mode opératoire Forms : découpage en sections, table des ramifications, types de questions, thème et logo, paramètres de collecte, diffusion, exploitation des résultats. |
@@ -50,8 +50,10 @@ se recalculent toutes seules.
 
 ## Après l'import dans Forms
 
-L'import est une reconnaissance automatique du document : il fait gagner la saisie, pas la
-relecture. Vérifier que les 52 questions sont bien là, supprimer les questions fantômes créées
-à partir de l'introduction ou du message de fin, recréer les sections (elles conditionnent les
-branchements), et recréer la grille Likert de la question Q7 si elle a mal été reconnue.
-Le détail est dans `03-parametrage-microsoft-forms.md`, §1.
+Le convertisseur de Forms ne sait produire que des questions à choix et des questions à texte
+libre, et tout paragraphe libre du document devient une question. Le fichier d'import ne
+contient donc que le titre et les 52 questions : l'introduction, les 9 sections, le rappel du
+process et le message de fin se saisissent à la main après l'import, tout comme la grille
+Likert (Q7) et la note sur 10 (Q49), que le convertisseur ne sait pas produire.
+
+Le détail de la relecture et des corrections est dans `03-parametrage-microsoft-forms.md`, §1.

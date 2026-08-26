@@ -12,12 +12,10 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 3. Description : coller le texte d'introduction de `01-enquete-menage-audika.md`.
 4. Saisie des questions — par ordre de préférence :
 
-   **a. Import du fichier Word (recommandé)** — c'est la voie disponible dans la plupart des
-   locataires : *Nouveau formulaire* → **Importer un fichier / Import your file** →
-   **Upload from this device** → choisir **`05-formulaire-a-importer.docx`** (15 Ko, très en
-   dessous de la limite de 10 Mo). Forms lit le document et crée les questions avec leurs
-   propositions de réponses. `06-formulaire-a-importer.pdf` contient exactement la même chose
-   au format PDF, si l'import du .docx donne un résultat imparfait.
+   **a. Import du fichier Word (recommandé)** — *Nouveau formulaire* → **Importer un fichier /
+   Import your file** → **Upload from this device** → **`05-formulaire-a-importer.docx`**
+   (12 Ko, loin de la limite de 10 Mo). `06-formulaire-a-importer.pdf` contient exactement la
+   même chose, à essayer si le Word donne un résultat imparfait.
 
    **b. Importation rapide (collage de texte)** — si votre locataire propose ce bouton :
    coller `02-import-microsoft-forms.txt`, puis supprimer les lignes entre crochets `[...]`
@@ -26,21 +24,37 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 
    **c. Manuel** — recréer les 52 questions à partir de `01-enquete-menage-audika.md`.
 
-### À vérifier systématiquement après l'import
+### Ce que contient — et ne contient pas — le fichier d'import
 
-L'import est une reconnaissance automatique : il fait gagner la saisie, pas la relecture.
+Le convertisseur de Forms ne sait faire que deux choses : des **questions à choix** et des
+**questions à texte libre**. Tout le reste (grille Likert, notation, tableau, titre de section)
+est soit ignoré, soit transformé en question fantôme. Et tout paragraphe libre du document
+devient une question : lors d'un premier essai, l'introduction et les descriptions de section
+sont ressorties en questions à texte libre.
 
-- **Les 52 questions sont-elles toutes là**, dans l'ordre, sans question fantôme créée à partir
-  de l'introduction, du rappel de process ou du message de fin ? Supprimer les intrus : ces
-  textes doivent être respectivement la **description du formulaire**, la **description de la
-  section 8** et le **message de confirmation** (voir §6), pas des questions.
-- **Les titres de section** (« Section 1 — … ») sont probablement importés comme du texte ou
-  ignorés : recréer les vraies sections à l'étape 2, elles conditionnent les branchements.
-- **La grille Likert** (question Q7) est le point le plus fragile de l'import : si elle arrive
-  sous forme de tableau cassé ou de questions séparées, la supprimer et la recréer à la main
-  en type **Likert** (8 lignes / 5 colonnes, voir §4).
-- **Les types de questions** : tout arrive généralement en « Choix » ou « Texte ». Appliquer
-  les corrections du §4, puis cocher les 30 questions obligatoires listées plus bas.
+`05-formulaire-a-importer.docx` ne contient donc **que le titre et les 52 questions numérotées**,
+en texte brut, sans puce Word, sans tableau et sans titre de section — la numérotation `1.` et
+les marqueurs `a.` `b.` des propositions sont de vrais caractères saisis, seule forme que le
+convertisseur reconnaît. À saisir à la main après l'import (le contenu est dans
+`01-enquete-menage-audika.md`) :
+
+- l'**introduction**, dans la description du formulaire ;
+- les **9 sections** et leurs descriptions (étape 2) ;
+- le **bloc de rappel du process**, en description de la section 8 ;
+- le **message de fin**, dans le message de confirmation (§6).
+
+### À vérifier après l'import
+
+- **Les 52 questions sont-elles toutes là**, dans l'ordre, avec leurs propositions séparées du
+  libellé ? Si des propositions se retrouvent collées à la fin du libellé, c'est que le
+  convertisseur a fusionné les lignes : recréer ces questions à la main. Microsoft signale que
+  la conversion est **moins fiable en français qu'en anglais**, une relecture complète est donc
+  indispensable.
+- **Q7 (grille Likert)** et **Q49 (note sur 10)** arriveront en texte libre : ces deux types ne
+  sont pas convertibles. Les supprimer et les recréer à la main en **Likert**
+  (8 lignes / 5 colonnes) et en **Notation** (10 niveaux) — voir §4.
+- **Les types de questions** : appliquer les corrections du §4 (liste déroulante, réponses
+  longues, choix multiples), puis cocher les 30 questions obligatoires listées plus bas.
 
 ---
 
@@ -103,6 +117,9 @@ Forms → **+ Ajouter nouveau** → **Section**. Créer 9 sections :
 ---
 
 ## 4. Types de questions à corriger après import
+
+Forms ne permet pas de changer le type d'une question existante : les deux dernières lignes du
+tableau demandent de supprimer la question importée et de la recréer.
 
 | Question | Type Forms à appliquer |
 |---|---|
