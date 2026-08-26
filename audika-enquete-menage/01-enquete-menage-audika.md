@@ -1,4 +1,4 @@
-# Enquête Propreté – Centres Audika – Vague 2
+# Enquête Propreté & Services Généraux – Centres Audika (2ᵉ édition)
 
 > **Document de référence** : contenu intégral du formulaire Microsoft Forms.
 > Pour la saisie rapide dans Forms, utiliser `02-import-microsoft-forms.txt`.
@@ -9,27 +9,31 @@
 
 ## Titre du formulaire
 
-**Enquête Propreté – Centres Audika – Vague 2**
+**Enquête Propreté & Services Généraux – Centres Audika (2ᵉ édition)**
 
 ## Description (texte d'introduction)
 
-Bonjour,
+Bonjour à toutes et à tous,
 
-Il y a quelques mois, vous avez été nombreux à répondre à notre première enquête sur les
-prestations de propreté et d'entretien de votre centre. Merci encore pour vos retours : ils ont
-été analysés centre par centre et ont donné lieu à des **plans d'actions avec nos prestataires**
-ainsi qu'à des **ajustements contractuels** (fréquences de passage, périmètre des prestations,
-changement de prestataire sur certains sites).
+L'an dernier, vous avez été **[XX] centres** à répondre à notre première enquête sur la propreté
+et l'entretien de vos locaux. Merci : c'est ce qui nous a permis d'aller négocier avec nos
+prestataires sur des faits plutôt que sur des impressions.
 
-Cette seconde enquête a un objectif simple : **mesurer ce qui a réellement changé sur le terrain.**
-Elle porte sur cinq prestations — le **ménage**, la **vitrerie**, l'**enlèvement des déchets**,
-le **désencombrement** et l'**entretien des espaces verts** — ainsi que sur les **délais et
-fréquences de passage** de chacune d'entre elles.
+**Ce que vos retours ont déjà changé :**
+• des fréquences de passage revues sur les centres les plus en difficulté ;
+• des ajustements contractuels sur le périmètre des prestations ;
+• un changement de prestataire engagé sur **[X] centres** ;
+• un process de signalement clarifié, rappelé plus bas.
 
-⏱️ **Durée : environ 5 minutes** (les prestations qui ne concernent pas votre centre sont
-automatiquement ignorées).
-📅 **Merci de répondre avant le [DATE LIMITE].**
-🔒 Vos réponses sont traitées par le service Services Généraux et analysées par centre.
+Cette seconde édition sert à vérifier **ce qui a réellement changé sur le terrain**, prestation
+par prestation : ménage, vitrerie, enlèvement des déchets, désencombrement et espaces verts.
+Pour chacune, trois questions reviennent — la qualité, le délai ou la fréquence de passage, et
+l'évolution depuis la première enquête.
+
+⏱️ **5 minutes suffisent.** Les prestations qui ne concernent pas votre centre sont
+automatiquement ignorées.
+📅 **À remplir avant le [DATE LIMITE].**
+🔒 Vos réponses sont traitées par les Services Généraux et analysées centre par centre.
 
 📌 **Rappel important du process** : toute demande d'intervention ou tout signalement
 (problème de propreté, prestation non réalisée, besoin ponctuel, dégradation…) doit
@@ -40,6 +44,8 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 ---
 
 # SECTION 1 — Votre centre
+
+*Ces informations servent uniquement à rattacher vos réponses au bon centre et à les comparer à celles de la première enquête.*
 
 **Q1. Nom / ville du centre Audika**
 *(réponse courte — obligatoire)*
@@ -83,7 +89,7 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 
 # SECTION 2 — Le ménage
 
-*Il s'agit du nettoyage courant de vos locaux : sols, surfaces, sanitaires, poubelles.*
+*Nettoyage courant de vos locaux. Répondez en pensant aux trois derniers mois dans leur ensemble, plutôt qu'à un incident isolé.*
 
 **Q6. De manière générale, êtes-vous satisfait(e) de la qualité du ménage dans votre centre ?**
 *(choix unique — obligatoire)*
@@ -142,7 +148,7 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 
 # SECTION 3 — La vitrerie
 
-*Il s'agit du nettoyage des vitrines, baies vitrées et portes vitrées.*
+*Vitrines, baies vitrées et portes vitrées — la première chose que voient vos patients.*
 
 **Q12. Êtes-vous satisfait(e) de la qualité de la prestation de vitrerie (vitrines, baies, portes vitrées) ?**
 *(choix unique — obligatoire)*
@@ -257,7 +263,7 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 
 # SECTION 5 — Le désencombrement
 
-*Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE.*
+*Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE. Cette section ne concerne que les centres qui en ont eu besoin cette année.*
 
 **Q25. Votre centre a-t-il eu besoin d'une prestation de désencombrement (débarras, enlèvement d'encombrants, évacuation de matériel ou de mobilier) au cours des 12 derniers mois ?**
 *(choix unique — obligatoire — déclenche un branchement)*
@@ -317,7 +323,7 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 
 # SECTION 6 — Les espaces verts
 
-*Tonte, taille des haies, désherbage, jardinières, entretien des abords et de la terrasse.*
+*Tonte, taille des haies, désherbage, jardinières, abords et terrasse. Si votre centre n'est pas concerné, indiquez-le à la première question : la section sera passée.*
 
 **Q32. Votre centre est-il concerné par l'entretien d'espaces verts ?**
 *(choix unique — obligatoire — déclenche un branchement)*
@@ -376,6 +382,8 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 ---
 
 # SECTION 7 — Changement de prestataire
+
+*À renseigner uniquement si votre centre a changé de prestataire au cours des 12 derniers mois.*
 
 **Q39. Y a-t-il eu un changement de prestataire dans votre centre au cours des 12 derniers mois ?**
 *(choix unique — obligatoire — déclenche un branchement)*
@@ -484,6 +492,8 @@ ni suivie, ni opposable au prestataire lors des revues de contrat.
 ---
 
 # SECTION 9 — Synthèse et remarques
+
+*Deux dernières questions pour situer l'ensemble et nous dire ce qui compte le plus pour vous.*
 
 **Q49. Globalement, quelle note donnez-vous aujourd'hui à l'ensemble des prestations de propreté et d'entretien de votre centre ?**
 *(échelle de notation 1 à 10 — obligatoire)*

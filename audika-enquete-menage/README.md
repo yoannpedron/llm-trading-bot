@@ -11,9 +11,12 @@ et ajustements contractuels).
 | `06-formulaire-a-importer.pdf` | Le même contenu en PDF, si l'import du .docx donne un résultat imparfait. |
 | `02-import-microsoft-forms.txt` | La même chose au format collable dans l'**Importation rapide**, quand le locataire propose ce bouton (ce n'est pas toujours le cas). |
 | `03-parametrage-microsoft-forms.md` | Le mode opératoire Forms : découpage en sections, table des ramifications, types de questions, thème et logo, paramètres de collecte, diffusion, exploitation des résultats. |
-| `04-apercu-formulaire.html` | Maquette du rendu, à ouvrir dans un navigateur pour validation avant saisie. |
+| `07-textes-a-coller.txt` | Tous les textes du formulaire — titre, introduction, titres et descriptions des 9 sections, rappel du process, message de fin — chacun avec sa destination dans Forms et le visuel qui l'accompagne. |
+| `visuels/` | Bandeau d'en-tête et une image par section, à charger dans Forms. |
+| `04-apercu-formulaire.html` | Maquette du rendu complet (bandeau et visuels compris), à ouvrir dans un navigateur pour validation avant saisie. |
 | `generate.py` | Générateur des fichiers texte + `form.json` à partir d'une source unique. |
 | `generate_docx.js` / `generate_pdf.js` | Générateurs du Word et du PDF à partir de `form.json`. |
+| `generate_visuels.js` | Générateur des images de `visuels/` (couleurs, libellés et icônes se retouchent en haut du fichier). |
 
 ## Prestations couvertes
 
@@ -32,12 +35,14 @@ par un ticket auprès des Services Généraux.
 Éditer la structure `SECTIONS` dans `generate.py`, puis :
 
 ```bash
-python3 generate.py                                   # md, txt, html, form.json
-node generate_docx.js                                 # 05-...docx
-NODE_PATH=/opt/node22/lib/node_modules node generate_pdf.js   # 06-...pdf
+NODE_PATH=/opt/node22/lib/node_modules node generate_visuels.js   # visuels/ (en premier :
+                                                                  # l'aperçu les intègre)
+python3 generate.py                                               # md, txt, html, form.json
+node generate_docx.js                                             # 05-...docx
+NODE_PATH=/opt/node22/lib/node_modules node generate_pdf.js       # 06-...pdf
 ```
 
-(`npm install docx` une fois pour le premier, Playwright/Chromium pour le second.)
+(`npm install docx` une fois pour le Word, Playwright/Chromium pour les visuels et le PDF.)
 
 Tous les fichiers sont régénérés, la numérotation des questions et la table des ramifications
 se recalculent toutes seules.
@@ -46,7 +51,9 @@ se recalculent toutes seules.
 
 - `[DATE LIMITE]` — date de clôture de l'enquête
 - `[LIEN / OUTIL DE TICKETING]` et `[ADRESSE MAIL SERVICES GÉNÉRAUX]`
-- Le logo Audika officiel et la couleur de charte, à charger dans le thème Forms
+- Le nombre de centres répondants de la première enquête (`[XX]`) et le nombre de centres
+  ayant changé de prestataire (`[X]`), dans l'introduction
+- Le logo Audika officiel : déposer `visuels/logo-audika.png` et régénérer les visuels
 
 ## Après l'import dans Forms
 

@@ -6,12 +6,14 @@ Sorties (dans le même dossier) :
   02-import-microsoft-forms.txt    version collable dans l'import rapide de Forms
   05-formulaire-a-importer.docx    fichier Word à charger dans « Import your file » de Forms
                                    (généré par generate_docx.js à partir de form.json)
+  07-textes-a-coller.txt           chaque bloc de texte du formulaire, avec sa destination
+                                   dans Forms et le visuel qui l'accompagne
   03-parametrage-microsoft-forms.md mode opératoire Forms (sections, branchements, réglages)
   04-apercu-formulaire.html        maquette de rendu pour validation interne
 
 Usage : python3 generate.py
 """
-import html, io, json, os
+import html, io, json, os, re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,7 +43,9 @@ def q(key, typ, text, options=None, required=False, help=None, branch=None, note
 
 
 SECTIONS = [
- dict(key="centre", title="Votre centre", desc="", questions=[
+ dict(key="centre", title="Votre centre",
+      desc="Ces informations servent uniquement à rattacher vos réponses au bon centre et à les comparer à celles de la première enquête.",
+      questions=[
    q("nom", SHORT, "Nom / ville du centre Audika", required=True),
    q("code", SHORT, "Code centre", help="Si vous ne le connaissez pas, laissez vide.",
       doc="Code centre (laissez vide si vous ne le connaissez pas)"),
@@ -57,7 +61,7 @@ SECTIONS = [
  ]),
 
  dict(key="menage", title="Le ménage",
-      desc="Il s'agit du nettoyage courant de vos locaux : sols, surfaces, sanitaires, poubelles.",
+      desc="Nettoyage courant de vos locaux. Répondez en pensant aux trois derniers mois dans leur ensemble, plutôt qu'à un incident isolé.",
       questions=[
    q("men_glob", RADIO, "De manière générale, êtes-vous satisfait(e) de la qualité du ménage dans votre centre ?", SAT, True),
    q("men_zones", LIKERT, "Pour chacune des zones suivantes, quel est votre niveau de satisfaction ?", required=True),
@@ -72,7 +76,7 @@ SECTIONS = [
  ]),
 
  dict(key="vitrerie", title="La vitrerie",
-      desc="Il s'agit du nettoyage des vitrines, baies vitrées et portes vitrées.",
+      desc="Vitrines, baies vitrées et portes vitrées — la première chose que voient vos patients.",
       questions=[
    q("vit_glob", RADIO, "Êtes-vous satisfait(e) de la qualité de la prestation de vitrerie (vitrines, baies, portes vitrées) ?",
       SAT + ["Non concerné / pas de vitrerie dans mon centre"], True),
@@ -103,7 +107,7 @@ SECTIONS = [
  ]),
 
  dict(key="desencombrement", title="Le désencombrement",
-      desc="Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE.",
+      desc="Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE. Cette section ne concerne que les centres qui en ont eu besoin cette année.",
       questions=[
    q("des_besoin", RADIO, "Votre centre a-t-il eu besoin d'une prestation de désencombrement (débarras, enlèvement d'encombrants, évacuation de matériel ou de mobilier) au cours des 12 derniers mois ?",
       ["Oui", "Non", "Je ne sais pas"], True,
@@ -120,7 +124,7 @@ SECTIONS = [
  ]),
 
  dict(key="espaces_verts", title="Les espaces verts",
-      desc="Tonte, taille des haies, désherbage, jardinières, entretien des abords et de la terrasse.",
+      desc="Tonte, taille des haies, désherbage, jardinières, abords et terrasse. Si votre centre n'est pas concerné, indiquez-le à la première question : la section sera passée.",
       questions=[
    q("ev_concerne", RADIO, "Votre centre est-il concerné par l'entretien d'espaces verts ?", [
       "Oui, un prestataire intervient",
@@ -139,7 +143,9 @@ SECTIONS = [
    q("ev_com", LONG, "Un commentaire sur les espaces verts ?"),
  ]),
 
- dict(key="prestataire", title="Changement de prestataire", desc="", questions=[
+ dict(key="prestataire", title="Changement de prestataire",
+      desc="À renseigner uniquement si votre centre a changé de prestataire au cours des 12 derniers mois.",
+      questions=[
    q("pre_change", RADIO, "Y a-t-il eu un changement de prestataire dans votre centre au cours des 12 derniers mois ?",
       ["Oui", "Non", "Je ne sais pas"], True,
       branch=[("Non", "SEC:process"), ("Je ne sais pas", "SEC:process")]),
@@ -173,7 +179,9 @@ SECTIONS = [
       ["Oui, j'ai bien noté"], True),
  ]),
 
- dict(key="synthese", title="Synthèse et remarques", desc="", questions=[
+ dict(key="synthese", title="Synthèse et remarques",
+      desc="Deux dernières questions pour situer l'ensemble et nous dire ce qui compte le plus pour vous.",
+      questions=[
    q("syn_note", SCALE, "Globalement, quelle note donnez-vous aujourd'hui à l'ensemble des prestations de propreté et d'entretien de votre centre ?",
       required=True, help="1 = très insatisfaisant • 10 = excellent"),
    q("syn_prio", LONG, "Si vous aviez une seule chose à améliorer en priorité, quelle serait-elle ?"),
@@ -224,25 +232,29 @@ def branch_short(qq):
     return " · ".join("« %s » → %s" % (a, target(t).split(" (")[0]) for a, t in qq["branch"])
 
 
-TITLE = "Enquête Propreté – Centres Audika – Vague 2"
+TITLE = "Enquête Propreté & Services Généraux – Centres Audika (2ᵉ édition)"
 
-INTRO_MD = """Bonjour,
+INTRO_MD = """Bonjour à toutes et à tous,
 
-Il y a quelques mois, vous avez été nombreux à répondre à notre première enquête sur les
-prestations de propreté et d'entretien de votre centre. Merci encore pour vos retours : ils ont
-été analysés centre par centre et ont donné lieu à des **plans d'actions avec nos prestataires**
-ainsi qu'à des **ajustements contractuels** (fréquences de passage, périmètre des prestations,
-changement de prestataire sur certains sites).
+L'an dernier, vous avez été **[XX] centres** à répondre à notre première enquête sur la propreté
+et l'entretien de vos locaux. Merci : c'est ce qui nous a permis d'aller négocier avec nos
+prestataires sur des faits plutôt que sur des impressions.
 
-Cette seconde enquête a un objectif simple : **mesurer ce qui a réellement changé sur le terrain.**
-Elle porte sur cinq prestations — le **ménage**, la **vitrerie**, l'**enlèvement des déchets**,
-le **désencombrement** et l'**entretien des espaces verts** — ainsi que sur les **délais et
-fréquences de passage** de chacune d'entre elles.
+**Ce que vos retours ont déjà changé :**
+• des fréquences de passage revues sur les centres les plus en difficulté ;
+• des ajustements contractuels sur le périmètre des prestations ;
+• un changement de prestataire engagé sur **[X] centres** ;
+• un process de signalement clarifié, rappelé plus bas.
 
-⏱️ **Durée : environ 5 minutes** (les prestations qui ne concernent pas votre centre sont
-automatiquement ignorées).
-📅 **Merci de répondre avant le [DATE LIMITE].**
-🔒 Vos réponses sont traitées par le service Services Généraux et analysées par centre."""
+Cette seconde édition sert à vérifier **ce qui a réellement changé sur le terrain**, prestation
+par prestation : ménage, vitrerie, enlèvement des déchets, désencombrement et espaces verts.
+Pour chacune, trois questions reviennent — la qualité, le délai ou la fréquence de passage, et
+l'évolution depuis la première enquête.
+
+⏱️ **5 minutes suffisent.** Les prestations qui ne concernent pas votre centre sont
+automatiquement ignorées.
+📅 **À remplir avant le [DATE LIMITE].**
+🔒 Vos réponses sont traitées par les Services Généraux et analysées centre par centre."""
 
 PROCESS_MD = """📌 **Rappel important du process** : toute demande d'intervention ou tout signalement
 (problème de propreté, prestation non réalisée, besoin ponctuel, dégradation…) doit
@@ -515,19 +527,42 @@ Tout le reste est facultatif, pour ne pas décourager la réponse.
 
 ---
 
-## 5. Thème et logo Audika
+## 5. Habillage visuel
 
-`Thème` (en haut à droite) → **Personnaliser le thème** :
+Le dossier `visuels/` contient un bandeau d'en-tête et une image par section, générés aux
+couleurs de la charte. C'est ce qui fait la différence entre une liste de questions et un
+formulaire d'entreprise.
 
-1. **Image** → *Télécharger* → charger le fichier du logo Audika officiel (intranet /
-   communication interne — PNG à fond transparent, largeur ≥ 600 px). Le logo s'affiche en
-   bandeau d'en-tête du formulaire.
-2. **Couleur** → couleur personnalisée, code hexadécimal de la charte Audika (à confirmer auprès
-   de la communication ; à défaut, un bleu foncé type `#0B3C5D` reste neutre et lisible).
-3. Vérifier le rendu sur mobile : la majorité des réponses en centre se font sur téléphone.
+| Image | Où la charger dans Forms |
+|---|---|
+| `visuels/banniere-formulaire.png` | Bouton image à droite du **titre du formulaire** |
+%s
 
-> `04-apercu-formulaire.html` est une **maquette de rendu** pour validation interne avant saisie.
-> Elle utilise un placeholder texte à la place du logo : charger le fichier officiel dans Forms.
+Pour chaque section : survoler l'en-tête de section → bouton **image** à droite → *Télécharger*.
+
+`07-textes-a-coller.txt` reprend, dans l'ordre de saisie, chaque texte à coller avec l'image
+qui l'accompagne.
+
+### Le logo officiel
+
+Le bandeau utilise pour l'instant le mot « audika » en typographie, pas le logo officiel.
+Pour le remplacer : déposer le fichier officiel (PNG à fond transparent, hauteur ≥ 120 px)
+dans `visuels/logo-audika.png`, puis régénérer :
+
+```bash
+NODE_PATH=/opt/node22/lib/node_modules node generate_visuels.js
+```
+
+Le script détecte le fichier et l'intègre à la place du mot-symbole. Couleurs, libellés et
+icônes se retouchent au même endroit, en haut de `generate_visuels.js`.
+
+### Thème Forms
+
+`Thème` → **Personnaliser le thème** → **Couleur** : reprendre le bleu de la charte
+(`#0B3C5D` par défaut dans les visuels, à confirmer auprès de la communication). Vérifier le
+rendu sur mobile : la majorité des réponses en centre se font sur téléphone.
+
+> `04-apercu-formulaire.html` montre le rendu complet, bandeau et visuels de section compris.
 
 ---
 
@@ -571,7 +606,10 @@ Tout le reste est facultatif, pour ne pas décourager la réponse.
   dépasse 20 %%, prévoir une communication dédiée avant la vague 3.
 - Le taux de « Je ne suis pas concerné(e) » sur %s et %s permet au passage de fiabiliser le
   périmètre réel des prestations centre par centre.
-""" % (len(req), ", ".join(req), NUM["nom"],
+""" % (len(req), ", ".join(req),
+       "\n".join("| `%s` | En-tête de la **section %d — %s** |"
+                 % (IMAGES[s_["key"]], s_["num"], s_["title"]) for s_ in SECTIONS),
+       NUM["nom"],
        ", ".join(NUM[k] for k in ["men_evol", "vit_evol", "dec_evol", "des_evol", "ev_evol"]),
        NUM["pre_juge"],
        ", ".join(NUM[k] for k in ["men_freq", "vit_freq", "dec_freq", "des_delai_ok", "ev_freq"]),
@@ -609,8 +647,14 @@ BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;-webkit-fon
 .wrap{max-width:760px;margin:0 auto;padding:24px 16px 64px}
 .mockup-note{background:var(--note-bg);border:1px solid var(--note-line);border-radius:8px;
 padding:10px 14px;font-size:13px;margin-bottom:18px}
-.header{background:var(--card);border:1px solid var(--line);border-top:8px solid var(--brand);
-border-radius:10px;padding:26px 28px;margin-bottom:16px}
+.header{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:0 0 26px;margin-bottom:16px;overflow:hidden}
+.header h1,.header .intro,.header .process,.header .logo-slot{margin-left:28px;margin-right:28px}
+.header h1{margin-top:24px}
+img.banner{display:block;width:100%;height:auto}
+img.secimg{display:block;width:100%;height:auto;border-radius:10px;margin:26px 0 0;
+border:1px solid var(--line)}
+img.secimg+.sec-head{margin-top:8px;border-radius:0 0 10px 10px}
 .logo-slot{display:inline-flex;align-items:center;gap:10px;padding:8px 16px;border:1px dashed var(--line);
 border-radius:6px;margin-bottom:18px}
 .logo-word{font-size:26px;font-weight:700;letter-spacing:.08em;color:var(--brand)}
@@ -664,41 +708,49 @@ border-radius:10px;padding:20px 22px;margin-top:26px}
 """
 
 
+def _data_uri(rel):
+    """PNG en data: URI, pour que l'aperçu reste un fichier unique et autonome."""
+    import base64
+    path = os.path.join(HERE, rel)
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+
+
 def build_html():
     e = html.escape
     o = io.StringIO(); w = o.write
     w('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">\n'
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
       '<title>%s</title>\n<style>%s</style></head><body><div class="wrap">\n' % (e(TITLE), CSS))
-    w('<div class="mockup-note"><strong>Maquette de validation interne</strong> — aperçu du rendu du '
-      'formulaire Microsoft Forms avant saisie. Les champs ne sont pas actifs. Le logo officiel Audika '
-      'est à charger dans le thème Forms (voir <code>03-parametrage-microsoft-forms.md</code>).</div>\n')
-    w("""<div class="header">
-  <div class="logo-slot"><span class="logo-word">audika</span>
-    <span class="logo-hint">Emplacement du logo officiel — à charger dans Thème &gt; Image</span></div>
+    w('<div class="mockup-note"><strong>Maquette de validation interne</strong> — le rendu visé du '
+      'formulaire Microsoft Forms, bandeau et visuels de section compris. Les champs ne sont pas '
+      'actifs. Le bandeau utilise le mot « audika » en typographie : déposer le logo officiel dans '
+      '<code>visuels/logo-audika.png</code> et régénérer pour l\'intégrer '
+      '(voir <code>03-parametrage-microsoft-forms.md</code>, §5).</div>\n')
+    banner = _data_uri(IMAGES["__banniere__"])
+    w('<div class="header">')
+    if banner:
+        w('<img class="banner" src="%s" alt="">' % banner)
+    else:
+        w('<div class="logo-slot"><span class="logo-word">audika</span>'
+          '<span class="logo-hint">Emplacement du logo officiel</span></div>')
+    w("""
   <h1>%s</h1>
-  <div class="intro">
-    <p>Bonjour,</p>
-    <p>Il y a quelques mois, vous avez été nombreux à répondre à notre première enquête sur les prestations
-    de propreté et d'entretien de votre centre. Merci encore pour vos retours : ils ont été analysés centre
-    par centre et ont donné lieu à des <strong>plans d'actions avec nos prestataires</strong> ainsi qu'à des
-    <strong>ajustements contractuels</strong> (fréquences de passage, périmètre des prestations,
-    changement de prestataire sur certains sites).</p>
-    <p>Cette seconde enquête a un objectif simple : <strong>mesurer ce qui a réellement changé sur le
-    terrain.</strong> Elle porte sur cinq prestations — le <strong>ménage</strong>, la
-    <strong>vitrerie</strong>, l'<strong>enlèvement des déchets</strong>, le
-    <strong>désencombrement</strong> et l'<strong>entretien des espaces verts</strong> — ainsi que sur les
-    <strong>délais et fréquences de passage</strong> de chacune d'entre elles.</p>
-    <p class="meta">⏱️ Environ 5 minutes (les prestations qui ne concernent pas votre centre sont
-    automatiquement ignorées) &nbsp;•&nbsp; 📅 Merci de répondre avant le
-    <span class="ph">[DATE LIMITE]</span> &nbsp;•&nbsp; 🔒 Réponses traitées par les Services Généraux
-    et analysées par centre.</p>
-  </div>
+  <div class="intro">""" % e(TITLE))
+    for t in blocks(INTRO_MD):
+        cls = ' class="meta"' if t.startswith(("⏱️", "📅", "🔒")) else ''
+        w('<p%s>%s</p>' % (cls, inline(t)))
+    w("""</div>
   %s
 </div>
-""" % (e(TITLE), PROCESS_HTML % "📌 Rappel important du process"))
+""" % (PROCESS_HTML % "📌 Rappel important du process"))
 
     for s in SECTIONS:
+        img = _data_uri(IMAGES[s["key"]])
+        if img:
+            w('<img class="secimg" src="%s" alt="">' % img)
         w('<div class="sec-head"><div class="kicker">Section %d sur %d</div><h2>%s</h2>'
           % (s["num"], len(SECTIONS), e(s["title"])))
         if s["desc"] == "__PROCESS__":
@@ -770,13 +822,38 @@ PROCESS_DOC = {
 }
 
 
-def plain(md):
-    """Markdown → paragraphes de texte simple (pour le Word)."""
+# Une ligne qui commence par l'un de ces marqueurs est une ligne à part entière : on ne la
+# recolle pas à la précédente en reconstituant les paragraphes.
+LINE_MARKERS = ("•", "-", "⏱️", "📅", "🔒", "📌", "➡️", "✅")
+
+
+def blocks(md):
+    """Markdown → paragraphes, en gardant les retours à la ligne signifiants."""
     out = []
     for block in md.split("\n\n"):
-        t = " ".join(l.strip() for l in block.strip().splitlines())
-        out.append(t.replace("**", "").strip())
-    return [t for t in out if t]
+        lines = []
+        for raw in block.strip().splitlines():
+            t = raw.strip()
+            if not t:
+                continue
+            if lines and not t.startswith(LINE_MARKERS):
+                lines[-1] = (lines[-1] + " " + t).strip()
+            else:
+                lines.append(t)
+        if lines:
+            out.append("\n".join(lines))
+    return out
+
+
+def plain(md):
+    """Idem, débarrassé du gras Markdown : prêt à coller dans Forms."""
+    return [b.replace("**", "").strip() for b in blocks(md)]
+
+
+def inline(t):
+    """Un paragraphe Markdown → HTML (gras et retours à la ligne seulement)."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>",
+                  html.escape(t)).replace("\n", "<br>")
 
 
 # Libellés pour les fichiers d'import Word/PDF.
@@ -822,6 +899,72 @@ def build_form_json():
                       ensure_ascii=False, indent=1)
 
 
+IMAGES = {
+    "__banniere__": "visuels/banniere-formulaire.png",
+    "centre": "visuels/section-1-votre-centre.png",
+    "menage": "visuels/section-2-menage.png",
+    "vitrerie": "visuels/section-3-vitrerie.png",
+    "dechets": "visuels/section-4-dechets.png",
+    "desencombrement": "visuels/section-5-desencombrement.png",
+    "espaces_verts": "visuels/section-6-espaces-verts.png",
+    "prestataire": "visuels/section-7-prestataire.png",
+    "process": "visuels/section-8-process.png",
+    "synthese": "visuels/section-9-synthese.png",
+}
+
+
+def build_paste_text():
+    """Tous les textes du formulaire, dans l'ordre de saisie, avec leur destination.
+
+    L'import Word ne monte que les questions : titre, introduction, sections, rappel du
+    process et message de fin se saisissent à la main. Ce fichier existe pour que cette
+    saisie soit du copier-coller et rien d'autre.
+    """
+    o = io.StringIO(); w = o.write
+    bar = "=" * 78
+
+    def bloc(num, quoi, ou, corps, image=None):
+        w("%s\n %s · %s\n%s\n → DANS FORMS : %s\n" % (bar, num, quoi.upper(), bar, ou))
+        if image:
+            w(" → IMAGE      : %s\n" % image)
+        w("\n" + corps.rstrip() + "\n\n\n")
+
+    w("TEXTES À COLLER DANS MICROSOFT FORMS\n")
+    w("%s\n\n" % TITLE)
+    w("Les questions arrivent par l'import du fichier Word ; tout ce qui suit se saisit à la\n"
+      "main. Les blocs sont dans l'ordre où vous les rencontrerez dans Forms. Remplacer les\n"
+      "mentions entre crochets avant diffusion : [DATE LIMITE], [XX] centres, [X] centres,\n"
+      "[LIEN OUTIL DE TICKETING], [ADRESSE MAIL SERVICES GÉNÉRAUX].\n\n\n")
+
+    n = 1
+    bloc(n, "Titre du formulaire", "champ titre, tout en haut", TITLE,
+         IMAGES["__banniere__"] + "  (bouton image à droite du titre)")
+    n += 1
+    bloc(n, "Description du formulaire", "champ juste sous le titre",
+         "\n\n".join(plain(INTRO_MD) + plain(PROCESS_MD)))
+    n += 1
+
+    for s_ in SECTIONS:
+        titre = "Section %d — %s" % (s_["num"], s_["title"])
+        if s_["desc"] == "__PROCESS__":
+            corps = ("TITRE DE LA SECTION :\n%s\n\nDESCRIPTION DE LA SECTION :\n%s"
+                     % (s_["title"], "\n\n".join(
+                         PROCESS_DOC["paras"]
+                         + ["• " + b for b in PROCESS_DOC["bullets"]]
+                         + PROCESS_DOC["after"])))
+        else:
+            corps = ("TITRE DE LA SECTION :\n%s\n\nDESCRIPTION DE LA SECTION :\n%s"
+                     % (s_["title"], s_["desc"] or "(laisser vide)"))
+        bloc(n, titre, "en-tête de la section %d (questions %s à %s)"
+             % (s_["num"], s_["questions"][0]["id"], s_["questions"][-1]["id"]),
+             corps, IMAGES[s_["key"]])
+        n += 1
+
+    bloc(n, "Message de fin", "Paramètres → Message de confirmation personnalisé",
+         "\n\n".join(plain(FIN_MD)))
+    return o.getvalue()
+
+
 def write(name, content):
     path = os.path.join(HERE, name)
     with open(path, "w", encoding="utf-8") as f:
@@ -835,4 +978,5 @@ if __name__ == "__main__":
     write("03-parametrage-microsoft-forms.md", build_setup())
     write("04-apercu-formulaire.html", build_html())
     write("form.json", build_form_json())
+    write("07-textes-a-coller.txt", build_paste_text())
     print("%d questions, %d sections" % (NQ, len(SECTIONS)))

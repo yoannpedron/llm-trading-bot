@@ -1,4 +1,4 @@
-# Paramétrage Microsoft Forms — Enquête Propreté – Centres Audika – Vague 2
+# Paramétrage Microsoft Forms — Enquête Propreté & Services Généraux – Centres Audika (2ᵉ édition)
 
 Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 *(Fichier généré par `generate.py`.)*
@@ -8,7 +8,7 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 ## 1. Créer le formulaire
 
 1. Aller sur **forms.office.com** → **Nouveau formulaire**.
-2. Titre : `Enquête Propreté – Centres Audika – Vague 2`
+2. Titre : `Enquête Propreté & Services Généraux – Centres Audika (2ᵉ édition)`
 3. Description : coller le texte d'introduction de `01-enquete-menage-audika.md`.
 4. Saisie des questions — par ordre de préférence :
 
@@ -79,12 +79,15 @@ Forms → **+ Ajouter nouveau** → **Section**. Créer 9 sections :
 
 **Descriptions de section à renseigner** (`...` de la section → *Ajouter une description*) :
 
-- **Section 2** : « Il s'agit du nettoyage courant de vos locaux : sols, surfaces, sanitaires, poubelles. »
-- **Section 3** : « Il s'agit du nettoyage des vitrines, baies vitrées et portes vitrées. »
+- **Section 1** : « Ces informations servent uniquement à rattacher vos réponses au bon centre et à les comparer à celles de la première enquête. »
+- **Section 2** : « Nettoyage courant de vos locaux. Répondez en pensant aux trois derniers mois dans leur ensemble, plutôt qu'à un incident isolé. »
+- **Section 3** : « Vitrines, baies vitrées et portes vitrées — la première chose que voient vos patients. »
 - **Section 4** : « Sortie et rentrée des conteneurs, évacuation des sacs et des cartons, gestion du tri. »
-- **Section 5** : « Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE. »
-- **Section 6** : « Tonte, taille des haies, désherbage, jardinières, entretien des abords et de la terrasse. »
+- **Section 5** : « Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE. Cette section ne concerne que les centres qui en ont eu besoin cette année. »
+- **Section 6** : « Tonte, taille des haies, désherbage, jardinières, abords et terrasse. Si votre centre n'est pas concerné, indiquez-le à la première question : la section sera passée. »
+- **Section 7** : « À renseigner uniquement si votre centre a changé de prestataire au cours des 12 derniers mois. »
 - **Section 8** : coller le bloc « Le process à retenir » de `01-enquete-menage-audika.md`, avec le lien vers l'outil de ticketing et l'adresse mail des Services Généraux.
+- **Section 9** : « Deux dernières questions pour situer l'ensemble et nous dire ce qui compte le plus pour vous. »
 
 ---
 
@@ -139,19 +142,50 @@ Tout le reste est facultatif, pour ne pas décourager la réponse.
 
 ---
 
-## 5. Thème et logo Audika
+## 5. Habillage visuel
 
-`Thème` (en haut à droite) → **Personnaliser le thème** :
+Le dossier `visuels/` contient un bandeau d'en-tête et une image par section, générés aux
+couleurs de la charte. C'est ce qui fait la différence entre une liste de questions et un
+formulaire d'entreprise.
 
-1. **Image** → *Télécharger* → charger le fichier du logo Audika officiel (intranet /
-   communication interne — PNG à fond transparent, largeur ≥ 600 px). Le logo s'affiche en
-   bandeau d'en-tête du formulaire.
-2. **Couleur** → couleur personnalisée, code hexadécimal de la charte Audika (à confirmer auprès
-   de la communication ; à défaut, un bleu foncé type `#0B3C5D` reste neutre et lisible).
-3. Vérifier le rendu sur mobile : la majorité des réponses en centre se font sur téléphone.
+| Image | Où la charger dans Forms |
+|---|---|
+| `visuels/banniere-formulaire.png` | Bouton image à droite du **titre du formulaire** |
+| `visuels/section-1-votre-centre.png` | En-tête de la **section 1 — Votre centre** |
+| `visuels/section-2-menage.png` | En-tête de la **section 2 — Le ménage** |
+| `visuels/section-3-vitrerie.png` | En-tête de la **section 3 — La vitrerie** |
+| `visuels/section-4-dechets.png` | En-tête de la **section 4 — L'enlèvement des déchets** |
+| `visuels/section-5-desencombrement.png` | En-tête de la **section 5 — Le désencombrement** |
+| `visuels/section-6-espaces-verts.png` | En-tête de la **section 6 — Les espaces verts** |
+| `visuels/section-7-prestataire.png` | En-tête de la **section 7 — Changement de prestataire** |
+| `visuels/section-8-process.png` | En-tête de la **section 8 — Rappel du process Services Généraux** |
+| `visuels/section-9-synthese.png` | En-tête de la **section 9 — Synthèse et remarques** |
 
-> `04-apercu-formulaire.html` est une **maquette de rendu** pour validation interne avant saisie.
-> Elle utilise un placeholder texte à la place du logo : charger le fichier officiel dans Forms.
+Pour chaque section : survoler l'en-tête de section → bouton **image** à droite → *Télécharger*.
+
+`07-textes-a-coller.txt` reprend, dans l'ordre de saisie, chaque texte à coller avec l'image
+qui l'accompagne.
+
+### Le logo officiel
+
+Le bandeau utilise pour l'instant le mot « audika » en typographie, pas le logo officiel.
+Pour le remplacer : déposer le fichier officiel (PNG à fond transparent, hauteur ≥ 120 px)
+dans `visuels/logo-audika.png`, puis régénérer :
+
+```bash
+NODE_PATH=/opt/node22/lib/node_modules node generate_visuels.js
+```
+
+Le script détecte le fichier et l'intègre à la place du mot-symbole. Couleurs, libellés et
+icônes se retouchent au même endroit, en haut de `generate_visuels.js`.
+
+### Thème Forms
+
+`Thème` → **Personnaliser le thème** → **Couleur** : reprendre le bleu de la charte
+(`#0B3C5D` par défaut dans les visuels, à confirmer auprès de la communication). Vérifier le
+rendu sur mobile : la majorité des réponses en centre se font sur téléphone.
+
+> `04-apercu-formulaire.html` montre le rendu complet, bandeau et visuels de section compris.
 
 ---
 
