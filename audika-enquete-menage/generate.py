@@ -4,12 +4,14 @@
 Sorties (dans le même dossier) :
   01-enquete-menage-audika.md      contenu intégral du formulaire
   02-import-microsoft-forms.txt    version collable dans l'import rapide de Forms
+  05-formulaire-a-importer.docx    fichier Word à charger dans « Import your file » de Forms
+                                   (généré par generate_docx.js à partir de form.json)
   03-parametrage-microsoft-forms.md mode opératoire Forms (sections, branchements, réglages)
   04-apercu-formulaire.html        maquette de rendu pour validation interne
 
 Usage : python3 generate.py
 """
-import html, io, os
+import html, io, json, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -31,15 +33,18 @@ LIKERT_COLS = ["Très satisfait(e)", "Plutôt satisfait(e)", "Plutôt insatisfai
                "Très insatisfait(e)", "Non concerné"]
 
 
-def q(key, typ, text, options=None, required=False, help=None, branch=None, note=None):
+def q(key, typ, text, options=None, required=False, help=None, branch=None, note=None, doc=None):
+    """doc : libellé alternatif utilisé dans les fichiers d'import Word/PDF, où les
+    consignes internes n'ont pas leur place et où le type de question se devine du libellé."""
     return dict(key=key, typ=typ, text=text, options=options or [], required=required,
-                help=help, branch=branch or [], note=note)
+                help=help, branch=branch or [], note=note, doc=doc)
 
 
 SECTIONS = [
  dict(key="centre", title="Votre centre", desc="", questions=[
    q("nom", SHORT, "Nom / ville du centre Audika", required=True),
-   q("code", SHORT, "Code centre", help="Si vous ne le connaissez pas, laissez vide."),
+   q("code", SHORT, "Code centre", help="Si vous ne le connaissez pas, laissez vide.",
+      doc="Code centre (réponse libre — laissez vide si vous ne le connaissez pas)"),
    q("region", DROPDOWN, "Région / secteur", [
       "Île-de-France", "Nord / Hauts-de-France", "Grand Est", "Bretagne / Pays de la Loire",
       "Normandie", "Centre-Val de Loire / Bourgogne-Franche-Comté", "Nouvelle-Aquitaine",
@@ -174,7 +179,9 @@ SECTIONS = [
    q("syn_prio", LONG, "Si vous aviez une seule chose à améliorer en priorité, quelle serait-elle ?"),
    q("syn_recontact", RADIO, "Souhaitez-vous être recontacté(e) par les Services Généraux au sujet de votre centre ?",
       ["Oui", "Non"], branch=[("Oui", "Q:syn_mail"), ("Non", "Fin du formulaire")]),
-   q("syn_mail", SHORT, "Votre email professionnel", help="Validation « adresse e-mail » à activer dans Forms."),
+   q("syn_mail", SHORT, "Votre email professionnel",
+      help="Validation « adresse e-mail » à activer dans Forms.",
+      doc="Votre email professionnel (réponse libre)"),
  ]),
 ]
 
@@ -377,12 +384,37 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 1. Aller sur **forms.office.com** → **Nouveau formulaire**.
 2. Titre : `%s`
 3. Description : coller le texte d'introduction de `01-enquete-menage-audika.md`.
-4. Saisie des questions, deux options :
-   - **Rapide** : bouton **« Importation rapide »** → coller `02-import-microsoft-forms.txt`,
-     puis corriger les types de questions et supprimer les lignes entre crochets `[...]`
-     et les séparateurs `=== ... ===`, qui sont des consignes.
-   - **Manuel** : recréer les %d questions à partir de `01-enquete-menage-audika.md`.
-     Plus long, mais plus propre pour les types spécifiques (Likert et Notation ne s'importent pas).
+4. Saisie des questions — par ordre de préférence :
+
+   **a. Import du fichier Word (recommandé)** — c'est la voie disponible dans la plupart des
+   locataires : *Nouveau formulaire* → **Importer un fichier / Import your file** →
+   **Upload from this device** → choisir **`05-formulaire-a-importer.docx`** (15 Ko, très en
+   dessous de la limite de 10 Mo). Forms lit le document et crée les questions avec leurs
+   propositions de réponses. `06-formulaire-a-importer.pdf` contient exactement la même chose
+   au format PDF, si l'import du .docx donne un résultat imparfait.
+
+   **b. Importation rapide (collage de texte)** — si votre locataire propose ce bouton :
+   coller `02-import-microsoft-forms.txt`, puis supprimer les lignes entre crochets `[...]`
+   et les séparateurs `=== ... ===`, qui sont des consignes. Beaucoup de locataires n'offrent
+   que l'import de fichier : dans ce cas, utiliser la voie **a**.
+
+   **c. Manuel** — recréer les %d questions à partir de `01-enquete-menage-audika.md`.
+
+### À vérifier systématiquement après l'import
+
+L'import est une reconnaissance automatique : il fait gagner la saisie, pas la relecture.
+
+- **Les %d questions sont-elles toutes là**, dans l'ordre, sans question fantôme créée à partir
+  de l'introduction, du rappel de process ou du message de fin ? Supprimer les intrus : ces
+  textes doivent être respectivement la **description du formulaire**, la **description de la
+  section 8** et le **message de confirmation** (voir §6), pas des questions.
+- **Les titres de section** (« Section 1 — … ») sont probablement importés comme du texte ou
+  ignorés : recréer les vraies sections à l'étape 2, elles conditionnent les branchements.
+- **La grille Likert** (question %s) est le point le plus fragile de l'import : si elle arrive
+  sous forme de tableau cassé ou de questions séparées, la supprimer et la recréer à la main
+  en type **Likert** (%d lignes / %d colonnes, voir §4).
+- **Les types de questions** : tout arrive généralement en « Choix » ou « Texte ». Appliquer
+  les corrections du §4, puis cocher les %d questions obligatoires listées plus bas.
 
 ---
 
@@ -392,7 +424,8 @@ Forms → **+ Ajouter nouveau** → **Section**. Créer %d sections :
 
 | # | Titre de section | Questions |
 |---|---|---|
-""" % (TITLE, TITLE, NQ, len(SECTIONS)))
+""" % (TITLE, TITLE, NQ, NQ, NUM["men_zones"], len(LIKERT_ROWS), len(LIKERT_COLS),
+       sum(1 for _q in ALL_Q if _q["required"]), len(SECTIONS)))
     for s in SECTIONS:
         qs = s["questions"]
         w("| %d | %s | %s → %s |\n" % (s["num"], s["title"], qs[0]["id"], qs[-1]["id"]))
@@ -697,6 +730,75 @@ Une synthèse des résultats et des actions engagées vous sera communiquée par
     return o.getvalue()
 
 
+PROCESS_DOC = {
+    "title": "Rappel du process — à retenir",
+    "paras": [
+        "Toute demande d'intervention ou tout signalement doit faire l'objet d'un ticket auprès "
+        "des Services Généraux. Cela concerne notamment :",
+    ],
+    "bullets": [
+        "une prestation non réalisée ou réalisée partiellement ;",
+        "un problème de qualité constaté (ménage, vitrerie, déchets, encombrants, espaces verts) ;",
+        "un besoin ponctuel ou exceptionnel (remise en état, débarras, intervention supplémentaire) ;",
+        "une dégradation, un dysfonctionnement ou une demande d'ajustement de prestation.",
+    ],
+    "after": [
+        "Merci de ne pas contacter directement le prestataire. Un signalement sans ticket n'est ni "
+        "tracé, ni suivi, ni opposable au prestataire lors des revues de contrat : c'est le volume "
+        "et l'historique des tickets qui nous permettent d'obtenir des corrections et de "
+        "renégocier les prestations.",
+        "Créer un ticket : [LIEN OUTIL DE TICKETING] — [ADRESSE MAIL SERVICES GÉNÉRAUX]",
+    ],
+}
+
+
+def plain(md):
+    """Markdown → paragraphes de texte simple (pour le Word)."""
+    out = []
+    for block in md.split("\n\n"):
+        t = " ".join(l.strip() for l in block.strip().splitlines())
+        out.append(t.replace("**", "").strip())
+    return [t for t in out if t]
+
+
+# Reformulations pour l'import Word : Forms déduit le type de question du libellé,
+# on remplace donc les annotations entre crochets par des indices en langage naturel.
+DOC_HINT = {
+    CHECK: " (plusieurs réponses possibles)",
+    LONG: " (réponse libre)",
+    SHORT: " (réponse libre)",
+}
+
+
+def build_form_json():
+    data = {
+        "title": TITLE,
+        "intro": plain(INTRO_MD) + plain(PROCESS_MD),
+        "fin": plain(FIN_MD),
+        "process": PROCESS_DOC,
+        "likert": {"rows": LIKERT_ROWS, "cols": LIKERT_COLS},
+        "sections": [],
+    }
+    for s_ in SECTIONS:
+        sec = {"num": s_["num"], "title": s_["title"],
+               "desc": "" if s_["desc"] == "__PROCESS__" else s_["desc"],
+               "process": s_["desc"] == "__PROCESS__", "questions": []}
+        for qq in s_["questions"]:
+            text = qq["doc"] or qq["text"]
+            if qq["doc"]:
+                pass
+            elif qq["typ"] == SCALE:
+                text += " (note de 1 à 10 : 1 = très insatisfaisant, 10 = excellent)"
+            elif qq["typ"] in DOC_HINT:
+                text += DOC_HINT[qq["typ"]]
+            sec["questions"].append({
+                "id": qq["id"], "n": int(qq["id"][1:]), "typ": qq["typ"],
+                "text": text, "options": qq["options"],
+            })
+        data["sections"].append(sec)
+    return json.dumps(data, ensure_ascii=False, indent=1)
+
+
 def write(name, content):
     path = os.path.join(HERE, name)
     with open(path, "w", encoding="utf-8") as f:
@@ -709,4 +811,5 @@ if __name__ == "__main__":
     write("02-import-microsoft-forms.txt", build_txt())
     write("03-parametrage-microsoft-forms.md", build_setup())
     write("04-apercu-formulaire.html", build_html())
+    write("form.json", build_form_json())
     print("%d questions, %d sections" % (NQ, len(SECTIONS)))

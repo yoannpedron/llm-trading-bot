@@ -37,3 +37,7 @@ $RECYCLE.BIN/
 *.zip
 *.tar.gz
 *.bak
+
+# Enquête Audika — dépendances des générateurs
+audika-enquete-menage/node_modules/
+audika-enquete-menage/package*.json

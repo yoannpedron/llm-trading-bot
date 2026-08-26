@@ -1,0 +1,716 @@
+{
+ "title": "Enquête Propreté – Centres Audika – Vague 2",
+ "intro": [
+  "Bonjour,",
+  "Il y a quelques mois, vous avez été nombreux à répondre à notre première enquête sur les prestations de propreté et d'entretien de votre centre. Merci encore pour vos retours : ils ont été analysés centre par centre et ont donné lieu à des plans d'actions avec nos prestataires ainsi qu'à des ajustements contractuels (fréquences de passage, périmètre des prestations, changement de prestataire sur certains sites).",
+  "Cette seconde enquête a un objectif simple : mesurer ce qui a réellement changé sur le terrain. Elle porte sur cinq prestations — le ménage, la vitrerie, l'enlèvement des déchets, le désencombrement et l'entretien des espaces verts — ainsi que sur les délais et fréquences de passage de chacune d'entre elles.",
+  "⏱️ Durée : environ 5 minutes (les prestations qui ne concernent pas votre centre sont automatiquement ignorées). 📅 Merci de répondre avant le [DATE LIMITE]. 🔒 Vos réponses sont traitées par le service Services Généraux et analysées par centre.",
+  "📌 Rappel important du process : toute demande d'intervention ou tout signalement (problème de propreté, prestation non réalisée, besoin ponctuel, dégradation…) doit obligatoirement faire l'objet d'un ticket auprès des Services Généraux. Merci de ne pas solliciter directement le prestataire : sans ticket, la demande n'est ni tracée, ni suivie, ni opposable au prestataire lors des revues de contrat."
+ ],
+ "fin": [
+  "Merci pour le temps que vous nous avez consacré.",
+  "Vos réponses seront analysées centre par centre et comparées à celles de la première enquête. Une synthèse des résultats et des actions engagées vous sera communiquée par les Services Généraux.",
+  "📌 Et d'ici là, un réflexe : un besoin, un problème, un signalement → un ticket Services Généraux."
+ ],
+ "process": {
+  "title": "Rappel du process — à retenir",
+  "paras": [
+   "Toute demande d'intervention ou tout signalement doit faire l'objet d'un ticket auprès des Services Généraux. Cela concerne notamment :"
+  ],
+  "bullets": [
+   "une prestation non réalisée ou réalisée partiellement ;",
+   "un problème de qualité constaté (ménage, vitrerie, déchets, encombrants, espaces verts) ;",
+   "un besoin ponctuel ou exceptionnel (remise en état, débarras, intervention supplémentaire) ;",
+   "une dégradation, un dysfonctionnement ou une demande d'ajustement de prestation."
+  ],
+  "after": [
+   "Merci de ne pas contacter directement le prestataire. Un signalement sans ticket n'est ni tracé, ni suivi, ni opposable au prestataire lors des revues de contrat : c'est le volume et l'historique des tickets qui nous permettent d'obtenir des corrections et de renégocier les prestations.",
+   "Créer un ticket : [LIEN OUTIL DE TICKETING] — [ADRESSE MAIL SERVICES GÉNÉRAUX]"
+  ]
+ },
+ "likert": {
+  "rows": [
+   "Accueil / espace d'attente",
+   "Cabines audio / salles de soin",
+   "Bureaux et espaces de travail",
+   "Sanitaires",
+   "Sols (aspiration, lavage)",
+   "Dépoussiérage des surfaces et mobilier",
+   "Évacuation des poubelles",
+   "Espace de pause / cuisine"
+  ],
+  "cols": [
+   "Très satisfait(e)",
+   "Plutôt satisfait(e)",
+   "Plutôt insatisfait(e)",
+   "Très insatisfait(e)",
+   "Non concerné"
+  ]
+ },
+ "sections": [
+  {
+   "num": 1,
+   "title": "Votre centre",
+   "desc": "",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q1",
+     "n": 1,
+     "typ": "short",
+     "text": "Nom / ville du centre Audika (réponse libre)",
+     "options": []
+    },
+    {
+     "id": "Q2",
+     "n": 2,
+     "typ": "short",
+     "text": "Code centre (réponse libre — laissez vide si vous ne le connaissez pas)",
+     "options": []
+    },
+    {
+     "id": "Q3",
+     "n": 3,
+     "typ": "dropdown",
+     "text": "Région / secteur",
+     "options": [
+      "Île-de-France",
+      "Nord / Hauts-de-France",
+      "Grand Est",
+      "Bretagne / Pays de la Loire",
+      "Normandie",
+      "Centre-Val de Loire / Bourgogne-Franche-Comté",
+      "Nouvelle-Aquitaine",
+      "Occitanie",
+      "Auvergne-Rhône-Alpes",
+      "PACA / Corse",
+      "Autre / Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q4",
+     "n": 4,
+     "typ": "radio",
+     "text": "Votre fonction",
+     "options": [
+      "Audioprothésiste",
+      "Assistant(e) / Coordinateur(trice) de centre",
+      "Responsable de secteur / Manager régional",
+      "Autre"
+     ]
+    },
+    {
+     "id": "Q5",
+     "n": 5,
+     "typ": "radio",
+     "text": "Aviez-vous répondu à la première enquête ?",
+     "options": [
+      "Oui",
+      "Non",
+      "Je ne me souviens pas"
+     ]
+    }
+   ]
+  },
+  {
+   "num": 2,
+   "title": "Le ménage",
+   "desc": "Il s'agit du nettoyage courant de vos locaux : sols, surfaces, sanitaires, poubelles.",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q6",
+     "n": 6,
+     "typ": "radio",
+     "text": "De manière générale, êtes-vous satisfait(e) de la qualité du ménage dans votre centre ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)"
+     ]
+    },
+    {
+     "id": "Q7",
+     "n": 7,
+     "typ": "likert",
+     "text": "Pour chacune des zones suivantes, quel est votre niveau de satisfaction ?",
+     "options": []
+    },
+    {
+     "id": "Q8",
+     "n": 8,
+     "typ": "radio",
+     "text": "La fréquence de passage pour le ménage est-elle adaptée aux besoins de votre centre ?",
+     "options": [
+      "Oui, tout à fait adaptée",
+      "Plutôt adaptée",
+      "Plutôt insuffisante",
+      "Nettement insuffisante",
+      "Excessive par rapport à nos besoins"
+     ]
+    },
+    {
+     "id": "Q9",
+     "n": 9,
+     "typ": "radio",
+     "text": "Les passages ont-ils lieu aux jours et horaires prévus au contrat ?",
+     "options": [
+      "Toujours",
+      "Le plus souvent",
+      "Rarement",
+      "Jamais",
+      "Je ne connais pas les horaires prévus"
+     ]
+    },
+    {
+     "id": "Q10",
+     "n": 10,
+     "typ": "radio",
+     "text": "Depuis la première enquête, comment a évolué la qualité du ménage dans votre centre ?",
+     "options": [
+      "Nettement améliorée",
+      "Plutôt améliorée",
+      "Inchangée",
+      "Plutôt dégradée",
+      "Nettement dégradée",
+      "Je ne peux pas comparer (arrivé(e) récemment)"
+     ]
+    },
+    {
+     "id": "Q11",
+     "n": 11,
+     "typ": "long",
+     "text": "Un commentaire sur le ménage ? (points positifs, points à corriger) (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 3,
+   "title": "La vitrerie",
+   "desc": "Il s'agit du nettoyage des vitrines, baies vitrées et portes vitrées.",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q12",
+     "n": 12,
+     "typ": "radio",
+     "text": "Êtes-vous satisfait(e) de la qualité de la prestation de vitrerie (vitrines, baies, portes vitrées) ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)",
+      "Non concerné / pas de vitrerie dans mon centre"
+     ]
+    },
+    {
+     "id": "Q13",
+     "n": 13,
+     "typ": "radio",
+     "text": "La fréquence de passage pour la vitrerie est-elle adaptée ?",
+     "options": [
+      "Oui, tout à fait adaptée",
+      "Plutôt adaptée",
+      "Plutôt insuffisante",
+      "Nettement insuffisante",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q14",
+     "n": 14,
+     "typ": "radio",
+     "text": "À quand remonte le dernier passage vitrerie dans votre centre ?",
+     "options": [
+      "Moins d'un mois",
+      "1 à 3 mois",
+      "3 à 6 mois",
+      "Plus de 6 mois",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q15",
+     "n": 15,
+     "typ": "radio",
+     "text": "Le délai entre deux passages de vitrerie vous permet-il de maintenir une vitrine présentable pour les patients ?",
+     "options": [
+      "Oui, sans difficulté",
+      "Oui, mais tout juste",
+      "Non, la vitrine est régulièrement sale entre deux passages",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q16",
+     "n": 16,
+     "typ": "radio",
+     "text": "Depuis la première enquête, comment a évolué la qualité de la vitrerie ?",
+     "options": [
+      "Nettement améliorée",
+      "Plutôt améliorée",
+      "Inchangée",
+      "Plutôt dégradée",
+      "Nettement dégradée",
+      "Je ne peux pas comparer"
+     ]
+    },
+    {
+     "id": "Q17",
+     "n": 17,
+     "typ": "long",
+     "text": "Un commentaire sur la vitrerie ? (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 4,
+   "title": "L'enlèvement des déchets",
+   "desc": "Sortie et rentrée des conteneurs, évacuation des sacs et des cartons, gestion du tri.",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q18",
+     "n": 18,
+     "typ": "radio",
+     "text": "Êtes-vous satisfait(e) de la prestation d'enlèvement des déchets dans votre centre ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)",
+      "Je ne suis pas concerné(e) par cette prestation"
+     ]
+    },
+    {
+     "id": "Q19",
+     "n": 19,
+     "typ": "radio",
+     "text": "La fréquence d'enlèvement est-elle adaptée au volume de déchets de votre centre ?",
+     "options": [
+      "Oui, tout à fait adaptée",
+      "Plutôt adaptée",
+      "Plutôt insuffisante",
+      "Nettement insuffisante",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q20",
+     "n": 20,
+     "typ": "radio",
+     "text": "Arrive-t-il que les conteneurs ou les sacs débordent faute de passage ?",
+     "options": [
+      "Jamais",
+      "Rarement",
+      "Souvent",
+      "En permanence"
+     ]
+    },
+    {
+     "id": "Q21",
+     "n": 21,
+     "typ": "radio",
+     "text": "Le délai entre deux enlèvements vous paraît-il acceptable au quotidien ?",
+     "options": [
+      "Oui, tout à fait",
+      "Plutôt oui",
+      "Plutôt non",
+      "Non, beaucoup trop long"
+     ]
+    },
+    {
+     "id": "Q22",
+     "n": 22,
+     "typ": "radio",
+     "text": "Les déchets spécifiques (cartons, papier confidentiel, piles et DEEE) sont-ils correctement pris en charge ?",
+     "options": [
+      "Oui, pour tous les types de déchets",
+      "Partiellement",
+      "Non",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q23",
+     "n": 23,
+     "typ": "radio",
+     "text": "Depuis la première enquête, comment a évolué la prestation d'enlèvement des déchets ?",
+     "options": [
+      "Nettement améliorée",
+      "Plutôt améliorée",
+      "Inchangée",
+      "Plutôt dégradée",
+      "Nettement dégradée",
+      "Je ne peux pas comparer"
+     ]
+    },
+    {
+     "id": "Q24",
+     "n": 24,
+     "typ": "long",
+     "text": "Un commentaire sur l'enlèvement des déchets ? (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 5,
+   "title": "Le désencombrement",
+   "desc": "Débarras et enlèvements d'encombrants : mobilier, matériel, cartons volumineux, DEEE.",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q25",
+     "n": 25,
+     "typ": "radio",
+     "text": "Votre centre a-t-il eu besoin d'une prestation de désencombrement (débarras, enlèvement d'encombrants, évacuation de matériel ou de mobilier) au cours des 12 derniers mois ?",
+     "options": [
+      "Oui",
+      "Non",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q26",
+     "n": 26,
+     "typ": "radio",
+     "text": "Êtes-vous satisfait(e) de la qualité de la prestation de désencombrement ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)"
+     ]
+    },
+    {
+     "id": "Q27",
+     "n": 27,
+     "typ": "radio",
+     "text": "Quel a été le délai entre votre demande (ticket) et l'intervention ?",
+     "options": [
+      "Moins d'une semaine",
+      "1 à 2 semaines",
+      "2 à 4 semaines",
+      "Plus d'un mois",
+      "L'intervention n'a jamais eu lieu",
+      "Je ne sais plus"
+     ]
+    },
+    {
+     "id": "Q28",
+     "n": 28,
+     "typ": "radio",
+     "text": "Ce délai d'intervention vous paraît-il acceptable ?",
+     "options": [
+      "Oui, tout à fait",
+      "Plutôt oui",
+      "Plutôt non",
+      "Non, beaucoup trop long"
+     ]
+    },
+    {
+     "id": "Q29",
+     "n": 29,
+     "typ": "radio",
+     "text": "L'enlèvement a-t-il été complet (rien n'est resté sur place) ?",
+     "options": [
+      "Oui, totalement",
+      "Partiellement",
+      "Non",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q30",
+     "n": 30,
+     "typ": "radio",
+     "text": "Depuis la première enquête, comment a évolué la prestation de désencombrement ?",
+     "options": [
+      "Nettement améliorée",
+      "Plutôt améliorée",
+      "Inchangée",
+      "Plutôt dégradée",
+      "Nettement dégradée",
+      "Je ne peux pas comparer"
+     ]
+    },
+    {
+     "id": "Q31",
+     "n": 31,
+     "typ": "long",
+     "text": "Un commentaire sur le désencombrement ? (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 6,
+   "title": "Les espaces verts",
+   "desc": "Tonte, taille des haies, désherbage, jardinières, entretien des abords et de la terrasse.",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q32",
+     "n": 32,
+     "typ": "radio",
+     "text": "Votre centre est-il concerné par l'entretien d'espaces verts ?",
+     "options": [
+      "Oui, un prestataire intervient",
+      "Oui, mais aucun prestataire n'intervient à ma connaissance",
+      "Je ne suis pas concerné(e) par la maintenance des espaces verts"
+     ]
+    },
+    {
+     "id": "Q33",
+     "n": 33,
+     "typ": "radio",
+     "text": "Êtes-vous satisfait(e) de la qualité de l'entretien des espaces verts ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)"
+     ]
+    },
+    {
+     "id": "Q34",
+     "n": 34,
+     "typ": "radio",
+     "text": "La fréquence de passage pour les espaces verts est-elle adaptée ?",
+     "options": [
+      "Oui, tout à fait adaptée",
+      "Plutôt adaptée",
+      "Plutôt insuffisante",
+      "Nettement insuffisante",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q35",
+     "n": 35,
+     "typ": "radio",
+     "text": "Les passages sont-ils bien répartis sur l'année (tonte, taille, désherbage aux bonnes saisons) ?",
+     "options": [
+      "Oui, tout à fait",
+      "Plutôt oui",
+      "Plutôt non, il y a des périodes sans passage",
+      "Non, les passages sont trop irréguliers",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q36",
+     "n": 36,
+     "typ": "radio",
+     "text": "Les abords immédiats du centre (entrée, trottoir, parking, jardinières) sont-ils présentables pour les patients ?",
+     "options": [
+      "Oui, toujours",
+      "Le plus souvent",
+      "Rarement",
+      "Jamais"
+     ]
+    },
+    {
+     "id": "Q37",
+     "n": 37,
+     "typ": "radio",
+     "text": "Depuis la première enquête, comment a évolué l'entretien des espaces verts ?",
+     "options": [
+      "Nettement améliorée",
+      "Plutôt améliorée",
+      "Inchangée",
+      "Plutôt dégradée",
+      "Nettement dégradée",
+      "Je ne peux pas comparer"
+     ]
+    },
+    {
+     "id": "Q38",
+     "n": 38,
+     "typ": "long",
+     "text": "Un commentaire sur les espaces verts ? (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 7,
+   "title": "Changement de prestataire",
+   "desc": "",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q39",
+     "n": 39,
+     "typ": "radio",
+     "text": "Y a-t-il eu un changement de prestataire dans votre centre au cours des 12 derniers mois ?",
+     "options": [
+      "Oui",
+      "Non",
+      "Je ne sais pas"
+     ]
+    },
+    {
+     "id": "Q40",
+     "n": 40,
+     "typ": "radio",
+     "text": "Depuis ce changement, comment jugez-vous la prestation par rapport à l'ancien prestataire ?",
+     "options": [
+      "Bien meilleure",
+      "Meilleure",
+      "Équivalente",
+      "Moins bonne",
+      "Bien moins bonne"
+     ]
+    },
+    {
+     "id": "Q41",
+     "n": 41,
+     "typ": "check",
+     "text": "Sur quels points l'amélioration est-elle la plus visible ? (plusieurs réponses possibles)",
+     "options": [
+      "Qualité du nettoyage",
+      "Régularité et respect des passages",
+      "Respect des horaires convenus",
+      "Qualité de la vitrerie",
+      "Enlèvement des déchets",
+      "Traitement des encombrants",
+      "Entretien des espaces verts",
+      "Réactivité sur les demandes ponctuelles",
+      "Communication / relation avec les intervenants",
+      "Stabilité des équipes (mêmes intervenants)",
+      "Aucune amélioration visible"
+     ]
+    },
+    {
+     "id": "Q42",
+     "n": 42,
+     "typ": "long",
+     "text": "Quels points restent à améliorer avec le nouveau prestataire ? (réponse libre)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "num": 8,
+   "title": "Rappel du process Services Généraux",
+   "desc": "",
+   "process": true,
+   "questions": [
+    {
+     "id": "Q43",
+     "n": 43,
+     "typ": "radio",
+     "text": "Connaissiez-vous ce process (ticket auprès des Services Généraux) avant cette enquête ?",
+     "options": [
+      "Oui, et je l'utilise systématiquement",
+      "Oui, mais je ne l'utilise pas toujours",
+      "Non, je ne le connaissais pas"
+     ]
+    },
+    {
+     "id": "Q44",
+     "n": 44,
+     "typ": "radio",
+     "text": "Au cours des 6 derniers mois, avez-vous créé au moins un ticket concernant ces prestations ?",
+     "options": [
+      "Oui",
+      "Non"
+     ]
+    },
+    {
+     "id": "Q45",
+     "n": 45,
+     "typ": "radio",
+     "text": "Êtes-vous satisfait(e) du traitement de vos tickets par les Services Généraux ?",
+     "options": [
+      "Très satisfait(e)",
+      "Plutôt satisfait(e)",
+      "Plutôt insatisfait(e)",
+      "Très insatisfait(e)"
+     ]
+    },
+    {
+     "id": "Q46",
+     "n": 46,
+     "typ": "radio",
+     "text": "Le délai de traitement de vos tickets vous paraît-il acceptable ?",
+     "options": [
+      "Oui, tout à fait",
+      "Plutôt oui",
+      "Plutôt non",
+      "Non, beaucoup trop long"
+     ]
+    },
+    {
+     "id": "Q47",
+     "n": 47,
+     "typ": "check",
+     "text": "Si vous n'avez pas créé de ticket, pour quelle raison ? (plusieurs réponses possibles)",
+     "options": [
+      "Je n'en ai pas eu besoin, tout va bien",
+      "Je ne connaissais pas le process",
+      "Je ne sais pas comment/où créer un ticket",
+      "Je contacte directement le prestataire ou l'intervenant",
+      "J'en parle à mon responsable de secteur",
+      "Je n'ai pas le temps",
+      "Les tickets précédents n'ont pas abouti",
+      "Autre"
+     ]
+    },
+    {
+     "id": "Q48",
+     "n": 48,
+     "typ": "check",
+     "text": "Je confirme avoir pris connaissance du process : toute demande d'intervention ou signalement passe par un ticket auprès des Services Généraux. (plusieurs réponses possibles)",
+     "options": [
+      "Oui, j'ai bien noté"
+     ]
+    }
+   ]
+  },
+  {
+   "num": 9,
+   "title": "Synthèse et remarques",
+   "desc": "",
+   "process": false,
+   "questions": [
+    {
+     "id": "Q49",
+     "n": 49,
+     "typ": "scale",
+     "text": "Globalement, quelle note donnez-vous aujourd'hui à l'ensemble des prestations de propreté et d'entretien de votre centre ? (note de 1 à 10 : 1 = très insatisfaisant, 10 = excellent)",
+     "options": []
+    },
+    {
+     "id": "Q50",
+     "n": 50,
+     "typ": "long",
+     "text": "Si vous aviez une seule chose à améliorer en priorité, quelle serait-elle ? (réponse libre)",
+     "options": []
+    },
+    {
+     "id": "Q51",
+     "n": 51,
+     "typ": "radio",
+     "text": "Souhaitez-vous être recontacté(e) par les Services Généraux au sujet de votre centre ?",
+     "options": [
+      "Oui",
+      "Non"
+     ]
+    },
+    {
+     "id": "Q52",
+     "n": 52,
+     "typ": "short",
+     "text": "Votre email professionnel (réponse libre)",
+     "options": []
+    }
+   ]
+  }
+ ]
+}

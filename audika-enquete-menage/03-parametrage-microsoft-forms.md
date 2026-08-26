@@ -10,12 +10,37 @@ Pas-à-pas pour construire le formulaire, poser les branchements et le diffuser.
 1. Aller sur **forms.office.com** → **Nouveau formulaire**.
 2. Titre : `Enquête Propreté – Centres Audika – Vague 2`
 3. Description : coller le texte d'introduction de `01-enquete-menage-audika.md`.
-4. Saisie des questions, deux options :
-   - **Rapide** : bouton **« Importation rapide »** → coller `02-import-microsoft-forms.txt`,
-     puis corriger les types de questions et supprimer les lignes entre crochets `[...]`
-     et les séparateurs `=== ... ===`, qui sont des consignes.
-   - **Manuel** : recréer les 52 questions à partir de `01-enquete-menage-audika.md`.
-     Plus long, mais plus propre pour les types spécifiques (Likert et Notation ne s'importent pas).
+4. Saisie des questions — par ordre de préférence :
+
+   **a. Import du fichier Word (recommandé)** — c'est la voie disponible dans la plupart des
+   locataires : *Nouveau formulaire* → **Importer un fichier / Import your file** →
+   **Upload from this device** → choisir **`05-formulaire-a-importer.docx`** (15 Ko, très en
+   dessous de la limite de 10 Mo). Forms lit le document et crée les questions avec leurs
+   propositions de réponses. `06-formulaire-a-importer.pdf` contient exactement la même chose
+   au format PDF, si l'import du .docx donne un résultat imparfait.
+
+   **b. Importation rapide (collage de texte)** — si votre locataire propose ce bouton :
+   coller `02-import-microsoft-forms.txt`, puis supprimer les lignes entre crochets `[...]`
+   et les séparateurs `=== ... ===`, qui sont des consignes. Beaucoup de locataires n'offrent
+   que l'import de fichier : dans ce cas, utiliser la voie **a**.
+
+   **c. Manuel** — recréer les 52 questions à partir de `01-enquete-menage-audika.md`.
+
+### À vérifier systématiquement après l'import
+
+L'import est une reconnaissance automatique : il fait gagner la saisie, pas la relecture.
+
+- **Les 52 questions sont-elles toutes là**, dans l'ordre, sans question fantôme créée à partir
+  de l'introduction, du rappel de process ou du message de fin ? Supprimer les intrus : ces
+  textes doivent être respectivement la **description du formulaire**, la **description de la
+  section 8** et le **message de confirmation** (voir §6), pas des questions.
+- **Les titres de section** (« Section 1 — … ») sont probablement importés comme du texte ou
+  ignorés : recréer les vraies sections à l'étape 2, elles conditionnent les branchements.
+- **La grille Likert** (question Q7) est le point le plus fragile de l'import : si elle arrive
+  sous forme de tableau cassé ou de questions séparées, la supprimer et la recréer à la main
+  en type **Likert** (8 lignes / 5 colonnes, voir §4).
+- **Les types de questions** : tout arrive généralement en « Choix » ou « Texte ». Appliquer
+  les corrections du §4, puis cocher les 30 questions obligatoires listées plus bas.
 
 ---
 
