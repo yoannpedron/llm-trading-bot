@@ -532,6 +532,78 @@ P7.push(P("{{à documenter : périmètre couvert par Izix, qui crée les comptes
 P7.push(GAP(70));
 P7.push(note('Section à compléter', "Izix n'apparaît pas dans le cahier de consignes du site : cette section reste vide tant que son usage réel n'a pas été décrit par les services généraux.", 'info'));
 
+
+/* ================= PROCÉDURE 8 — TRAITEMENT DES MAILS ================= */
+const P8 = [];
+P8.push(EYEBROW('PROCÉDURE INTERNE'));
+P8.push(TITLE('Traitement des mails du poste d’accueil'));
+P8.push(LEDE("Consulter, trier, réorienter et répondre aux mails reçus sur les boîtes du poste d'accueil et des services généraux."));
+P8.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P8.push(H2('1', 'Les deux boîtes et le rythme'));
+P8.push(BUL("**Deux boîtes mail** sont à consulter : {{boîtes à préciser}}."));
+P8.push(BUL("À la prise de poste, ouvrir Teams, Outlook et Tracker, puis dépouiller les mails et les traiter rapidement."));
+P8.push(BUL("**Avant de quitter le poste**, tous les mails reçus dans la journée doivent être traités ou avoir reçu une réponse."));
+
+P8.push(H2('2', 'Trier à la lecture'));
+P8.push(P("Chaque mail entre dans l'une de ces quatre familles, qui appellent chacune un geste différent :"));
+P8.push(table(['Type de mail', 'Ce que vous en faites'], [
+  ['Demande d’intervention', "La saisir dans Tracker et sur le fichier Excel de suivi. Le dispatch revient au responsable des services généraux ; certaines demandes — badges, préparation de salle, déplacement d'un meuble — sont à votre charge."],
+  ['Externe cherchant à joindre un collaborateur', "Prendre le message et l'envoyer au collaborateur avec le modèle « Prise de message »."],
+  ['Demande exceptionnelle', "Montage de mobilier, aménagement ponctuel : en accord avec le responsable des services généraux avant d'engager quoi que ce soit."],
+  ['Information', "Réunion, note de service : en prendre connaissance, pas de réponse nécessaire."],
+], cols([0.30, 0.70])));
+
+P8.push(H2('3', 'Vers qui réorienter'));
+P8.push(P("Un mail qui ne relève pas des services généraux n'est pas traité au poste : il est transféré au service concerné, et l'expéditeur en est informé."));
+P8.push(table(['Objet du mail', 'Destinataire'], [
+  ['Flotte automobile, contraventions', 'auddika@oovoom.fr — 01 80 82 44 43 (voir la procédure contraventions)'],
+  ['Factures fournisseurs', 'facture@audika.com'],
+  ['Loyers', 'loyers@audika.com'],
+  ['Comptabilité générale', 'compta@audika.com'],
+  ['Services généraux', 'sgx@audika.com'],
+  ['Informatique', 'info@audika.com'],
+  ['Ressources humaines', "Solde de tout compte : prendre le message et l'envoyer à la personne RH. Recrutement : recrutement.siege@audika.com"],
+  ['Qualité', 'flaroche@audika.com — 0 800 210 470'],
+  ['Boutique en ligne', 'boutique@audika.fr — 01 55 70 26 27'],
+  ['Ménage et propreté des locaux', '{{prestataire et adresse à compléter}}'],
+], cols([0.32, 0.68])));
+
+P8.push(H2('4', 'Réponses types'));
+P8.push(P("Trois modèles sont disponibles en signature dans la boîte mail. Les utiliser plutôt que de rédiger au cas par cas :"));
+P8.push(BUL("**Votre badge est prêt** — informe le collaborateur que son badge peut être récupéré auprès des services généraux."));
+P8.push(BUL("**Prise de message** — signale qu'une personne extérieure a cherché à le joindre, avec le sujet et les coordonnées de l'appelant."));
+P8.push(BUL("**Rappel : pli en attente à récupérer** — relance un collaborateur dont le pli attend au service généraux."));
+P8.push(GAP(70));
+P8.push(note('Avant d’envoyer', "Relire : pas de faute, formulation professionnelle, objet explicite. Les messages envoyés depuis ce poste engagent l'image de l'accueil.", 'warn'));
+
+/* ================= PROCÉDURE 9 — MACHINE À CAFÉ ================= */
+const P9 = [];
+P9.push(EYEBROW('PROCÉDURE INTERNE'));
+P9.push(TITLE('Machine à café et consommables'));
+P9.push(LEDE("Approvisionner les machines à café, suivre les consommables de la tisanerie et faire intervenir le prestataire en cas de panne."));
+P9.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P9.push(H2('1', 'Consommables à suivre'));
+P9.push(P("Les consommables de la tisanerie font partie des fournitures gérées par le poste : **café, thé, sucre, touillettes**."));
+P9.push(BUL("Vérifier le stock {{fréquence à définir}} et réapprovisionner avant rupture."));
+P9.push(BUL("La tisanerie doit être **propre et rangée** avant le départ, comme le poste de travail."));
+P9.push(BUL("Les fournitures de bureau et les consommables se commandent chez Lyreco : voir la procédure de commande."));
+P9.push(BUL("Fournisseur des consommables café : {{à compléter si différent de Lyreco}}"));
+
+P9.push(H2('2', 'Panne ou entretien de la machine'));
+P9.push(P("L'entretien des machines à café est assuré par le prestataire **SOVEDIS**."));
+P9.push(table(null, [
+  ['SOVEDIS — entretien des machines à café', '06 52 97 88 52'],
+], cols([0.55, 0.45])));
+P9.push(GAP(70));
+P9.push(BUL("Signaler la panne à SOVEDIS en précisant l'étage, la machine concernée et le symptôme."));
+P9.push(BUL("Prévenir le responsable des services généraux."));
+P9.push(BUL("Signaler l'indisponibilité aux collaborateurs si l'immobilisation dure."));
+P9.push(BUL("Noter l'intervention : {{support de suivi à préciser — Tracker, fichier Excel ?}}"));
+P9.push(GAP(70));
+P9.push(note('Section à consolider', "Le cahier de consignes ne mentionne la machine à café que par le contact SOVEDIS et la liste des consommables. Les fréquences de contrôle, le fournisseur du café et le suivi des interventions restent à décrire par les services généraux.", 'info'));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -564,4 +636,6 @@ build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_websh
   .then(() => build(P4, 'Gestion du courrier, des plis et des colis', 'PRO-SG-004_Gestion_du_courrier.docx'))
   .then(() => build(P5, 'Welcome by : visiteurs, plis et colis', 'PRO-SG-005_Welcome_by.docx'))
   .then(() => build(P6, 'Contraventions et courrier de la flotte automobile', 'PRO-SG-006_Contraventions_flotte_auto.docx'))
-  .then(() => build(P7, 'Accès aux parkings P1 et P2', 'PRO-SG-007_Acces_parkings.docx'));
+  .then(() => build(P7, 'Accès aux parkings P1 et P2', 'PRO-SG-007_Acces_parkings.docx'))
+  .then(() => build(P8, 'Traitement des mails du poste d’accueil', 'PRO-SG-008_Traitement_des_mails.docx'))
+  .then(() => build(P9, 'Machine à café et consommables', 'PRO-SG-009_Machine_a_cafe.docx'));
