@@ -16,6 +16,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café et consommables | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 1 |
+| Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 | Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
 | Welcome by : visiteurs, plis et colis | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 2 |
@@ -23,6 +24,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café et consommables | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 1 |
+| Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
@@ -33,7 +35,7 @@ npm install docx && node build-procedures.js
 ```
 
 Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
-`P1` à `P9` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+`P1` à `P9` et `F1` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
 les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
 ## Attention aux retouches dans Word

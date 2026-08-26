@@ -289,7 +289,7 @@ P3.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'serv
 
 P3.push(H2('1', 'Objet et contact'));
 P3.push(P("L'objectif principal est de créer et délivrer les badges pour sécuriser l'accès des collaborateurs aux différentes zones du bâtiment. La procédure couvre trois opérations : la création d'une étiquette, la création et l'enrôlement du badge, la suppression et la révocation d'un accès."));
-P3.push(P("Contact : **Sébastien Bourbon**, responsable des services généraux — {{numéro à compléter}}"));
+P3.push(P("Contact : **Sébastien BOURDON**, directeur des services généraux — snrb@audika.com, {{numéro à compléter}}"));
 
 P3.push(H2('2', "Création d'une étiquette"));
 P3.push(P("{{mode opératoire à rédiger}}"));
@@ -604,6 +604,73 @@ P9.push(BUL("Noter l'intervention : {{support de suivi à préciser — Tracker,
 P9.push(GAP(70));
 P9.push(note('Section à consolider', "Le cahier de consignes ne mentionne la machine à café que par le contact SOVEDIS et la liste des consommables. Les fréquences de contrôle, le fournisseur du café et le suivi des interventions restent à décrire par les services généraux.", 'info'));
 
+
+/* ================= FICHE — CONTACTS UTILES ================= */
+const F1 = [];
+F1.push(EYEBROW('FICHE PRATIQUE'));
+F1.push(TITLE('Contacts utiles'));
+F1.push(LEDE("Les numéros et adresses à avoir sous la main au poste d'accueil des services généraux."));
+F1.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+F1.push(H2('1', 'Urgences'));
+F1.push(table(['Service', 'Numéro'], [
+  ['Pompiers', '18'],
+  ['Police secours', '17'],
+  ['SAMU', '15'],
+  ['Toutes urgences — numéro européen, à préférer depuis un mobile', '112'],
+  ['Centre antipoison de Paris', '01 40 05 48 48'],
+], cols([0.66, 0.34])));
+F1.push(GAP(70));
+F1.push(note('Après tout appel d’urgence', "Prévenir immédiatement le directeur des services généraux, puis la responsable d'agence Pénélope. Rester joignable sur le portable jusqu'à la fin de l'intervention.", 'stop'));
+
+F1.push(H2('2', 'Sur le site'));
+F1.push(table(null, [
+  ['Accueil principal', '06 33 68 52 80'],
+  ['Sébastien BOURDON — directeur des services généraux', 'snrb@audika.com'],
+  ['John BLAISE — gestionnaire des services généraux', 'jhbs@audika.com'],
+  ['Services généraux — boîte du service', 'sgx@audika.com'],
+  ['Marjorie GRAND — assistante Direction Générale et membres de la Direction', '{{à compléter}}'],
+], cols([0.55, 0.45])));
+
+F1.push(H2('3', 'Services internes Audika'));
+F1.push(table(['Service', 'Contact'], [
+  ['ABS', 'abs.audika.fr — 01 76 44 00 84'],
+  ['Boutique en ligne', 'boutique@audika.fr — 01 55 70 26 27'],
+  ['CSE', 'cse.audika@audika.com'],
+  ['Communication', 'communication@audika.fr'],
+  ['Comptabilité générale', 'compta@audika.com'],
+  ['Comptabilité — loyers', 'loyers@audika.com'],
+  ['Comptabilité — factures', 'facture@audika.com'],
+  ['Service développement', 'developpement@audika.com'],
+  ['Informatique', 'info@audika.com'],
+  ['Marketing', 'EAC_Marketing_Audika_FR@dgs.com'],
+  ['Qualité', 'flaroche@audika.com — 0 800 210 470'],
+  ['Service clients', 'serviceclients@audika.com'],
+  ['Ressources humaines — recrutement', 'recrutement.siege@audika.com'],
+], cols([0.34, 0.66])));
+
+F1.push(H2('4', 'Prestataires et fournisseurs'));
+F1.push(table(['Prestataire', 'Objet', 'Contact'], [
+  ['SPIE', 'Maintenance technique du bâtiment', '06 80 22 32 14'],
+  ['SOVEDIS', 'Entretien des machines à café', '06 52 97 88 52'],
+  ['OOVOOM', 'Flotte automobile, contraventions', 'auddika@oovoom.fr — 01 80 82 44 43'],
+  ['Lyreco', 'Fournitures de bureau', '0825 09 08 07'],
+  ['Ménage', 'Propreté des locaux', '{{à compléter}}'],
+  ['Navette interne', 'Enlèvement des colis au départ', '{{à compléter}}'],
+], cols([0.20, 0.42, 0.38])));
+F1.push(GAP(60));
+F1.push(P("Adresse postale OOVOOM, pour les envois papier — vignette Crit’Air notamment : **SAS 30 Mile — OOVOOM, 59 boulevard Exelmans, 75016 Paris**."));
+
+F1.push(H2('5', 'Encadrement Pénélope'));
+F1.push(table(['Nom', 'Fonction', 'Contact'], [
+  ['Raja HELLARA', 'Directrice régionale', '06 33 37 23 65 — r.hellara@penelope.fr'],
+  ['Olivera KOJCIC', 'Responsable d’agence', '06 83 82 70 78 — o.kojcic@penelope.fr'],
+  ['Sarah BENKHALIFA', 'Responsable planning', '06 02 04 51 05 — s.benkhalifa@penelope.fr'],
+  ['Svetlana CAUTIK', 'Responsable contrôle qualité', '06 88 08 82 22 — s.cautik@penelope.fr'],
+], cols([0.22, 0.28, 0.50])));
+F1.push(GAP(70));
+F1.push(note('Numéros d’urgence', "Le cahier de consignes laisse la table des urgences vide, à l'exception du centre antipoison. Les numéros ci-dessus sont les numéros nationaux ; si le site dispose d'un numéro de sécurité interne, il doit être ajouté ici.", 'warn'));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -638,4 +705,5 @@ build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_websh
   .then(() => build(P6, 'Contraventions et courrier de la flotte automobile', 'PRO-SG-006_Contraventions_flotte_auto.docx'))
   .then(() => build(P7, 'Accès aux parkings P1 et P2', 'PRO-SG-007_Acces_parkings.docx'))
   .then(() => build(P8, 'Traitement des mails du poste d’accueil', 'PRO-SG-008_Traitement_des_mails.docx'))
-  .then(() => build(P9, 'Machine à café et consommables', 'PRO-SG-009_Machine_a_cafe.docx'));
+  .then(() => build(P9, 'Machine à café et consommables', 'PRO-SG-009_Machine_a_cafe.docx'))
+  .then(() => build(F1, 'Contacts utiles', 'FIC-SG-001_Contacts_utiles.docx'));
