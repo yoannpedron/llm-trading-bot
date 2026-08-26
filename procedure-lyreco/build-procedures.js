@@ -401,6 +401,103 @@ P4.push(BUL("**Courrier adressé au responsable des services généraux** : dép
 P4.push(BUL("**Direction Générale et membres de la Direction** : passer par l'assistante, **Mme Marjorie Grand**."));
 P4.push(BUL("**En cas de difficulté sur un courrier** : solliciter le responsable des services généraux."));
 
+
+/* ================= PROCÉDURE 5 — WELCOME BY ================= */
+const P5 = [];
+P5.push(EYEBROW('PROCÉDURE INTERNE'));
+P5.push(TITLE('Welcome by : visiteurs, plis et colis'));
+P5.push(LEDE("Enregistrer et suivre dans Welcome by les visiteurs, les prestataires, les plis et colis reçus et les expéditions au départ."));
+P5.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P5.push(H2('1', 'Ce que Welcome by doit contenir'));
+P5.push(P("Welcome by est le registre du poste d'accueil. Trois familles d'évènements y sont saisies **sans exception** :"));
+P5.push(BUL("les **visiteurs et prestataires**, à leur arrivée et à leur départ ;"));
+P5.push(BUL("les **plis et colis reçus**, jusqu'à leur remise au destinataire ;"));
+P5.push(BUL("les **expéditions au départ**, jusqu'à la remise au transporteur."));
+P5.push(P("Les **LRAR** et les **plis d'huissier** y sont enregistrés dans tous les cas, à l'arrivée comme au départ."));
+
+P5.push(H2('2', 'Enregistrer un visiteur'));
+P5.push(BUL("Ouvrir l'onglet `Visiteur`."));
+P5.push(BUL("Saisir le nom de la **personne visitée** : une liste déroulante propose les noms déjà enregistrés."));
+P5.push(BUL("Si le visiteur n'est pas dans la liste, cliquer sur `Ajouter une personne à l'annuaire`, saisir ses informations et valider."));
+P5.push(BUL("Pour plusieurs visiteurs, cliquer sur `Nouveau visiteur` autant de fois que nécessaire, puis sur `Confirmation`."));
+P5.push(BUL("Si l'adresse de la personne visitée est enregistrée, elle est prévenue automatiquement. Une autre personne peut être mise en copie ; décocher la case pour n'envoyer aucun mail."));
+
+P5.push(H2('3', 'Suivre un prestataire'));
+P5.push(P("Le prestataire est accueilli au rez-de-chaussée, accompagné pendant son intervention puis raccompagné à la sortie. Son **arrivée et son heure de départ sont enregistrées dans Welcome by** : c'est la trace de son passage sur le site."));
+P5.push(P("À son départ, un compte rendu est envoyé par mail au responsable des services généraux : actions réalisées, résumé en quelques lignes, et mention indiquant si l'intervention est terminée ou si le prestataire doit revenir."));
+
+P5.push(H2('4', "Enregistrer un pli ou un colis à l'arrivée"));
+P5.push(P("Dès la récupération du pli à l'accueil principal, créer la fiche avec les informations suivantes :"));
+P5.push(table(['Champ', 'Ce que vous saisissez'], [
+  ['Date', "Date de réception du pli"],
+  ['Heure', "Heure de réception"],
+  ["Nombre d'expéditions et destinataire", "Nombre de plis reçus et nom du collaborateur"],
+  ['Prévenue', "Personne prévenue, une fois le message Teams envoyé"],
+  ['Prise en charge', "Date et heure de la remise, complétées au moment du retrait"],
+], cols([0.34, 0.66])));
+P5.push(GAP(70));
+P5.push(note('Le suivi fait partie de la saisie', "Une fiche créée n'est pas une fiche terminée : le **statut doit être changé dans Welcome by** au moment où le pli est récupéré. Sans cela, les relances de fin de journée portent sur des plis déjà remis.", 'warn'));
+
+P5.push(H2('5', 'Remettre un pli à son destinataire'));
+P5.push(BUL("Rechercher le pli par le **nom du destinataire** dans la barre de recherche, puis cliquer sur `Remettre`."));
+P5.push(BUL("Le destinataire communique le **code de sécurité** reçu par mail : le saisir, puis cliquer sur `Vérifier le code`."));
+P5.push(BUL("Si l'option est activée, inviter le collaborateur à **signer** via le lien reçu dans son mail. La fenêtre de confirmation autorise alors la remise."));
+P5.push(BUL("Si une autre personne que le destinataire se présente, le destinataire peut être prévenu par mail depuis l'outil."));
+
+P5.push(H2('6', 'Enregistrer une expédition au départ'));
+P5.push(BUL("Cliquer sur `Expédition d'un colis` et remplir les champs requis."));
+P5.push(BUL("Cocher `préparé` si aucune préparation n'est nécessaire ; sinon cocher la case depuis la liste une fois la préparation faite."));
+P5.push(BUL("Cliquer sur `expédier` au moment de la remise au transporteur ou à la navette interne."));
+P5.push(GAP(70));
+P5.push(note('Notice de l\'outil', "Une notice d'utilisation de Welcome by est communiquée par la responsable d'agence ou la responsable qualité. Cette procédure ne remplace pas cette notice : elle fixe ce qui doit être saisi sur le site.", 'info'));
+
+/* ================= PROCÉDURE 6 — CONTRAVENTIONS / OOVOOM ================= */
+const P6 = [];
+P6.push(EYEBROW('PROCÉDURE INTERNE'));
+P6.push(TITLE('Contraventions et courrier de la flotte automobile'));
+P6.push(LEDE("Traiter les contraventions et les documents de la flotte automobile reçus par courrier, et les transmettre au prestataire OOVOOM."));
+P6.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P6.push(H2('1', 'Principe et délai'));
+P6.push(P("À l'arrivée du courrier, **mettre de côté** les contraventions et tous les documents concernant la flotte automobile, sans les distribuer dans les bannettes. Ils sont traités **l'après-midi**."));
+P6.push(note('Délai impératif', "Le traitement doit être **terminé le jour même**. Une contravention laissée en attente fait courir des majorations à la charge de l'entreprise.", 'stop'));
+
+P6.push(H2('2', 'Numériser les documents'));
+P6.push(BUL("Ouvrir le courrier et **classer les documents par date**."));
+P6.push(BUL("Scanner **toutes les pages**, sans exception, document par document."));
+P6.push(BUL("Toujours commencer par la première page, **tête en bas**."));
+P6.push(BUL("Le petit scanner Brother se trouve sur le bureau : appuyer sur `vers le PC` sur son écran, puis sur `démarrer`."));
+
+P6.push(H2('3', 'Renommer les fichiers'));
+P6.push(BUL("**Supprimer d'abord les anciens fichiers renommés**, pour ne pas mélanger deux traitements."));
+P6.push(BUL("Ouvrir le document scanné depuis le dossier `DOCUMENTS` de l'ordinateur."));
+P6.push(BUL("Relever la **plaque d'immatriculation** sur le document, la copier, puis renommer le fichier selon le tableau ci-dessous."));
+P6.push(table(['Type de document', 'Nom du fichier'], [
+  ['Forfait post-stationnement', 'FPS + plaque immatriculation'],
+  ['Avis de non-paiement', 'Avis de non-paiement + plaque immatriculation'],
+  ['Carte Total', 'Carte Total + plaque immatriculation'],
+  ['Carte grise', 'Carte grise + plaque immatriculation'],
+], cols([0.40, 0.60])));
+
+P6.push(H2('4', 'Transmettre à OOVOOM'));
+P6.push(P("Envoyer les documents renommés par mail au service flotte automobile d'OOVOOM."));
+P6.push(table(null, [
+  ['Adresse mail', 'auddika@oovoom.fr'],
+  ['Téléphone', '01 80 82 44 43'],
+  ['Adresse postale', 'SAS 30 Mile — OOVOOM, 59 boulevard Exelmans, 75016 Paris'],
+], cols([0.28, 0.72])));
+
+P6.push(H2('5', 'Cas de la vignette Crit’Air'));
+P6.push(BUL("Scanner la vignette comme les autres documents."));
+P6.push(BUL("L'envoyer par mail à OOVOOM."));
+P6.push(BUL("**Puis la renvoyer par courrier** à l'adresse postale ci-dessus : le mail ne suffit pas."));
+
+P6.push(H2('6', 'Archivage des originaux'));
+P6.push(BUL("Conserver les originaux, **classés par date**, dans l'enveloppe prévue — rangée dans les bannettes noires situées derrière le poste."));
+P6.push(BUL("Les garder **trois mois**."));
+P6.push(BUL("Détruire les enveloppes avec la machine prévue à cet effet."));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -430,4 +527,6 @@ function build(children, title, file) {
 build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx')
   .then(() => build(P2, 'Déverrouillage et manutention des cloisons mobiles', 'PRO-SG-002_Cloisons_mobiles.docx'))
   .then(() => build(P3, 'Gestion des accès au siège social', 'PRO-SG-003_Gestion_des_acces_au_siege.docx'))
-  .then(() => build(P4, 'Gestion du courrier, des plis et des colis', 'PRO-SG-004_Gestion_du_courrier.docx'));
+  .then(() => build(P4, 'Gestion du courrier, des plis et des colis', 'PRO-SG-004_Gestion_du_courrier.docx'))
+  .then(() => build(P5, 'Welcome by : visiteurs, plis et colis', 'PRO-SG-005_Welcome_by.docx'))
+  .then(() => build(P6, 'Contraventions et courrier de la flotte automobile', 'PRO-SG-006_Contraventions_flotte_auto.docx'));

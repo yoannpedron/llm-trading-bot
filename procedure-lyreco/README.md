@@ -11,8 +11,12 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 | Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
+| Welcome by : visiteurs, plis et colis | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 2 |
+| Contraventions et courrier de la flotte automobile | PRO-SG-006 | `PRO-SG-006_Contraventions_flotte_auto.docx` | 1 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 | Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
+| Welcome by : visiteurs, plis et colis | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 2 |
+| Contraventions et courrier de la flotte automobile | PRO-SG-006 | `PRO-SG-006_Contraventions_flotte_auto.docx` | 1 |
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
@@ -23,7 +27,7 @@ npm install docx && node build-procedures.js
 ```
 
 Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
-`P1` à `P4` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+`P1` à `P6` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
 les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
 ## Attention aux retouches dans Word
@@ -51,7 +55,9 @@ courses des plinthes et ordre des zones inchangés.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, complété par le guide
 d'utilisation VISOR V2.0.0.36 pour les libellés d'écrans, les statuts d'identifiant, la limite
 de dix groupes d'accès et le comportement de la suppression.
-Procédure courrier : cahier de consignes Pénélope pour Audika (mars 2026), sections « plis et
-colis à l'arrivée et au départ », « courrier la Poste », consignes d'ouverture et de fermeture.
+Procédures courrier, Welcome by et contraventions : cahier de consignes Pénélope pour Audika
+(mars 2026) — sections « plis et colis à l'arrivée et au départ », « courrier la Poste »,
+« gestion des contraventions », « gestion des prestataires », consignes d'ouverture et de
+fermeture, et tableau des interlocuteurs.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, repris à l'identique —
 écrans VISOR, convention de nommage et règle de validation des permissions inchangés.
