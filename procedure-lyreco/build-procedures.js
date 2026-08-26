@@ -339,6 +339,68 @@ P3.push(H2('4', "Suppression et révocation d'un accès"));
 P3.push(P("Ouvrir `Utilisateurs › Utilisateurs`, sélectionner la fiche du collaborateur concerné et cliquer sur `Supprimer`. Confirmer la suppression, puis répondre à la seconde question : VISOR demande si les identifiants rattachés doivent être supprimés eux aussi. Répondre **oui** pour un départ définitif, **non** pour réattribuer le badge à quelqu'un d'autre."));
 P3.push(CAPTURE("capture à insérer : suppression d'une fiche"));
 
+
+/* ================= PROCÉDURE 4 — COURRIER ================= */
+const P4 = [];
+P4.push(EYEBROW('PROCÉDURE INTERNE'));
+P4.push(TITLE('Gestion du courrier, des plis et des colis'));
+P4.push(LEDE("Réception, tri, distribution et expédition du courrier et des colis au siège social, poste d'accueil des services généraux."));
+P4.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+P4.push(H2('1', 'Rythme de la journée'));
+P4.push(table(['Horaire', 'Ce qui est attendu'], [
+  ['9h00 – 9h30', "Récupérer le courrier à l'accueil principal"],
+  ['9h30 et 11h30', 'Passages du matin à l’accueil principal'],
+  ['10h30 – 11h00', 'Courrier trié, tamponné et distribué dans les bannettes'],
+  ['15h00 et 16h00', "Passages de l'après-midi, dépôt du courrier au départ"],
+  ['Avant 16h00', "Pochette Affranchigo déposée à l'accueil principal"],
+  ['Fin de journée', 'Plis et colis non récupérés rangés dans le local des services généraux'],
+], cols([0.24, 0.76])));
+
+P4.push(H2('2', "Courrier à l'arrivée"));
+P4.push(BUL("Récupérer le courrier à l'accueil principal entre 9h00 et 9h30."));
+P4.push(BUL("Trier et **tamponner** le courrier, en ajoutant les preuves de dépôt (avis de réception) à la date du jour."));
+P4.push(BUL("Répartir en deux catégories : **nominatif** et **non nominatif** portant un nom de service."));
+P4.push(BUL("Un courrier qui n'est ni l'un ni l'autre est ouvert pour identifier le destinataire, qui est ensuite prévenu."));
+P4.push(BUL("Déposer le courrier dans les bannettes prévues, **avant 10h30 – 11h00**, et prévenir les personnes concernées par Teams."));
+P4.push(BUL("Les courriers publicitaires ne sont pas distribués : ils sont jetés."));
+P4.push(GAP(60));
+P4.push(note('Ne jamais ouvrir', "Ces courriers sont tamponnés puis transmis tels quels : service **conformité**, service **RH**, mention **« confidentiel »**, **recommandé retour expéditeur**, plis de la **Direction Partenaire et Affaires Publiques**.", 'stop'));
+
+P4.push(H2('3', "Plis et colis à l'arrivée"));
+P4.push(BUL("L'accueil principal signale l'arrivée d'un pli ou d'un colis. Descendre le chercher, puis prévenir le collaborateur par Teams — un message type est disponible."));
+P4.push(BUL("**Enregistrer systématiquement dans Welcome by** : date, heure, nombre d'expéditions et destinataire, personne prévenue, prise en charge (date et heure)."));
+P4.push(BUL("Le pli peut être conservé une journée au service généraux. En fin de journée, relancer par Teams les collaborateurs qui ne sont pas venus, puis déposer les plis restants dans le local prévu."));
+P4.push(H3('Remise au destinataire'));
+P4.push(BUL("Rechercher le pli par le nom du destinataire dans Welcome by, puis cliquer sur `Remettre`."));
+P4.push(BUL("Toute remise se fait **contre code sécurisé et signature** : le destinataire communique le code reçu par mail, saisir ce code puis `Vérifier le code`."));
+P4.push(BUL("Si l'option est activée, inviter le collaborateur à signer via le lien reçu dans son mail. La confirmation affichée autorise la remise."));
+P4.push(BUL("Si une autre personne que le destinataire se présente, prévenir le destinataire par mail avant de remettre le pli."));
+P4.push(BUL("Ne pas oublier de **changer le statut dans Welcome by** une fois le pli récupéré."));
+P4.push(H3('Colis particuliers'));
+P4.push(BUL("**Colis abîmé** : vérifier l'état avant d'accepter. Si le colis est endommagé, le prendre en photo, le refuser et informer le responsable des services généraux par mail."));
+P4.push(BUL("**Colis lourd ou volumineux** : utiliser le chariot prévu et l'ascenseur de service, sans passer par le hall principal. Contacter le destinataire, qui vient le réceptionner."));
+P4.push(BUL("**Colis non nominatif** : {{règle à trancher avec les services généraux}}"));
+
+P4.push(H2('4', "Plis d'huissier"));
+P4.push(P("Un pli d'huissier est un acte juridique remis par un huissier de justice : assignation, sommation de payer, signification d'une décision. L'accueil principal appelle, le pli est récupéré puis déposé dans la bannette **Direction Générale**."));
+P4.push(note('Traçabilité obligatoire', "Tout pli d'huissier est enregistré dans Welcome by, sans exception.", 'warn'));
+
+P4.push(H2('5', 'Courrier, plis et colis au départ'));
+P4.push(BUL("Le courrier simple et les **LRAR** sont placés dans la pochette **Affranchigo** et déposés à l'accueil principal **avant 16h00**. À défaut de pochette Affranchigo, utiliser une pochette rose portant la mention « Affranchigo »."));
+P4.push(BUL("**Tous les LRAR**, à l'arrivée comme au départ, sont notés dans Welcome by."));
+P4.push(BUL("La navette interne récupère les colis au départ plusieurs fois par semaine. Déposer les plis à côté du bureau, **sans les mélanger avec les plis à l'arrivée**."));
+P4.push(H3('Enregistrer un départ dans Welcome by'));
+P4.push(BUL("Cliquer sur `Expédition d'un colis` et remplir les champs requis."));
+P4.push(BUL("Cocher `préparé` si le pli ne demande aucune préparation ultérieure ; sinon le faire depuis la liste une fois la préparation terminée."));
+P4.push(BUL("Cliquer sur `expédier` au moment de la remise au transporteur."));
+
+P4.push(H2('6', 'Cas particuliers et interlocuteurs'));
+P4.push(BUL("**Flotte automobile et contraventions** : mettre ce courrier de côté dès l'arrivée et le traiter l'après-midi, **le jour même**, selon la procédure dédiée (scan, envoi à OOVOOM, originaux classés et conservés trois mois)."));
+P4.push(BUL("**Courrier adressé au responsable des services généraux** : déposé sur son bureau, avec information directe si nécessaire."));
+P4.push(BUL("**Direction Générale et membres de la Direction** : passer par l'assistante, **Mme Marjorie Grand**."));
+P4.push(BUL("**En cas de difficulté sur un courrier** : solliciter le responsable des services généraux."));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -367,4 +429,5 @@ function build(children, title, file) {
 
 build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx')
   .then(() => build(P2, 'Déverrouillage et manutention des cloisons mobiles', 'PRO-SG-002_Cloisons_mobiles.docx'))
-  .then(() => build(P3, 'Gestion des accès au siège social', 'PRO-SG-003_Gestion_des_acces_au_siege.docx'));
+  .then(() => build(P3, 'Gestion des accès au siège social', 'PRO-SG-003_Gestion_des_acces_au_siege.docx'))
+  .then(() => build(P4, 'Gestion du courrier, des plis et des colis', 'PRO-SG-004_Gestion_du_courrier.docx'));

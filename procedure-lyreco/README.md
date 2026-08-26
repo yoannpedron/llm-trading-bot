@@ -10,7 +10,9 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Commander sur le webshop Lyreco | PRO-ACH-001 | `PRO-ACH-001_Commander_sur_le_webshop_Lyreco.docx` | 1 |
 | Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
+| Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
+| Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
 
 Les `.pdf` du même nom sont les rendus de contrôle.
 
@@ -21,7 +23,7 @@ npm install docx && node build-procedures.js
 ```
 
 Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
-`P1`, `P2` et `P3` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+`P1` à `P4` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
 les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
 ## Attention aux retouches dans Word
@@ -49,5 +51,7 @@ courses des plinthes et ordre des zones inchangés.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, complété par le guide
 d'utilisation VISOR V2.0.0.36 pour les libellés d'écrans, les statuts d'identifiant, la limite
 de dix groupes d'accès et le comportement de la suppression.
+Procédure courrier : cahier de consignes Pénélope pour Audika (mars 2026), sections « plis et
+colis à l'arrivée et au départ », « courrier la Poste », consignes d'ouverture et de fermeture.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, repris à l'identique —
 écrans VISOR, convention de nommage et règle de validation des permissions inchangés.
