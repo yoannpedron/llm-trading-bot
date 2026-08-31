@@ -11,20 +11,20 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Déverrouillage et manutention des cloisons mobiles | PRO-SG-002 | `PRO-SG-002_Cloisons_mobiles.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 | Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
-| Welcome by : visiteurs, plis et colis | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 2 |
+| Welcome by : visiteurs et prestataires | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 1 |
 | Contraventions et courrier de la flotte automobile | PRO-SG-006 | `PRO-SG-006_Contraventions_flotte_auto.docx` | 1 |
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
-| Machine à café et consommables | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 1 |
+| Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
 | Gestion du courrier, des plis et des colis | PRO-SG-004 | `PRO-SG-004_Gestion_du_courrier.docx` | 2 |
-| Welcome by : visiteurs, plis et colis | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 2 |
+| Welcome by : visiteurs et prestataires | PRO-SG-005 | `PRO-SG-005_Welcome_by.docx` | 1 |
 | Contraventions et courrier de la flotte automobile | PRO-SG-006 | `PRO-SG-006_Contraventions_flotte_auto.docx` | 1 |
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
-| Machine à café et consommables | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 1 |
+| Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 
@@ -65,6 +65,8 @@ courses des plinthes et ordre des zones inchangés.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, complété par le guide
 d'utilisation VISOR V2.0.0.36 pour les libellés d'écrans, les statuts d'identifiant, la limite
 de dix groupes d'accès et le comportement de la suppression.
+Procédure machine à café : plan de nettoyage officiel De Jong Duke Lua et manuel utilisateur
+du constructeur (Lua CoEx, réf. 5DUCNS20M), complétés par les consignes du site.
 Procédures courrier, Welcome by et contraventions : cahier de consignes Pénélope pour Audika
 (mars 2026) — sections « plis et colis à l'arrivée et au départ », « courrier la Poste »,
 « gestion des contraventions », « gestion des prestataires », consignes d'ouverture et de

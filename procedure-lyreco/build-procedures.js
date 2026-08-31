@@ -349,8 +349,7 @@ P4.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accu
 
 P4.push(H2('1', 'Rythme de la journée'));
 P4.push(table(['Horaire', 'Ce qui est attendu'], [
-  ['9h00 – 9h30', "Récupérer le courrier à l'accueil principal"],
-  ['9h30 et 11h30', 'Passages du matin à l’accueil principal'],
+  ['9h30 et 11h30', "Récupérer le courrier à l'accueil principal — deux passages du facteur"],
   ['10h30 – 11h00', 'Courrier trié, tamponné et distribué dans les bannettes'],
   ['15h00 et 16h00', "Passages de l'après-midi, dépôt du courrier au départ"],
   ['Avant 16h00', "Pochette Affranchigo déposée à l'accueil principal"],
@@ -358,38 +357,34 @@ P4.push(table(['Horaire', 'Ce qui est attendu'], [
 ], cols([0.24, 0.76])));
 
 P4.push(H2('2', "Courrier à l'arrivée"));
-P4.push(BUL("Récupérer le courrier à l'accueil principal entre 9h00 et 9h30."));
+P4.push(BUL("Récupérer le courrier à l'accueil principal **à 9h30 puis à 11h30** : le facteur passe deux fois."));
 P4.push(BUL("Trier et **tamponner** le courrier, en ajoutant les preuves de dépôt (avis de réception) à la date du jour."));
+P4.push(BUL("Enregistrer les **recommandés et les colis dans Welcome by** dès la récupération."));
 P4.push(BUL("Répartir en deux catégories : **nominatif** et **non nominatif** portant un nom de service."));
 P4.push(BUL("Un courrier qui n'est ni l'un ni l'autre est ouvert pour identifier le destinataire, qui est ensuite prévenu."));
 P4.push(BUL("Déposer le courrier dans les bannettes prévues, **avant 10h30 – 11h00**, et prévenir les personnes concernées par Teams."));
-P4.push(BUL("Les courriers publicitaires ne sont pas distribués : ils sont jetés."));
 P4.push(GAP(60));
-P4.push(note('Ne jamais ouvrir', "Ces courriers sont tamponnés puis transmis tels quels : service **conformité**, service **RH**, mention **« confidentiel »**, **recommandé retour expéditeur**, plis de la **Direction Partenaire et Affaires Publiques**.", 'stop'));
+P4.push(note('Ne jamais ouvrir', "Ces courriers sont tamponnés puis transmis tels quels : service **conformité**, service **RH**, mention **« confidentiel »**, **recommandé retour expéditeur** (avec indication du service), plis de la **Direction Partenaire et Affaires Publiques**.", 'stop'));
 
 P4.push(H2('3', "Plis et colis à l'arrivée"));
-P4.push(BUL("L'accueil principal signale l'arrivée d'un pli ou d'un colis. Descendre le chercher, puis prévenir le collaborateur par Teams — un message type est disponible."));
+P4.push(BUL("L'accueil principal signale l'arrivée d'un pli ou d'un colis. Descendre le chercher, puis prévenir le collaborateur par Teams — un message type est disponible. Le colis reste **sur le bureau** en attendant son retrait."));
 P4.push(BUL("**Enregistrer systématiquement dans Welcome by** : date, heure, nombre d'expéditions et destinataire, personne prévenue, prise en charge (date et heure)."));
-P4.push(BUL("Le pli peut être conservé une journée au service généraux. En fin de journée, relancer par Teams les collaborateurs qui ne sont pas venus, puis déposer les plis restants dans le local prévu."));
+P4.push(BUL("Les colis peuvent être conservés une journée au service généraux. En fin de journée, relancer par Teams les collaborateurs qui ne sont pas venus, puis **ranger les colis restants dans le local prévu, pour les protéger**."));
 P4.push(H3('Remise au destinataire'));
-P4.push(BUL("Rechercher le pli par le nom du destinataire dans Welcome by, puis cliquer sur `Remettre`."));
-P4.push(BUL("Toute remise se fait **contre code sécurisé et signature** : le destinataire communique le code reçu par mail, saisir ce code puis `Vérifier le code`."));
-P4.push(BUL("Si l'option est activée, inviter le collaborateur à signer via le lien reçu dans son mail. La confirmation affichée autorise la remise."));
-P4.push(BUL("Si une autre personne que le destinataire se présente, prévenir le destinataire par mail avant de remettre le pli."));
-P4.push(BUL("Ne pas oublier de **changer le statut dans Welcome by** une fois le pli récupéré."));
+P4.push(BUL("Rechercher le pli par le nom du destinataire dans Welcome by, puis **valider la remise** dans l'outil. La signature n'est plus demandée."));
+P4.push(BUL("Une remise non validée laisse la fiche ouverte : les relances de fin de journée portent alors sur des plis déjà remis."));
 P4.push(H3('Colis particuliers'));
 P4.push(BUL("**Colis abîmé** : vérifier l'état avant d'accepter. Si le colis est endommagé, le prendre en photo, le refuser et informer le responsable des services généraux par mail."));
 P4.push(BUL("**Colis lourd ou volumineux** : utiliser le chariot prévu et l'ascenseur de service, sans passer par le hall principal. Contacter le destinataire, qui vient le réceptionner."));
-P4.push(BUL("**Colis non nominatif** : {{règle à trancher avec les services généraux}}"));
+P4.push(BUL("**Colis non nominatif** : il est **ouvert** pour identifier le destinataire."));
 
 P4.push(H2('4', "Plis d'huissier"));
-P4.push(P("Un pli d'huissier est un acte juridique remis par un huissier de justice : assignation, sommation de payer, signification d'une décision. L'accueil principal appelle, le pli est récupéré puis déposé dans la bannette **Direction Générale**."));
+P4.push(P("Un pli d'huissier est un acte juridique remis par un huissier de justice : assignation, sommation de payer, signification d'une décision. L'accueil principal appelle, le pli est récupéré puis déposé dans la bannette du **service juridique**, à l'attention de **Jade Pering**."));
 P4.push(note('Traçabilité obligatoire', "Tout pli d'huissier est enregistré dans Welcome by, sans exception.", 'warn'));
 
 P4.push(H2('5', 'Courrier, plis et colis au départ'));
-P4.push(BUL("Le courrier simple et les **LRAR** sont placés dans la pochette **Affranchigo** et déposés à l'accueil principal **avant 16h00**. À défaut de pochette Affranchigo, utiliser une pochette rose portant la mention « Affranchigo »."));
-P4.push(BUL("**Tous les LRAR**, à l'arrivée comme au départ, sont notés dans Welcome by."));
-P4.push(BUL("La navette interne récupère les colis au départ plusieurs fois par semaine. Déposer les plis à côté du bureau, **sans les mélanger avec les plis à l'arrivée**."));
+P4.push(BUL("Le courrier simple et les **LRAR** sont placés dans la pochette **Affranchigo** et déposés à l'accueil principal **avant 16h00**."));
+P4.push(BUL("La navette interne, qui dessert **les centres**, récupère les colis au départ plusieurs fois par semaine. Déposer les colis à côté du bureau, **sans les mélanger avec ceux à l'arrivée**."));
 P4.push(H3('Enregistrer un départ dans Welcome by'));
 P4.push(BUL("Cliquer sur `Expédition d'un colis` et remplir les champs requis."));
 P4.push(BUL("Cocher `préparé` si le pli ne demande aucune préparation ultérieure ; sinon le faire depuis la liste une fois la préparation terminée."));
@@ -398,23 +393,21 @@ P4.push(BUL("Cliquer sur `expédier` au moment de la remise au transporteur."));
 P4.push(H2('6', 'Cas particuliers et interlocuteurs'));
 P4.push(BUL("**Flotte automobile et contraventions** : mettre ce courrier de côté dès l'arrivée et le traiter l'après-midi, **le jour même**, selon la procédure dédiée (scan, envoi à OOVOOM, originaux classés et conservés trois mois)."));
 P4.push(BUL("**Courrier adressé au responsable des services généraux** : déposé sur son bureau, avec information directe si nécessaire."));
-P4.push(BUL("**Direction Générale et membres de la Direction** : passer par l'assistante, **Mme Marjorie Grand**."));
+P4.push(BUL("**Direction Générale et membres de la Direction** : passer par l'assistante, **Mme Virginie Grand**."));
 P4.push(BUL("**En cas de difficulté sur un courrier** : solliciter le responsable des services généraux."));
 
 
 /* ================= PROCÉDURE 5 — WELCOME BY ================= */
 const P5 = [];
 P5.push(EYEBROW('PROCÉDURE INTERNE'));
-P5.push(TITLE('Welcome by : visiteurs, plis et colis'));
-P5.push(LEDE("Enregistrer et suivre dans Welcome by les visiteurs, les prestataires, les plis et colis reçus et les expéditions au départ."));
+P5.push(TITLE('Welcome by : visiteurs et prestataires'));
+P5.push(LEDE("Enregistrer et suivre dans Welcome by les visiteurs et les prestataires reçus au poste des services généraux."));
 P5.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
 
 P5.push(H2('1', 'Ce que Welcome by doit contenir'));
-P5.push(P("Welcome by est le registre du poste d'accueil. Trois familles d'évènements y sont saisies **sans exception** :"));
-P5.push(BUL("les **visiteurs et prestataires**, à leur arrivée et à leur départ ;"));
-P5.push(BUL("les **plis et colis reçus**, jusqu'à leur remise au destinataire ;"));
-P5.push(BUL("les **expéditions au départ**, jusqu'à la remise au transporteur."));
-P5.push(P("Les **LRAR** et les **plis d'huissier** y sont enregistrés dans tous les cas, à l'arrivée comme au départ."));
+P5.push(P("Welcome by est le registre du poste. Deux familles d'évènements y sont saisies **sans exception** :"));
+P5.push(BUL("les **visiteurs et prestataires** reçus par les services généraux, à leur arrivée et à leur départ — la présente procédure ;"));
+P5.push(BUL("les **plis, colis, recommandés et expéditions**, traités dans la procédure de gestion du courrier."));
 
 P5.push(H2('2', 'Enregistrer un visiteur'));
 P5.push(BUL("Ouvrir l'onglet `Visiteur`."));
@@ -424,33 +417,8 @@ P5.push(BUL("Pour plusieurs visiteurs, cliquer sur `Nouveau visiteur` autant de 
 P5.push(BUL("Si l'adresse de la personne visitée est enregistrée, elle est prévenue automatiquement. Une autre personne peut être mise en copie ; décocher la case pour n'envoyer aucun mail."));
 
 P5.push(H2('3', 'Suivre un prestataire'));
-P5.push(P("Le prestataire est accueilli au rez-de-chaussée, accompagné pendant son intervention puis raccompagné à la sortie. Son **arrivée et son heure de départ sont enregistrées dans Welcome by** : c'est la trace de son passage sur le site."));
+P5.push(P("Le prestataire est accueilli au rez-de-chaussée, accompagné pendant son intervention — sauf s'il s'agit d'un **prestataire habituel** — puis raccompagné à la sortie. Son **arrivée et son heure de départ sont enregistrées dans Welcome by** : c'est la trace de son passage sur le site."));
 P5.push(P("À son départ, un compte rendu est envoyé par mail au responsable des services généraux : actions réalisées, résumé en quelques lignes, et mention indiquant si l'intervention est terminée ou si le prestataire doit revenir."));
-
-P5.push(H2('4', "Enregistrer un pli ou un colis à l'arrivée"));
-P5.push(P("Dès la récupération du pli à l'accueil principal, créer la fiche avec les informations suivantes :"));
-P5.push(table(['Champ', 'Ce que vous saisissez'], [
-  ['Date', "Date de réception du pli"],
-  ['Heure', "Heure de réception"],
-  ["Nombre d'expéditions et destinataire", "Nombre de plis reçus et nom du collaborateur"],
-  ['Prévenue', "Personne prévenue, une fois le message Teams envoyé"],
-  ['Prise en charge', "Date et heure de la remise, complétées au moment du retrait"],
-], cols([0.34, 0.66])));
-P5.push(GAP(70));
-P5.push(note('Le suivi fait partie de la saisie', "Une fiche créée n'est pas une fiche terminée : le **statut doit être changé dans Welcome by** au moment où le pli est récupéré. Sans cela, les relances de fin de journée portent sur des plis déjà remis.", 'warn'));
-
-P5.push(H2('5', 'Remettre un pli à son destinataire'));
-P5.push(BUL("Rechercher le pli par le **nom du destinataire** dans la barre de recherche, puis cliquer sur `Remettre`."));
-P5.push(BUL("Le destinataire communique le **code de sécurité** reçu par mail : le saisir, puis cliquer sur `Vérifier le code`."));
-P5.push(BUL("Si l'option est activée, inviter le collaborateur à **signer** via le lien reçu dans son mail. La fenêtre de confirmation autorise alors la remise."));
-P5.push(BUL("Si une autre personne que le destinataire se présente, le destinataire peut être prévenu par mail depuis l'outil."));
-
-P5.push(H2('6', 'Enregistrer une expédition au départ'));
-P5.push(BUL("Cliquer sur `Expédition d'un colis` et remplir les champs requis."));
-P5.push(BUL("Cocher `préparé` si aucune préparation n'est nécessaire ; sinon cocher la case depuis la liste une fois la préparation faite."));
-P5.push(BUL("Cliquer sur `expédier` au moment de la remise au transporteur ou à la navette interne."));
-P5.push(GAP(70));
-P5.push(note('Notice de l\'outil', "Une notice d'utilisation de Welcome by est communiquée par la responsable d'agence ou la responsable qualité. Cette procédure ne remplace pas cette notice : elle fixe ce qui doit être saisi sur le site.", 'info'));
 
 /* ================= PROCÉDURE 6 — CONTRAVENTIONS / OOVOOM ================= */
 const P6 = [];
@@ -580,30 +548,68 @@ P8.push(note('Avant d’envoyer', "Relire : pas de faute, formulation profession
 /* ================= PROCÉDURE 9 — MACHINE À CAFÉ ================= */
 const P9 = [];
 P9.push(EYEBROW('PROCÉDURE INTERNE'));
-P9.push(TITLE('Machine à café et consommables'));
-P9.push(LEDE("Approvisionner les machines à café, suivre les consommables de la tisanerie et faire intervenir le prestataire en cas de panne."));
+P9.push(TITLE('Machine à café De Jong Duke Lua'));
+P9.push(LEDE("Surveiller les stocks, assurer le nettoyage quotidien et hebdomadaire de la machine et faire intervenir SOVEDIS en cas de panne."));
 P9.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
 
-P9.push(H2('1', 'Consommables à suivre'));
-P9.push(P("Les consommables de la tisanerie font partie des fournitures gérées par le poste : **café, thé, sucre, touillettes**."));
-P9.push(BUL("Vérifier le stock {{fréquence à définir}} et réapprovisionner avant rupture."));
-P9.push(BUL("La tisanerie doit être **propre et rangée** avant le départ, comme le poste de travail."));
-P9.push(BUL("Les fournitures de bureau et les consommables se commandent chez Lyreco : voir la procédure de commande."));
-P9.push(BUL("Fournisseur des consommables café : {{à compléter si différent de Lyreco}}"));
+P9.push(H2('1', 'Qui fait quoi'));
+P9.push(BUL("Le **remplissage de la machine** est assuré par les personnes chargées de l'entretien : le poste d'accueil **veille au stock**, il ne remplit pas."));
+P9.push(BUL("**Vérifier le stock tous les 3 jours** — café, thé, sucre, touillettes — et réapprovisionner avant rupture."));
+P9.push(BUL("Les fournitures et consommables se commandent chez Lyreco : voir la procédure de commande."));
+P9.push(BUL("**Capsules L'Or** : uniquement pour la salle de réunion France."));
+P9.push(BUL("La tisanerie doit être propre et rangée avant le départ, comme le poste de travail."));
 
-P9.push(H2('2', 'Panne ou entretien de la machine'));
-P9.push(P("L'entretien des machines à café est assuré par le prestataire **SOVEDIS**."));
+P9.push(H2('2', 'Nettoyage quotidien'));
+P9.push(P("À faire en fin de journée, avant l'extinction de la machine. Ouvrir la porte et placer la **clé de service** à l'intérieur de la porte."));
+P9.push(BUL("Placer un bac sous la sortie et lancer le **rinçage quotidien**. Répéter jusqu'à ce que l'eau sortante soit claire."));
+P9.push(BUL("Relever le bras doseur, retirer le bac à déchets, nettoyer le **bac d'égouttage** et le **bac à résidus**, puis les remettre en place et rabattre le bras."));
+P9.push(BUL("Décrocher le **porte-gobelets**, le nettoyer et le remettre sur ses points d'accrochage."));
+P9.push(BUL("Tirer le **bac d'égouttage** dans le sens de la flèche pour l'extraire et le nettoyer."));
+P9.push(BUL("**Sécher soigneusement** chaque élément avant de le remettre en place."));
+P9.push(BUL("Éteindre la machine, nettoyer la carrosserie et l'écran au chiffon humide, puis rallumer."));
+P9.push(GAP(60));
+P9.push(note('Produits', "Pastille **Suma café Tab** dissoute dans de l'eau chaude, trempage **15 minutes maximum**, puis rinçage à l'eau claire. Nettoyant de surface **pulvérisé sur le chiffon, jamais sur la machine**. Ni produit agressif, ni abrasif.", 'warn'));
+
+P9.push(H2('3', 'Nettoyage hebdomadaire du groupe café'));
+P9.push(P("Deux opérations complémentaires, à faire chaque semaine : le nettoyage manuel du groupe café (le « brewer ») et le cycle automatique avec pastille."));
+P9.push(...STEP(1, 'Déposer et rincer le groupe café'));
+P9.push(BUL("Détacher la sortie café du groupe, avec le tuyau et le bec."));
+P9.push(BUL("Repérer la **poignée de fixation** du groupe, la pousser **vers le haut** et, en la maintenant, tirer puis soulever le groupe hors de la machine."));
+P9.push(BUL("Vérifier que le **berceau** du groupe est propre : nettoyer le raccord d'eau et l'accouplement moteur."));
+P9.push(BUL("Rincer le groupe et les pièces déposées à l'**eau chaude claire**. Brosser l'intérieur des tuyaux et les becs de sortie, en insistant dans les angles."));
+P9.push(BUL("Reposer le groupe sur son berceau et **pousser fermement jusqu'au clic**, poignée de fixation en position basse. Remettre la sortie café en l'enfonçant à fond sur les becs."));
+P9.push(GAP(60));
+P9.push(note('Deux interdits', "**Ne jamais démonter le groupe café lui-même** : seule une personne formée peut intervenir dessus. Et **jamais de produit moussant ni abrasif** — eau chaude claire, éventuellement un détergent doux.", 'stop'));
+P9.push(...STEP(2, 'Lancer le cycle de nettoyage avec pastille'));
+P9.push(BUL("Ouvrir la porte : le **menu de service** s'affiche à l'écran."));
+P9.push(BUL("Appuyer sur **Nettoyage du groupe café**."));
+P9.push(BUL("Placer **une pastille de nettoyage** dans le groupe café, gants et lunettes de protection portés."));
+P9.push(BUL("Placer un bac ou un pichet d'un litre sous la sortie."));
+P9.push(BUL("Insérer la **clé de service** dans la porte, puis appuyer sur **Suivant** pour lancer le cycle."));
+P9.push(BUL("Le cycle dure **8 minutes** : ne jamais l'interrompre. S'il est interrompu, tout reprendre depuis le début."));
+P9.push(BUL("Retirer la clé de service, vider le bac."));
+P9.push(GAP(60));
+P9.push(note('La machine se bloque toute seule', "Sans nettoyage du groupe café, un message apparaît au bout de **7 jours** ; au bout de **9 jours, la distribution de café est désactivée**. Ne pas utiliser la pastille recommandée par le constructeur fait perdre la garantie sur les pièces concernées.", 'stop'));
+
+P9.push(H2('4', 'Périodicité'));
+P9.push(table(['Opération', 'Fréquence'], [
+  ['Rinçage, bacs, porte-gobelets, carrosserie et écran', 'Quotidienne'],
+  ['Dépose et rinçage du groupe café', 'Hebdomadaire'],
+  ['Cycle de nettoyage avec pastille', 'Hebdomadaire'],
+  ['Système de mixage et poubelle du meuble', 'Hebdomadaire'],
+  ['Nettoyage des canisters à la brosse sèche', 'Mensuelle'],
+  ['Circuit d’eau froide', 'Semestrielle, par le prestataire agréé'],
+], cols([0.62, 0.38])));
+
+P9.push(H2('5', 'Panne et intervention'));
 P9.push(table(null, [
   ['SOVEDIS — entretien des machines à café', '06 52 97 88 52'],
 ], cols([0.55, 0.45])));
-P9.push(GAP(70));
-P9.push(BUL("Signaler la panne à SOVEDIS en précisant l'étage, la machine concernée et le symptôme."));
-P9.push(BUL("Prévenir le responsable des services généraux."));
-P9.push(BUL("Signaler l'indisponibilité aux collaborateurs si l'immobilisation dure."));
-P9.push(BUL("Noter l'intervention : {{support de suivi à préciser — Tracker, fichier Excel ?}}"));
-P9.push(GAP(70));
-P9.push(note('Section à consolider', "Le cahier de consignes ne mentionne la machine à café que par le contact SOVEDIS et la liste des consommables. Les fréquences de contrôle, le fournisseur du café et le suivi des interventions restent à décrire par les services généraux.", 'info'));
-
+P9.push(GAP(60));
+P9.push(BUL("Signaler la panne à SOVEDIS en précisant l'étage, la machine concernée et le message affiché à l'écran."));
+P9.push(BUL("Prévenir le directeur des services généraux."));
+P9.push(BUL("Si l'immobilisation dure, **afficher l'indisponibilité** sur la machine pour éviter les sollicitations répétées."));
+P9.push(BUL("Noter l'intervention : {{support de suivi à préciser}}"));
 
 /* ================= FICHE — CONTACTS UTILES ================= */
 const F1 = [];
@@ -629,7 +635,7 @@ F1.push(table(null, [
   ['Sébastien BOURDON — directeur des services généraux', 'snrb@audika.com'],
   ['John BLAISE — gestionnaire des services généraux', 'jhbs@audika.com'],
   ['Services généraux — boîte du service', 'sgx@audika.com'],
-  ['Marjorie GRAND — assistante Direction Générale et membres de la Direction', '{{à compléter}}'],
+  ['Virginie GRAND — assistante Direction Générale et membres de la Direction', '{{à compléter}}'],
 ], cols([0.55, 0.45])));
 
 F1.push(H2('3', 'Services internes Audika'));
@@ -682,8 +688,7 @@ M1.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accu
 M1.push(H2('1', 'La journée en un coup d’œil'));
 M1.push(table(['Horaire', 'Ce qui doit être fait'], [
   ['8h30', "Prise de poste, ouverture de Teams, Outlook et Tracker, tournée des salles de réunion"],
-  ['9h00 – 9h30', "Récupération du courrier à l'accueil principal"],
-  ['9h30 et 11h30', 'Passages du matin'],
+  ['9h30 et 11h30', "Récupération du courrier à l'accueil principal, deux passages du facteur"],
   ['10h30 – 11h00', 'Courrier trié, tamponné et distribué'],
   ['Après-midi', 'Traitement des contraventions et du courrier de la flotte automobile'],
   ['15h00 et 16h00', 'Passages, dépôt du courrier au départ'],
@@ -696,7 +701,7 @@ M1.push(table(['Situation', 'Le réflexe'], [
   ['Commande Lyreco', "Vérifier le compte du centre **avant** de remplir le panier, et atteindre 75 € HT"],
   ['Courrier sensible', "Conformité, RH, « confidentiel », recommandé retour expéditeur, Direction Partenaire : tamponner, **ne jamais ouvrir**"],
   ['Pli ou colis reçu', "Enregistrer dans Welcome by, **puis changer le statut** au moment de la remise"],
-  ['Remise d’un pli', 'Contre code sécurisé et signature, jamais autrement'],
+  ['Remise d’un pli', 'Valider la remise dans Welcome by, sinon la fiche reste ouverte'],
   ['Colis abîmé', 'Photo, refus, information au directeur des services généraux'],
   ['Contravention', "Traitée **le jour même** ; la vignette Crit’Air repart aussi **par courrier**"],
   ['Badge d’accès', "Ne jamais présumer des permissions ; remise **en main propre** après test sur un lecteur"],
@@ -731,7 +736,7 @@ M1.push(table(['Réf.', 'Procédure'], [
   ['PRO-SG-002', 'Déverrouillage et manutention des cloisons mobiles'],
   ['PRO-SG-003', 'Gestion des accès au siège social'],
   ['PRO-SG-004', 'Gestion du courrier, des plis et des colis'],
-  ['PRO-SG-005', 'Welcome by : visiteurs, plis et colis'],
+  ['PRO-SG-005', 'Welcome by : visiteurs et prestataires'],
   ['PRO-SG-006', 'Contraventions et courrier de la flotte automobile'],
   ['PRO-SG-007', 'Accès aux parkings P1 et P2'],
   ['PRO-SG-008', 'Traitement des mails du poste d’accueil'],
