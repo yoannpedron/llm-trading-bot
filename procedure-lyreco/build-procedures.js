@@ -570,33 +570,25 @@ P9.push(BUL("Éteindre la machine, nettoyer la carrosserie et l'écran au chiffo
 P9.push(GAP(60));
 P9.push(note('Produits', "Pastille **Suma café Tab** dissoute dans de l'eau chaude, trempage **15 minutes maximum**, puis rinçage à l'eau claire. Nettoyant de surface **pulvérisé sur le chiffon, jamais sur la machine**. Ni produit agressif, ni abrasif.", 'warn'));
 
-P9.push(H2('3', 'Nettoyage hebdomadaire du groupe café'));
-P9.push(P("Deux opérations complémentaires, à faire chaque semaine : le nettoyage manuel du groupe café (le « brewer ») et le cycle automatique avec pastille."));
-P9.push(...STEP(1, 'Déposer et rincer le groupe café'));
-P9.push(BUL("Détacher la sortie café du groupe, avec le tuyau et le bec."));
-P9.push(BUL("Repérer la **poignée de fixation** du groupe, la pousser **vers le haut** et, en la maintenant, tirer puis soulever le groupe hors de la machine."));
-P9.push(BUL("Vérifier que le **berceau** du groupe est propre : nettoyer le raccord d'eau et l'accouplement moteur."));
-P9.push(BUL("Rincer le groupe et les pièces déposées à l'**eau chaude claire**. Brosser l'intérieur des tuyaux et les becs de sortie, en insistant dans les angles."));
-P9.push(BUL("Reposer le groupe sur son berceau et **pousser fermement jusqu'au clic**, poignée de fixation en position basse. Remettre la sortie café en l'enfonçant à fond sur les becs."));
+P9.push(H2('3', 'Cycle de nettoyage du groupe café'));
+P9.push(P("Le cycle est automatique, mais il s'interrompt en cours de route pour demander le **nettoyage manuel de l'infuseur**. Prévoir la clé de service, une pastille de nettoyage, un bac et du papier absorbant avant de commencer."));
+P9.push(BUL("Récupérer la **clé de service** dans le local ménage."));
+P9.push(BUL("Ouvrir puis refermer la machine : le **menu de maintenance** s'affiche à l'écran."));
+P9.push(BUL("Placer une **pastille de nettoyage** dans l'infuseur et un bac sous la sortie, puis lancer le nettoyage."));
+P9.push(BUL("**Quand la machine le demande** : ouvrir la machine, sortir l'infuseur — la pièce avec le **bouton vert** — et l'essuyer au papier absorbant pendant **une minute au minimum**."));
+P9.push(BUL("Remettre l'infuseur en place en le poussant **jusqu'au clic**, refermer la machine : le cycle se poursuit."));
+P9.push(BUL("Retirer la clé de service et vider le bac une fois le cycle terminé."));
 P9.push(GAP(60));
-P9.push(note('Deux interdits', "**Ne jamais démonter le groupe café lui-même** : seule une personne formée peut intervenir dessus. Et **jamais de produit moussant ni abrasif** — eau chaude claire, éventuellement un détergent doux.", 'stop'));
-P9.push(...STEP(2, 'Lancer le cycle de nettoyage avec pastille'));
-P9.push(BUL("Ouvrir la porte : le **menu de service** s'affiche à l'écran."));
-P9.push(BUL("Appuyer sur **Nettoyage du groupe café**."));
-P9.push(BUL("Placer **une pastille de nettoyage** dans le groupe café, gants et lunettes de protection portés."));
-P9.push(BUL("Placer un bac ou un pichet d'un litre sous la sortie."));
-P9.push(BUL("Insérer la **clé de service** dans la porte, puis appuyer sur **Suivant** pour lancer le cycle."));
-P9.push(BUL("Le cycle dure **8 minutes** : ne jamais l'interrompre. S'il est interrompu, tout reprendre depuis le début."));
-P9.push(BUL("Retirer la clé de service, vider le bac."));
+P9.push(note('Ne jamais interrompre le cycle', "Le cycle complet dure environ **8 minutes**. S'il est interrompu, la procédure doit être reprise depuis le début. Ne jamais démonter l'infuseur lui-même : seule une personne formée peut intervenir dessus.", 'stop'));
 P9.push(GAP(60));
-P9.push(note('La machine se bloque toute seule', "Sans nettoyage du groupe café, un message apparaît au bout de **7 jours** ; au bout de **9 jours, la distribution de café est désactivée**. Ne pas utiliser la pastille recommandée par le constructeur fait perdre la garantie sur les pièces concernées.", 'stop'));
+P9.push(note('La machine se bloque toute seule', "Sans nettoyage de l'infuseur, un message apparaît au bout de **7 jours** ; au bout de **9 jours, la distribution de café est désactivée**. Ne pas utiliser la pastille recommandée par le constructeur fait perdre la garantie sur les pièces concernées.", 'warn'));
 
 P9.push(H2('4', 'Périodicité'));
 P9.push(table(['Opération', 'Fréquence'], [
   ['Rinçage, bacs, porte-gobelets, carrosserie et écran', 'Quotidienne'],
-  ['Dépose et rinçage du groupe café', 'Hebdomadaire'],
-  ['Cycle de nettoyage avec pastille', 'Hebdomadaire'],
+  ['Cycle de nettoyage avec pastille et essuyage de l’infuseur', 'Hebdomadaire'],
   ['Système de mixage et poubelle du meuble', 'Hebdomadaire'],
+  ['Rinçage du groupe café à l’eau chaude, groupe déposé — prévu par le constructeur', '{{à confirmer avec SOVEDIS}}'],
   ['Nettoyage des canisters à la brosse sèche', 'Mensuelle'],
   ['Circuit d’eau froide', 'Semestrielle, par le prestataire agréé'],
 ], cols([0.62, 0.38])));
