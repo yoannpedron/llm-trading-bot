@@ -671,6 +671,74 @@ F1.push(table(['Nom', 'Fonction', 'Contact'], [
 F1.push(GAP(70));
 F1.push(note('Numéros d’urgence', "Le cahier de consignes laisse la table des urgences vide, à l'exception du centre antipoison. Les numéros ci-dessus sont les numéros nationaux ; si le site dispose d'un numéro de sécurité interne, il doit être ajouté ici.", 'warn'));
 
+
+/* ================= MÉMENTO ================= */
+const M1 = [];
+M1.push(EYEBROW('MÉMENTO'));
+M1.push(TITLE('L’essentiel du poste'));
+M1.push(LEDE("Les repères de la journée, les gestes à ne pas rater et les contacts à avoir sous la main. Le détail est dans les procédures listées au dos."));
+M1.push(META([['Version', '1.0'], ['Site', 'siège social'], ['Diffusion', 'accueil et services généraux']]));
+
+M1.push(H2('1', 'La journée en un coup d’œil'));
+M1.push(table(['Horaire', 'Ce qui doit être fait'], [
+  ['8h30', "Prise de poste, ouverture de Teams, Outlook et Tracker, tournée des salles de réunion"],
+  ['9h00 – 9h30', "Récupération du courrier à l'accueil principal"],
+  ['9h30 et 11h30', 'Passages du matin'],
+  ['10h30 – 11h00', 'Courrier trié, tamponné et distribué'],
+  ['Après-midi', 'Traitement des contraventions et du courrier de la flotte automobile'],
+  ['15h00 et 16h00', 'Passages, dépôt du courrier au départ'],
+  ['Avant 16h00', "Pochette Affranchigo déposée à l'accueil principal"],
+  ['Fin de journée', "Mails traités, colis au local, tisanerie et poste rangés, clés au local informatique"],
+], cols([0.22, 0.78])));
+
+M1.push(H2('2', 'Les gestes à ne pas rater'));
+M1.push(table(['Situation', 'Le réflexe'], [
+  ['Commande Lyreco', "Vérifier le compte du centre **avant** de remplir le panier, et atteindre 75 € HT"],
+  ['Courrier sensible', "Conformité, RH, « confidentiel », recommandé retour expéditeur, Direction Partenaire : tamponner, **ne jamais ouvrir**"],
+  ['Pli ou colis reçu', "Enregistrer dans Welcome by, **puis changer le statut** au moment de la remise"],
+  ['Remise d’un pli', 'Contre code sécurisé et signature, jamais autrement'],
+  ['Colis abîmé', 'Photo, refus, information au directeur des services généraux'],
+  ['Contravention', "Traitée **le jour même** ; la vignette Crit’Air repart aussi **par courrier**"],
+  ['Badge d’accès', "Ne jamais présumer des permissions ; remise **en main propre** après test sur un lecteur"],
+  ['Place de parking occupée', 'Photo avant de se garer ailleurs'],
+  ['Cloison mobile', "Aucun rail au sol : désolidariser du sol **avant** tout mouvement latéral, zones dans l'ordre 1 → 6"],
+  ['Anomalie de livraison', 'Réserve écrite précise sur le bon de livraison, signalement sous 48 h'],
+], cols([0.26, 0.74])));
+
+M1.push(H2('3', 'Où enregistrer quoi'));
+M1.push(table(['Outil', 'Ce qui doit y être saisi'], [
+  ['Welcome by', 'Visiteurs, prestataires, plis et colis reçus, LRAR, plis d’huissier, expéditions'],
+  ['Tracker + fichier Excel', 'Demandes des collaborateurs et suivi des interventions'],
+  ['VISOR', 'Utilisateurs, badges, groupes d’accès'],
+  ['Webshop Lyreco', 'Commandes de fournitures, par compte de centre'],
+  ['Sharvy', 'Inscription des plaques pour le parking P1'],
+], cols([0.26, 0.74])));
+
+M1.push(H2('4', 'Contacts immédiats'));
+M1.push(table(['Besoin', 'Contact'], [
+  ['Urgences', 'Pompiers 18 · Police 17 · SAMU 15 · Toutes urgences 112'],
+  ['Accueil principal', '06 33 68 52 80'],
+  ['Directeur des services généraux', 'Sébastien BOURDON — snrb@audika.com'],
+  ['Maintenance du bâtiment', 'SPIE — 06 80 22 32 14'],
+  ['Machines à café', 'SOVEDIS — 06 52 97 88 52'],
+  ['Flotte automobile', 'OOVOOM — auddika@oovoom.fr — 01 80 82 44 43'],
+  ['Fournitures', 'Lyreco — 0825 09 08 07'],
+], cols([0.30, 0.70])));
+
+M1.push(H2('5', 'Le détail, procédure par procédure'));
+M1.push(table(['Réf.', 'Procédure'], [
+  ['PRO-ACH-001', 'Commander sur le webshop Lyreco'],
+  ['PRO-SG-002', 'Déverrouillage et manutention des cloisons mobiles'],
+  ['PRO-SG-003', 'Gestion des accès au siège social'],
+  ['PRO-SG-004', 'Gestion du courrier, des plis et des colis'],
+  ['PRO-SG-005', 'Welcome by : visiteurs, plis et colis'],
+  ['PRO-SG-006', 'Contraventions et courrier de la flotte automobile'],
+  ['PRO-SG-007', 'Accès aux parkings P1 et P2'],
+  ['PRO-SG-008', 'Traitement des mails du poste d’accueil'],
+  ['PRO-SG-009', 'Machine à café et consommables'],
+  ['FIC-SG-001', 'Contacts utiles'],
+], cols([0.20, 0.80])));
+
 /* ================= GÉNÉRATION ================= */
 const numbering = {
   config: [
@@ -706,4 +774,5 @@ build(P1, 'Commander sur le webshop Lyreco', 'PRO-ACH-001_Commander_sur_le_websh
   .then(() => build(P7, 'Accès aux parkings P1 et P2', 'PRO-SG-007_Acces_parkings.docx'))
   .then(() => build(P8, 'Traitement des mails du poste d’accueil', 'PRO-SG-008_Traitement_des_mails.docx'))
   .then(() => build(P9, 'Machine à café et consommables', 'PRO-SG-009_Machine_a_cafe.docx'))
-  .then(() => build(F1, 'Contacts utiles', 'FIC-SG-001_Contacts_utiles.docx'));
+  .then(() => build(F1, 'Contacts utiles', 'FIC-SG-001_Contacts_utiles.docx'))
+  .then(() => build(M1, 'Mémento — l’essentiel du poste', 'MEM-SG-001_Memento.docx'));
