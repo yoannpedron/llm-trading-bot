@@ -1,0 +1,55 @@
+; ============================================================================
+; galaxy_proxy.ini — configuration facultative de la proxy Galaxy64.dll
+;
+; Renomme ce fichier en galaxy_proxy.ini et pose-le a cote de Galaxy64.dll,
+; dans le dossier du jeu. Sans lui, la proxy fonctionne en tout-automatique :
+; elle identifie les methodes a intercepter en lisant Galaxy64_o.dll.
+;
+; Il ne sert qu'a deux choses : diagnostiquer, et forcer la main au resolveur
+; sur un SDK qu'il n'arrive pas a lire.
+; ============================================================================
+
+[log]
+; Journal detaille : chaque etape du scan de signatures. Bavard.
+verbose=0
+
+; Ecrit la vtable complete de IStats et IUser dans galaxy_proxy.log, avec,
+; pour chaque slot, la chaine que la methode reference. C'est l'outil de
+; calibration : lance le jeu une fois avec ce reglage, lis le journal, et
+; epingle les index ci-dessous.
+dump_vtables=0
+
+[hook]
+; minhook (defaut) : detour du corps de la fonction dans Galaxy64_o.dll.
+;                    Intercepte tout appelant, meme ceux qui ne passent pas
+;                    par la vtable de l'objet.
+; vtable           : remplacement du pointeur dans la vtable. Plus discret,
+;                    n'ecrit aucun octet de code. A essayer si un anticheat
+;                    ou un overlay se plaint.
+mode=minhook
+
+[stats]
+; Index dans la vtable de IStats. -1 = resolution automatique.
+; Sur le SDK 1.123 verifie : SetAchievement=8, StoreStatsAndAchievements=10.
+set_achievement_index=-1
+store_index=-1
+
+[user]
+; Repondre true a SignedIn() et IsLoggedOn() quand le client GOG ne repond
+; pas. C'est la raison d'etre du proxy hors GOG Galaxy : sans cela, la propre
+; implementation de GOG sort immediatement sur
+; « SetAchievement: not signed in with Galaxy ».
+; Mets 0 pour desactiver le forcage (diagnostic).
+force_signed_in=1
+
+; Index dans la vtable de IUser. -1 = resolution automatique.
+; Sur le SDK 1.123 verifie : SignedIn=1, IsLoggedOn=18.
+; Attention : les en-tetes publics v1.148 annoncent IsLoggedOn=15. Ne
+; recopie pas un index depuis un en-tete, lis-le avec dump_vtables=1.
+signed_in_index=-1
+is_logged_on_index=-1
+
+[cache]
+; Rempli automatiquement : <version du SDK>/<methode>=<index>.
+; Purement informatif — la resolution est refaite a chaque lancement et ne
+; retombe sur ce cache que si le scan echoue.

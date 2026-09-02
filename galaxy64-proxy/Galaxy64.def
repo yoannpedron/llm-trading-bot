@@ -1,0 +1,114 @@
+; ============================================================================
+; Galaxy64.def — Exports de la proxy DLL
+;
+; Noms decores (mangled) MSVC x64 correspondant aux fonctions globales du SDK
+; GOG Galaxy. Le linker exporte exactement ces symboles, ce qui rend notre
+; DLL interchangeable avec l'originale.
+;
+; Verification faite sur une vraie Galaxy64.dll v1.123.0.0 : elle exporte 26
+; symboles, tous presents ci-dessous. Deux exports de cette liste n'existent
+; PAS en v1.123 mais apparaissent dans des versions plus recentes — la forme
+; legacy de Init() et Telemetry(). Les exporter quand meme ne coute rien : la
+; proxy les transmet si le symbole existe, et renvoie une valeur neutre
+; sinon.
+;
+; Un seul export de la v1.123 n'est pas repris ici : `load`, un symbole non
+; decore issu d'une bibliotheque statique tierce. Aucun jeu ne l'importe.
+;
+; Pour verifier sur TON jeu :
+;   dumpbin /exports Galaxy64_o.dll
+; Tout symbole present la-bas et absent ici empechera le jeu de demarrer.
+; ============================================================================
+
+LIBRARY "Galaxy64"
+
+EXPORTS
+    ; --- Cycle de vie ---
+
+    ; Init(const InitOptions&)
+    ?Init@api@galaxy@@YAXAEBUInitOptions@12@@Z
+
+    ; Init(const char*, const char*) — forme legacy, absente en v1.123
+    ?Init@api@galaxy@@YAXPEBD0@Z
+
+    ; Shutdown()
+    ?Shutdown@api@galaxy@@YAXXZ
+
+    ; ProcessData()
+    ?ProcessData@api@galaxy@@YAXXZ
+
+    ; GetError() -> const IError*
+    ?GetError@api@galaxy@@YAPEBVIError@12@XZ
+
+    ; --- Accesseurs d'interfaces ---
+    ; Tous transmettent le pointeur reel de Galaxy64_o.dll, Stats() et User()
+    ; compris. L'interception se fait par hooking a l'interieur de ces
+    ; objets, pas en substituant le pointeur (voir src/hooks.h).
+
+    ; Stats() -> IStats*   [methodes hookees : SetAchievement, StoreStatsAndAchievements]
+    ?Stats@api@galaxy@@YAPEAVIStats@12@XZ
+
+    ; User() -> IUser*     [methodes hookees : SignedIn, IsLoggedOn]
+    ?User@api@galaxy@@YAPEAVIUser@12@XZ
+
+    ; ListenerRegistrar() -> IListenerRegistrar*
+    ?ListenerRegistrar@api@galaxy@@YAPEAVIListenerRegistrar@12@XZ
+
+    ; Friends() -> IFriends*
+    ?Friends@api@galaxy@@YAPEAVIFriends@12@XZ
+
+    ; Matchmaking() -> IMatchmaking*
+    ?Matchmaking@api@galaxy@@YAPEAVIMatchmaking@12@XZ
+
+    ; Networking() -> INetworking*
+    ?Networking@api@galaxy@@YAPEAVINetworking@12@XZ
+
+    ; Utils() -> IUtils*
+    ?Utils@api@galaxy@@YAPEAVIUtils@12@XZ
+
+    ; Apps() -> IApps*
+    ?Apps@api@galaxy@@YAPEAVIApps@12@XZ
+
+    ; Storage() -> IStorage*
+    ?Storage@api@galaxy@@YAPEAVIStorage@12@XZ
+
+    ; CustomNetworking() -> ICustomNetworking*
+    ?CustomNetworking@api@galaxy@@YAPEAVICustomNetworking@12@XZ
+
+    ; Logger() -> ILogger*
+    ?Logger@api@galaxy@@YAPEAVILogger@12@XZ
+
+    ; Telemetry() -> ITelemetry* — absent en v1.123
+    ?Telemetry@api@galaxy@@YAPEAVITelemetry@12@XZ
+
+    ; Chat() -> IChat*
+    ?Chat@api@galaxy@@YAPEAVIChat@12@XZ
+
+    ; --- Fonctions GameServer (importees par GalaxyCSharpGlue.dll) ---
+
+    ; ServerNetworking() -> INetworking*
+    ?ServerNetworking@api@galaxy@@YAPEAVINetworking@12@XZ
+
+    ; InitGameServer(const InitOptions&)
+    ?InitGameServer@api@galaxy@@YAXAEBUInitOptions@12@@Z
+
+    ; ShutdownGameServer()
+    ?ShutdownGameServer@api@galaxy@@YAXXZ
+
+    ; ProcessGameServerData()
+    ?ProcessGameServerData@api@galaxy@@YAXXZ
+
+    ; GameServerUser() -> IUser*
+    ?GameServerUser@api@galaxy@@YAPEAVIUser@12@XZ
+
+    ; GameServerMatchmaking() -> IMatchmaking*
+    ?GameServerMatchmaking@api@galaxy@@YAPEAVIMatchmaking@12@XZ
+
+    ; GameServerNetworking() -> INetworking*
+    ?GameServerNetworking@api@galaxy@@YAPEAVINetworking@12@XZ
+
+    ; GameServerLogger() -> ILogger*
+    ?GameServerLogger@api@galaxy@@YAPEAVILogger@12@XZ
+
+    ; GameServerListenerRegistrar() -> IListenerRegistrar*
+    ?GameServerListenerRegistrar@api@galaxy@@YAPEAVIListenerRegistrar@12@XZ

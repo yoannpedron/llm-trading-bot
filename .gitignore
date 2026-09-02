@@ -37,3 +37,12 @@ $RECYCLE.BIN/
 *.zip
 *.tar.gz
 *.bak
+
+# Proxy Galaxy64
+# (le *.txt plus haut masquerait CMakeLists.txt)
+!galaxy64-proxy/CMakeLists.txt
+galaxy64-proxy/build/
+galaxy64-proxy/tests/test_resolver
+galaxy64-proxy/**/Galaxy64_o.dll
+galaxy64-proxy/**/galaxy_proxy.log
+galaxy64-proxy/**/galaxy_proxy.ini
