@@ -264,13 +264,27 @@ Parallel, Starfoil et Mosaic tombaient dans « rare » (nom argenté) alors que
 ce sont des foils pleine surface ; l'Ultimate recevait un arc-en-ciel alors
 que c'est un relief sans couleur.
 
-`src/lib/rarity.js` est désormais la seule table : onze paliers, chacun avec
-une **couverture** (rien, nom, illustration, illustration + nom, toute la
-surface) et une **finition** (argent, or, arc-en-ciel, motif, relief,
-platine, ghost), plus intensités et couleurs. `HoloCard` pose couverture et
-finition en attributs et les intensités en variables CSS ; `holo.css` ne
+`src/lib/rarity.js` est désormais la seule table : treize paliers, chacun
+décrit **zone par zone** (nom, illustration, bandeau des étoiles, bordures,
+carte entière, carte entière sauf la boîte de texte) avec une **finition par
+zone** (argent, or, arc-en-ciel, motif, relief, platine, ghost) et une
+texture éventuelle (diagonales Secret, scintillement). Une Ultra a
+l'illustration en holo et le nom en or sur la même carte : un seul palier ne
+pouvait pas le dire. `HoloCard` rend une couche par zone, `holo.css` ne
 connaît plus les raretés. `test/rarity.test.js` fixe le palier de chaque
-libellé réel de l'index, coquilles comprises (« PLatinum », « Cr », « 2 »).
+libellé réel de l'index, coquilles comprises, et les zones de chaque famille.
+
+**Le holo ne couvre « toute la carte » que pour les Parallel** (Starfoil,
+Shatterfoil, Mosaic, Duel Terminal). Starlight et Quarter Century couvrent
+tout sauf la boîte de texte ; Gold, Platinum, Ultimate et Collector's foilent
+les bordures mais pas le texte ; Super, Ultra, Secret ne touchent que
+l'illustration, les étoiles et, selon le cas, le nom ; une Rare n'a que le
+nom argenté. Sources : Yugipedia, TCGplayer. Vérifié à l'écran sur une
+planche de huit paliers rendus sur un vrai visuel (`$SP/holo-check.png`,
+fabriquée à la main — les masques d'anneaux de bordure y ont révélé un
+décalage : en CSS, une position de masque en pourcentage se rapporte à
+l'espace restant, pas au conteneur ; le calcul est commenté dans
+`holo.css`).
 
 Deux questions posées, deux réponses : les reflets sont **pertinents pour
 les cartes françaises** — la rareté est celle du tirage, identique dans

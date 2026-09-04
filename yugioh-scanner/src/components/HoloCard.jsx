@@ -28,11 +28,10 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
   }, [image]);
 
   const profile = rarityProfile(rarity);
-  const { coverage, finish } = profile;
-  const showName = coverage === 'name' || coverage === 'artname';
-  const showArt = coverage === 'art' || coverage === 'artname';
-  const showFull = coverage === 'full';
-  const showDiagonals = finish === 'rainbow' && (coverage === 'artname' || coverage === 'full');
+  // Une couche par zone foilée, chacune avec sa finition : une Ultra a
+  // l'illustration en holo et le nom en or, sur la même carte.
+  const layers = Object.entries(profile.zones);
+  const texturedZones = layers.map(([zone]) => zone);
 
   const setVars = useCallback((x, y) => {
     const element = frameRef.current;
@@ -85,8 +84,6 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
       // et la carte apparaît ensuite sans cérémonie — c'est ce qu'on voyait.
       className={`ygo-card${loaded ? ' ygo-card--revealed' : ''}`}
       data-rarity={profile.key}
-      data-coverage={coverage}
-      data-finish={finish}
       // Les intensités viennent du profil : le CSS ne connaît pas les raretés.
       style={{
         '--ygo-foil': profile.foil,
@@ -129,12 +126,22 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
           style={{ opacity: loaded ? 1 : 0, transition: 'opacity 320ms ease' }}
         />
 
-        {showName && <span data-layer className="ygo-card__foil ygo-card__foil--name" />}
-        {showArt && <span data-layer className="ygo-card__foil ygo-card__foil--art" />}
-        {showFull && <span data-layer className="ygo-card__foil ygo-card__foil--full" />}
-        {finish === 'pattern' && <span data-layer className="ygo-card__pattern" />}
-        {showDiagonals && <span data-layer className="ygo-card__diagonals" />}
-        {profile.sparkle && <span data-layer className="ygo-card__sparkles" />}
+        {layers.map(([zone, finish]) => (
+          <span
+            key={zone}
+            data-layer
+            data-finish={finish}
+            className={`ygo-card__foil ygo-card__foil--${zone}`}
+          />
+        ))}
+        {layers.some(([, finish]) => finish === 'pattern') && (
+          <span data-layer className="ygo-card__pattern" />
+        )}
+        {profile.texture === 'diagonals' &&
+          texturedZones.map((zone) => (
+            <span key={zone} data-layer className={`ygo-card__diagonals ygo-card__foil--${zone}`} />
+          ))}
+        {profile.texture === 'sparkle' && <span data-layer className="ygo-card__sparkles" />}
 
         <span data-layer className="ygo-card__glare" />
         <span data-layer className="ygo-card__sweep" />
