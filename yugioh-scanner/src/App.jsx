@@ -1,327 +1,185 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import Aurora from './components/Aurora.jsx';
-import CardStage from './components/CardStage.jsx';
-import ConditionPicker from './components/ConditionPicker.jsx';
+import DataPanel from './components/DataPanel.jsx';
 import HistoryTab from './components/HistoryTab.jsx';
-import PricePanel from './components/PricePanel.jsx';
-import RarityPicker from './components/RarityPicker.jsx';
-import Scanner from './components/Scanner.jsx';
-import SettingsPanel from './components/SettingsPanel.jsx';
-import { conditionPrice } from './lib/condition.js';
-import { chime, vibrate } from './lib/feedback.js';
-import { useCardScanner } from './lib/useCardScanner.js';
+import HoloCard from './components/HoloCard.jsx';
+import SniperView from './components/SniperView.jsx';
+import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
-import { useSettings } from './lib/useSettings.js';
+import { useSniper } from './lib/useSniper.js';
 
 const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
-const TABS = [
-  { id: 'scan', label: 'Scanner' },
-  { id: 'history', label: 'Historique' },
-];
-
-function Tabs({ tab, onTab, count, className = '' }) {
-  return (
-    <div className={`flex rounded-2xl border border-white/10 bg-black/40 p-1 ${className}`}>
-      {TABS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onTab(item.id)}
-          aria-current={tab === item.id}
-          className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition ${
-            tab === item.id ? 'bg-cyan/20 text-cyan' : 'text-muted hover:text-ink'
-          }`}
-        >
-          {item.label}
-          {item.id === 'history' && count > 0 && (
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
-              {count}
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Placeholder({ misses, modelReady }) {
-  return (
-    <div className="glass flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-3xl p-8 text-center lg:min-h-[420px]">
-      <div className="relative">
-        <div
-          className="h-28 w-20 rounded-lg border border-dashed border-white/25"
-          style={{ animation: 'halo-breathe 3.4s ease-in-out infinite' }}
-        />
-        <div className="absolute inset-0 rounded-lg bg-cyan/10 blur-xl" />
-      </div>
-
-      <div>
-        <p className="font-medium">En attente d’une carte</p>
-        <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
-          {modelReady
-            ? 'Alignez le titre dans le cadre du haut et le code d’extension dans celui de droite.'
-            : 'Chargement du modèle de reconnaissance…'}
-        </p>
-      </div>
-
-      {misses >= 2 && (
-        <p className="max-w-xs rounded-xl border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
-          Lecture difficile : rapprochez la carte, évitez les reflets directs et posez-la à plat.
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Une ligne d'historique redevient une sélection affichable. */
-const entryToSelection = (entry) => ({
-  key: entry.key,
-  card: {
-    id: entry.cardId,
-    name: entry.name,
-    image: entry.image,
-    images: [{ small: entry.imageSmall }],
-    rarities: [],
-  },
-  printing: {
-    setCode: entry.setCode,
-    setName: entry.setName,
-    rarity: entry.rarity,
-    rarityCode: entry.rarityCode,
-  },
-  condition: entry.condition,
-  via: null,
-});
-
 export default function App() {
-  const { settings, update, reset, sensitivity } = useSettings();
+  const sniper = useSniper();
+  const collection = useCollection();
 
   const [tab, setTab] = useState('scan');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rarity, setRarity] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [savedKey, setSavedKey] = useState(null);
 
-  const scanner = useCardScanner({
-    active: tab === 'scan' && !settingsOpen,
-    autoScan: settings.autoScan,
-    sensitivity,
-  });
-  const collection = useCollection({
-    persist: settings.keepHistory,
-    refreshOnLoad: settings.refreshOnLoad,
-  });
+  const scan = sniper.result;
 
-  const [selection, setSelection] = useState(null);
-  const [condition, setCondition] = useState(settings.defaultCondition);
-  const [trackedKey, setTrackedKey] = useState(null);
-  const revealRef = useRef(null);
-
-  /* Une identification arrive : elle remplace immédiatement l'affichage. */
+  /* Un code vient d'être résolu : une seule rareté se valide d'office. */
   useEffect(() => {
-    const found = scanner.result;
-    if (!found) return;
-
-    const printings = found.card.rarities ?? [];
-    setSelection({
-      key: `${found.card.id}-${found.setCode?.code ?? found.card.name}`,
-      card: found.card,
-      via: found.via,
-      setCode: found.setCode,
-      // Une seule rareté possible : validée d'office. Plusieurs : l'utilisateur
-      // choisit, la caméra ne voit pas l'holographie.
-      printing: printings.length === 1 ? printings[0] : null,
-    });
-    setCondition(settings.defaultCondition);
-
-    if (settings.sound) chime();
-    if (settings.haptics) vibrate();
-  }, [scanner.result]);
-
-  /* Carte et rareté connues : on enregistre, et la cote suit. */
-  useEffect(() => {
-    if (!selection?.card || !selection.printing) {
-      setTrackedKey(null);
+    if (!scan) {
+      setRarity(null);
+      setDetail(null);
+      setSavedKey(null);
       return;
     }
-    setTrackedKey(collection.track(selection.card, selection.printing, condition));
-    // `condition` est volontairement hors dépendances : un changement d'état
-    // passe par l'effet suivant. Le faire transiter par `track` compterait un
-    // scan de plus à chaque clic sur l'échelle d'usure.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selection?.card?.id,
-    selection?.printing?.setCode,
-    selection?.printing?.rarity,
-    collection.track,
-  ]);
+    setRarity(scan.rarities?.length === 1 ? scan.rarities[0] : null);
+  }, [scan]);
 
-  /* L'état change seul : on relève la cote sans rejouer un scan. */
+  /* La fiche complète — nom, texte et statistiques en français — arrive après
+     coup : la carte s'affiche sans l'attendre. */
   useEffect(() => {
-    if (trackedKey) collection.setCondition(trackedKey, condition);
-  }, [condition, trackedKey, collection.setCondition]);
+    const cardId = scan?.card?.id;
+    if (!cardId) return undefined;
 
-  /* Sur téléphone, la révélation est sous la caméra : on l'amène à l'écran. */
-  useEffect(() => {
-    if (!selection || tab !== 'scan') return;
-    if (window.matchMedia('(min-width: 1024px)').matches) return;
-    revealRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [selection?.key, tab]);
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
 
-  const openFromHistory = useCallback((entry) => {
-    const restored = entryToSelection(entry);
-    setSelection(restored);
-    setCondition(restored.condition ?? settings.defaultCondition);
-    setTab('scan');
-  }, [settings.defaultCondition]);
+    cardDetail(cardId, { language: 'fr' }, controller.signal)
+      .then((found) => !controller.signal.aborted && setDetail(found))
+      .catch((cause) => {
+        if (cause.name !== 'AbortError') setError(cause.message);
+      })
+      .finally(() => !controller.signal.aborted && setLoading(false));
 
-  const entry = trackedKey ? collection.entryFor(trackedKey) : null;
-  const printings = useMemo(() => selection?.card?.rarities ?? [], [selection]);
-  const estimated = conditionPrice(entry?.price, condition).estimated;
+    return () => controller.abort();
+  }, [scan?.card?.id]);
+
+  const validate = useCallback(() => {
+    if (!scan?.card || !rarity) return;
+    const key = collection.track(
+      {
+        id: scan.card.id,
+        name: detail?.name ?? scan.card.name,
+        image: detail?.image ?? `https://images.ygoprodeck.com/images/cards/${scan.card.id}.jpg`,
+        images: [
+          {
+            small:
+              detail?.image_small ??
+              `https://images.ygoprodeck.com/images/cards_small/${scan.card.id}.jpg`,
+          },
+        ],
+        type: detail?.type,
+        race: detail?.race,
+        attribute: detail?.attribute,
+        atk: detail?.atk,
+        def: detail?.def,
+        level: detail?.level,
+      },
+      {
+        setCode: scan.matchedCode,
+        setName: rarity.setName,
+        rarity: rarity.rarity,
+        rarityCode: rarity.rarityCode,
+      },
+    );
+    setSavedKey(key);
+  }, [scan, rarity, detail, collection]);
+
+  const cancel = useCallback(() => {
+    setSavedKey(null);
+    sniper.rescan();
+  }, [sniper]);
 
   return (
-    <div className="min-h-full">
-      <Aurora enabled={settings.aurora} />
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <Aurora enabled={!scan} />
 
-      <main className="safe-top mx-auto w-full max-w-6xl px-3 pt-6 pb-28 sm:px-6 sm:pb-12 lg:py-12">
-        <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.3em] text-cyan uppercase">
-              OCR · Tesseract.js
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-4xl">
-              Scanner&nbsp;
-              <span className="bg-gradient-to-r from-cyan via-violet to-amber bg-clip-text text-transparent">
-                Yu-Gi-Oh!
-              </span>
-            </h1>
-            <p className="mt-1 hidden max-w-xl text-sm text-muted sm:block">
-              Présentez une carte : le titre et le code d’extension sont lus à la volée, la carte
-              apparaît en haute définition et sa cote suit.
-            </p>
+      <header className="safe-top flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+        <div className="min-w-0">
+          <p className="font-mono text-[9px] tracking-[0.3em] text-cyan uppercase">
+            Sniper · code d’extension
+          </p>
+          <h1 className="text-base font-bold tracking-tight">
+            Scanner{' '}
+            <span className="bg-gradient-to-r from-cyan via-violet to-amber bg-clip-text text-transparent">
+              Yu-Gi-Oh!
+            </span>
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] text-muted"
+            title={
+              usingBackend()
+                ? 'Résolution par l’API Python (SQLite + rapidfuzz)'
+                : 'Résolution locale sur l’index embarqué — aucun serveur requis'
+            }
+          >
+            {usingBackend() ? 'API' : 'LOCAL'}
+          </span>
+          <div className="flex rounded-xl border border-white/10 bg-black/40 p-1">
+            {[
+              ['scan', 'Scanner'],
+              ['collection', `Collection${collection.entries.length ? ` ${collection.entries.length}` : ''}`],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                aria-current={tab === id}
+                className={`h-9 rounded-lg px-3 text-xs font-medium transition ${
+                  tab === id ? 'bg-cyan/20 text-cyan' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+        </div>
+      </header>
 
-          <div className="flex items-center gap-2">
-            <div className="glass rounded-2xl px-4 py-2 text-right">
-              <p className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">
-                Collection
-              </p>
-              <p className="text-xl font-bold tabular-nums sm:text-2xl">
-                {EURO.format(collection.total)}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Réglages"
-              className="glass grid h-12 w-12 place-items-center rounded-2xl transition hover:bg-white/10"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4m-1.4-8h2.8l.4 2.3q.8.3 1.5.7l2.1-1 1.4 2.4-1.7 1.5q.1.5.1 1t-.1 1l1.7 1.5-1.4 2.4-2.1-1q-.7.4-1.5.7l-.4 2.3h-2.8l-.4-2.3q-.8-.3-1.5-.7l-2.1 1-1.4-2.4 1.7-1.5q-.1-.5-.1-1t.1-1L3.1 6.4l1.4-2.4 2.1 1q.7-.4 1.5-.7z" />
-              </svg>
-            </button>
+      {tab === 'collection' ? (
+        <main className="rail min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+          <div className="mx-auto max-w-3xl">
+            <p className="mb-3 text-sm text-muted">
+              Valeur totale&nbsp;: <strong>{EURO.format(collection.total)}</strong>
+            </p>
+            <HistoryTab collection={collection} onOpen={() => setTab('scan')} />
           </div>
-        </header>
-
-        <Tabs
-          tab={tab}
-          onTab={setTab}
-          count={collection.entries.length}
-          className="mb-5 hidden sm:flex"
-        />
-
-        {tab === 'scan' ? (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <Scanner
-              scanner={scanner}
-              locked={Boolean(selection)}
-              compact={Boolean(selection)}
-              diagnostics={settings.diagnostics}
-              autoScan={settings.autoScan}
+        </main>
+      ) : scan ? (
+        /* Deux zones : le visuel en haut, les données en bas. En paysage et sur
+           écran large, elles se placent côte à côte plutôt que l'une sous l'autre. */
+        <main className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 pb-3 lg:grid-cols-2 lg:grid-rows-1 lg:items-center">
+          <div className="flex min-h-0 min-w-0 items-center justify-center py-2">
+            <HoloCard
+              image={
+                detail?.image ?? `https://images.ygoprodeck.com/images/cards/${scan.card.id}.jpg`
+              }
+              name={detail?.name ?? scan.card.name}
+              rarity={rarity?.rarity}
             />
-
-            <div ref={revealRef} className="flex scroll-mt-4 flex-col gap-4">
-              {selection ? (
-                <>
-                  <CardStage
-                    key={selection.key}
-                    card={selection.card}
-                    rarity={selection.printing?.rarity ?? null}
-                    via={selection.via}
-                    animations={settings.animations}
-                    holo={settings.holo}
-                  />
-
-                  <RarityPicker
-                    printings={printings}
-                    selected={selection.printing}
-                    onSelect={(printing) =>
-                      setSelection((current) => ({ ...current, printing }))
-                    }
-                  />
-
-                  {settings.askCondition && selection.printing && (
-                    <ConditionPicker
-                      value={condition}
-                      onSelect={setCondition}
-                      estimated={estimated}
-                    />
-                  )}
-
-                  {selection.printing ? (
-                    <PricePanel
-                      price={entry?.price ?? null}
-                      loading={collection.pending.has(trackedKey)}
-                      error={collection.errors.get(trackedKey) ?? null}
-                      card={selection.card}
-                      printing={selection.printing}
-                      condition={condition}
-                    />
-                  ) : (
-                    <p className="glass rounded-2xl px-4 py-3 text-sm text-muted">
-                      Choisissez la rareté ci-dessus pour afficher la cote.
-                    </p>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelection(null);
-                      scanner.clear();
-                    }}
-                    className="h-11 self-start rounded-xl border border-white/10 bg-white/5 px-4 text-sm transition hover:border-white/25 hover:bg-white/10"
-                  >
-                    Scanner une autre carte
-                  </button>
-                </>
-              ) : (
-                <Placeholder misses={scanner.misses} modelReady={scanner.modelReady} />
-              )}
-            </div>
           </div>
-        ) : (
-          <HistoryTab collection={collection} onOpen={openFromHistory} />
-        )}
 
-        <footer className="mt-10 text-center font-mono text-[11px] leading-relaxed text-muted/70">
-          Données cartes&nbsp;: YGOPRODeck · Cotes&nbsp;: Cardmarket, avec repli YGOPRODeck
-          <br />
-          OCR exécuté dans le navigateur — aucune image n’est envoyée à un serveur.
-        </footer>
-      </main>
-
-      {/* Sur téléphone, les onglets se posent sous le pouce. */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-abyss/85 px-3 pt-3 backdrop-blur-xl sm:hidden">
-        <Tabs tab={tab} onTab={setTab} count={collection.entries.length} />
-      </nav>
-
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        settings={settings}
-        onChange={update}
-        onReset={reset}
-      />
+          <DataPanel
+            scan={scan}
+            detail={detail}
+            loading={loading}
+            error={error}
+            rarity={rarity}
+            onRarity={setRarity}
+            onValidate={validate}
+            onCancel={cancel}
+            saved={Boolean(savedKey)}
+          />
+        </main>
+      ) : (
+        <main className="min-h-0 flex-1">
+          <SniperView sniper={sniper} />
+        </main>
+      )}
     </div>
   );
 }

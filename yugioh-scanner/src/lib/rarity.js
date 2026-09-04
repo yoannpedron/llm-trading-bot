@@ -85,3 +85,18 @@ export function sortRarities(printings) {
   };
   return [...printings].sort((a, b) => rank(a.rarity) - rank(b.rarity));
 }
+
+/**
+ * Palier visuel d'une rareté, tel que l'attend `holo.css`.
+ *
+ * Cinq paliers seulement : au-delà, les effets ne se distinguent plus à l'œil,
+ * et la carte devient illisible sous les reflets.
+ */
+export function rarityTier(rarity) {
+  const label = String(rarity ?? '');
+  if (/secret|ghost|starlight|quarter century|collector/i.test(label)) return 'secret';
+  if (/ultimate|ultra|gold|prismatic|platinum/i.test(label)) return 'ultra';
+  if (/super|shatterfoil|starfoil|mosaic/i.test(label)) return 'super';
+  if (/rare/i.test(label)) return 'rare';
+  return 'common';
+}

@@ -165,6 +165,112 @@ export function preprocessGray(gray, { clip = 0.02, autoInvert = true } = {}) {
   return { pixels, threshold, inverted };
 }
 
+/* ------------------------------------------------------------------ */
+/* Seuil adaptatif                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Images intégrales des valeurs et de leurs carrés.
+ *
+ * Elles permettent d'obtenir la moyenne et l'écart-type de n'importe quelle
+ * fenêtre en temps constant, quatre lectures suffisent. Sans elles, un seuil
+ * local coûterait `fenêtre²` opérations par pixel — inutilisable.
+ */
+export function integralImages(gray, width, height) {
+  const stride = width + 1;
+  const sum = new Float64Array(stride * (height + 1));
+  const squares = new Float64Array(stride * (height + 1));
+
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    let rowSquares = 0;
+    for (let x = 0; x < width; x += 1) {
+      const value = gray[y * width + x];
+      rowSum += value;
+      rowSquares += value * value;
+      const index = (y + 1) * stride + (x + 1);
+      sum[index] = sum[index - stride] + rowSum;
+      squares[index] = squares[index - stride] + rowSquares;
+    }
+  }
+
+  return { sum, squares, stride };
+}
+
+/**
+ * Binarisation de Sauvola.
+ *
+ * Le seuil d'Otsu est global : un seul reflet sur la moitié droite du code
+ * d'extension et cette moitié bascule entièrement en blanc. Sauvola calcule un
+ * seuil par pixel à partir de la moyenne et de l'écart-type de son voisinage —
+ *
+ *     T = m * (1 + k * (s / R - 1))
+ *
+ * — donc une zone localement claire relève son propre seuil au lieu d'être
+ * emportée par le reste de l'image. C'est le remède aux vernis brillants et aux
+ * éclairages inégaux, exactement ce qui met l'OCR en échec sur une carte.
+ */
+export function sauvolaThreshold(gray, width, height, { window, k = 0.2, range = 128 } = {}) {
+  // Une fenêtre de l'ordre de la demi-hauteur de la ligne couvre le fût d'une
+  // lettre et un peu de fond, ce qu'il faut pour estimer les deux populations.
+  const size = window ?? Math.max(15, Math.round(height / 2) | 1);
+  const radius = Math.max(1, (size - 1) >> 1);
+
+  const { sum, squares, stride } = integralImages(gray, width, height);
+  const out = new Uint8ClampedArray(gray.length);
+
+  for (let y = 0; y < height; y += 1) {
+    const top = Math.max(0, y - radius);
+    const bottom = Math.min(height - 1, y + radius);
+
+    for (let x = 0; x < width; x += 1) {
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width - 1, x + radius);
+      const count = (bottom - top + 1) * (right - left + 1);
+
+      const a = top * stride + left;
+      const b = top * stride + right + 1;
+      const c = (bottom + 1) * stride + left;
+      const d = (bottom + 1) * stride + right + 1;
+
+      const total = sum[d] - sum[b] - sum[c] + sum[a];
+      const totalSquares = squares[d] - squares[b] - squares[c] + squares[a];
+
+      const mean = total / count;
+      // La variance peut sortir très légèrement négative en virgule flottante.
+      const variance = Math.max(0, totalSquares / count - mean * mean);
+      const threshold = mean * (1 + k * (Math.sqrt(variance) / range - 1));
+
+      out[y * width + x] = gray[y * width + x] > threshold ? 255 : 0;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Les variantes de binarisation d'une même image, de la plus probable à la
+ * plus improbable.
+ *
+ * Aucune ne gagne à tous les coups : Otsu est net sur une carte bien éclairée,
+ * Sauvola sauve les reflets, et la polarité inverse rattrape les cartes à texte
+ * clair sur fond sombre quand l'heuristique d'auto-inversion se trompe — ce
+ * qu'elle fait d'autant plus facilement que la zone est petite. On les essaie
+ * dans l'ordre et on s'arrête dès qu'une lecture tombe sur une carte réelle.
+ */
+export function preprocessVariants(gray, width, height, { autoInvert = true } = {}) {
+  const otsu = preprocessGray(gray, { autoInvert });
+  const local = sauvolaThreshold(gray, width, height);
+  const localDark = darkRatio(local) > 0.5 ? invert(local) : local;
+
+  return [
+    { label: 'otsu', pixels: otsu.pixels },
+    { label: 'sauvola', pixels: localDark },
+    { label: 'otsu-inverse', pixels: invert(otsu.pixels) },
+    { label: 'sauvola-inverse', pixels: invert(localDark) },
+  ];
+}
+
 /**
  * Réécrit un canal unique dans un ImageData RGBA (opaque, gris).
  */
@@ -225,6 +331,40 @@ export function cropAndPreprocess(source, rect, { scale = UPSCALE, autoInvert = 
   context.putImageData(imageData, 0, 0);
 
   return { canvas, threshold, inverted };
+}
+
+/**
+ * Recadre une zone et renvoie ses variantes binarisées, prêtes pour l'OCR.
+ *
+ * @param {CanvasImageSource} source
+ * @param {{x:number,y:number,width:number,height:number}} rect
+ * @returns {Array<{label: string, canvas: HTMLCanvasElement}>}
+ */
+export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true } = {}) {
+  const width = Math.max(1, Math.round(rect.width * scale));
+  const height = Math.max(1, Math.round(rect.height * scale));
+
+  const base = document.createElement('canvas');
+  base.width = width;
+  base.height = height;
+
+  const context = base.getContext('2d', { willReadFrequently: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(source, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
+
+  const gray = toGrayscale(context.getImageData(0, 0, width, height));
+
+  return preprocessVariants(gray, width, height, { autoInvert }).map(({ label, pixels }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const target = canvas.getContext('2d');
+    const imageData = target.createImageData(width, height);
+    grayToImageData(pixels, width, height, imageData);
+    target.putImageData(imageData, 0, 0);
+    return { label, canvas };
+  });
 }
 
 /**

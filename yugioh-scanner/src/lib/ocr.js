@@ -28,12 +28,22 @@ const cleanPaths = Object.fromEntries(
   Object.entries(PATHS).filter(([, value]) => Boolean(value)),
 );
 
-const PROFILES = {
+export const PROFILES = {
   setCode: {
-    // Le code est une ligne unique, en capitales, sans le moindre caractère
-    // accentué : restreindre l'alphabet supprime d'un coup l'essentiel des
-    // hallucinations de Tesseract sur le bruit de la bordure.
-    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    // Bloc unique, et non « ligne unique ».
+    //
+    // PSM 7 suppose que l'image ne contient *que* la ligne à lire. Or la taille
+    // du viseur en pixels vidéo dépend de la hauteur de l'écran : sur un
+    // téléphone au conteneur court, le même cadre à l'écran couvre une bande
+    // 1,5 fois plus haute de l'image, et embarque la bordure du cadre de la
+    // carte. PSM 7 rend alors du vide, avec une confiance de zéro et sans la
+    // moindre erreur — une panne parfaitement silencieuse.
+    //
+    // Mesuré sur les deux cadrages : PSM 6 lit « RA03-FR001 » dans les deux,
+    // PSM 7 seulement dans le cadrage serré, PSM 3 et 11 dans aucun des deux.
+    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+    // Le code n'a ni minuscule ni accent : restreindre l'alphabet supprime
+    // l'essentiel des hallucinations sur le décor de la carte.
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
   },
   title: {
@@ -43,6 +53,13 @@ const PROFILES = {
     tessedit_char_whitelist:
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -'#&,.:!?()@",
   },
+  passcode: {
+    // Huit chiffres et rien d'autre. Retirer les lettres de l'alphabet supprime
+    // d'un coup toute la classe d'erreurs qui plombe le code d'extension : il
+    // devient impossible de lire « O » à la place de « 0 ».
+    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    tessedit_char_whitelist: '0123456789',
+  },
 };
 
 /** Ne demander que le texte : le HOCR et les blocs coûtent une sérialisation inutile. */
@@ -51,16 +68,31 @@ const TEXT_ONLY = { text: true, blocks: false, hocr: false, tsv: false };
 const workers = new Map();
 
 function startWorker(profile, onProgress) {
-  const promise = createWorker('eng', 1, {
-    ...cleanPaths,
-    logger: onProgress
-      ? (message) => {
-          if (message.status === 'loading tesseract core' || message.status.startsWith('loading lang')) {
-            onProgress(message.progress ?? 0);
-          }
+  const options = { ...cleanPaths };
+
+  // La clé `logger` n'est ajoutée que s'il y a vraiment quelque chose à
+  // journaliser : la passer à `undefined` écraserait le logger par défaut de
+  // Tesseract, qu'il appelle ensuite sans vérifier — et le worker meurt à la
+  // première image sur « logger is not a function ».
+  if (onProgress) {
+    options.logger = (message) => {
+      // Tesseract appelle ce rappel depuis son propre gestionnaire de messages.
+      // Une exception ici ne remonte donc pas à l'appelant : elle casse la
+      // réception, et la reconnaissance se met à rendre du vide sans erreur.
+      // D'où la valeur par défaut et le filet — tous les paquets ne portent pas
+      // de `status`.
+      try {
+        const status = message?.status ?? '';
+        if (status === 'loading tesseract core' || status.startsWith('loading lang')) {
+          onProgress(message.progress ?? 0);
         }
-      : undefined,
-  }).then(async (worker) => {
+      } catch {
+        // Un défaut de journalisation ne doit jamais coûter une lecture.
+      }
+    };
+  }
+
+  const promise = createWorker('eng', 1, options).then(async (worker) => {
     await worker.setParameters(PROFILES[profile]);
     return worker;
   });
@@ -76,12 +108,16 @@ export function getWorker(profile, onProgress) {
 
 /** Lance le téléchargement du modèle sans attendre le premier scan. */
 export function warmUp(onProgress) {
-  return Promise.all([getWorker('setCode', onProgress), getWorker('title')]);
+  return Promise.all([
+    getWorker('setCode', onProgress),
+    getWorker('title'),
+    getWorker('passcode'),
+  ]);
 }
 
 /**
  * Reconnaît une image déjà prétraitée.
- * @param {'setCode'|'title'} profile
+ * @param {'setCode'|'title'|'passcode'} profile
  * @param {CanvasImageSource|Blob|string} image
  * @returns {Promise<{text: string, confidence: number}>}
  */

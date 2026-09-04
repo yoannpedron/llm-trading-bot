@@ -4,3 +4,16 @@ dist/
 .env
 .env.local
 *.local
+
+# Index de cartes : régénéré au build depuis YGOPRODeck (voir scripts/build-index.mjs)
+public/card-index.json
+
+# Moteur Tesseract servi en local : uniquement pour les tests hors ligne,
+# l'application le charge depuis un CDN en production (voir src/lib/ocr.js).
+public/tess/
+
+# Base SQLite du backend, reconstruite par `python -m app.cli sync`
+backend/data/
+__pycache__/
+*.pyc
+.pytest_cache/

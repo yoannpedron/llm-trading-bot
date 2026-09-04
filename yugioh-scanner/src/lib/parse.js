@@ -192,6 +192,17 @@ export function extractSetCodes(raw) {
     push(buildCode({ prefix: match[1], ...splitSuffix(match[2]) }), 2);
   }
 
+  // Le tiret a pu être lu comme un espace, coupant le code en deux mots. On ne
+  // recolle que si la moitié droite commence par une région connue, sans quoi
+  // « DEF 2500 » deviendrait un code d'extension.
+  const words = text.split(' ');
+  for (let i = 0; i < words.length - 1; i += 1) {
+    if (!/^[A-Z]/.test(words[i]) || !REGIONS.includes(words[i + 1].slice(0, 2))) continue;
+    const glued = `${words[i]}-${words[i + 1]}`;
+    const parts = /^([A-Z0-9]{2,5})-([A-Z0-9]{2,6})$/.exec(glued);
+    if (parts) push(buildCode({ prefix: parts[1], ...splitSuffix(parts[2]) }), 1);
+  }
+
   for (const match of text.matchAll(CODE_WITHOUT_DASH)) {
     push(
       buildCode({
@@ -204,7 +215,49 @@ export function extractSetCodes(raw) {
     );
   }
 
+  // Les deux lectures possibles de la fin du préfixe (voir `prefixVariants`).
+  for (const candidate of [...found.values()]) {
+    for (const [rank, variant] of prefixVariants(candidate).entries()) {
+      if (rank === 0 || found.has(variant.code)) continue;
+      found.set(variant.code, { ...variant, score: candidate.score - rank * 0.1 });
+    }
+  }
+
   return [...found.values()].sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Les lectures possibles de la fin du préfixe.
+ *
+ * Les deux premiers caractères d'un préfixe sont toujours des lettres, mais les
+ * suivants peuvent être l'un ou l'autre : « BLAR » est tout lettres, « RA03 »
+ * finit par des chiffres. Un « 0 » lu « O » à cet endroit n'est donc pas
+ * corrigible par position — on ne sait pas ce qui est attendu.
+ *
+ * Plutôt que de deviner, on propose les deux lectures et on laisse la base
+ * trancher : celle qui existe gagne. C'est ce qui fait passer « RAO3-FR001 »
+ * d'une correspondance approchée à une correspondance exacte.
+ */
+function prefixVariants(candidate) {
+  const { prefix } = candidate;
+  if (prefix.length <= 2) return [candidate];
+
+  const head = prefix.slice(0, 2);
+  const tail = prefix.slice(2);
+  const variants = [candidate];
+
+  for (const rewritten of [asDigits(tail), asLetters(tail)]) {
+    if (rewritten === tail) continue;
+    const next = buildCode({
+      prefix: `${head}${rewritten}`,
+      region: candidate.region,
+      serial: candidate.serial,
+      number: candidate.number,
+    });
+    if (!variants.some((known) => known.code === next.code)) variants.push(next);
+  }
+
+  return variants;
 }
 
 /** Le meilleur code, ou `null`. */
@@ -236,6 +289,25 @@ export function extractTitle(raw) {
     .replace(/^[^A-Za-zÀ-ÿ0-9"'(]+/, '')
     .replace(/[^A-Za-zÀ-ÿ0-9.!?")\]]+$/, '')
     .trim();
+}
+
+/**
+ * Extrait le passcode : huit chiffres, en bas à gauche de la carte.
+ *
+ * Le profil OCR n'autorise que des chiffres, donc le texte reçu est déjà propre.
+ * Une lecture à sept chiffres est renvoyée telle quelle, sans rien inventer :
+ * compléter au hasard fabriquerait une clé fausse, et une clé fausse qui tombe
+ * par malchance sur une carte existante est bien pire qu'une absence de clé.
+ * C'est à l'appariement de tenter les complétions et de n'en retenir une que si
+ * elle est la seule à exister dans la base.
+ */
+export function extractPasscode(raw) {
+  const digits = String(raw ?? '').replace(/[^0-9]/g, '');
+
+  const exact = /(?:^|\D)(\d{8})(?:\D|$)/.exec(String(raw ?? ''));
+  if (exact) return exact[1];
+
+  return digits.length === 8 || digits.length === 7 ? digits : '';
 }
 
 /** Forme canonique pour comparer deux titres (casse, accents, ponctuation). */

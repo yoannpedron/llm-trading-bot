@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  extractPasscode,
   extractSetCode,
   extractSetCodes,
   extractTitle,
@@ -84,4 +85,35 @@ test('ignore les lignes sans texte exploitable', () => {
 test('mesure la ressemblance de titres malgré l’OCR', () => {
   assert.ok(titleSimilarity('Blue-Eyes VVhite Dragon', 'Blue-Eyes White Dragon') > 0.9);
   assert.ok(titleSimilarity('Dark Magician', 'Pot of Greed') < 0.5);
+});
+
+test('lit le passcode sans jamais en inventer un', () => {
+  assert.equal(extractPasscode('89631139'), '89631139');
+  assert.equal(extractPasscode('  89631139 \n'), '89631139');
+  // Sept chiffres : on rend la lecture telle quelle. Compléter au hasard
+  // fabriquerait une clé fausse — c'est à l'appariement de trancher.
+  assert.equal(extractPasscode('9631139'), '9631139');
+  // Trop court, trop long, ou vide : on préfère ne rien affirmer.
+  assert.equal(extractPasscode('1234'), '');
+  assert.equal(extractPasscode(''), '');
+  assert.equal(extractPasscode('ATK 2500'), '');
+});
+
+test('propose les deux lectures de la fin du préfixe', () => {
+  // Le 3ᵉ caractère d'un préfixe peut être une lettre (« BLAR ») ou un chiffre
+  // (« RA03 ») : aucune correction par position n'est possible là. On propose
+  // donc les deux et la base tranchera.
+  const codes = extractSetCodes('RAO3-FR001').map((entry) => entry.code);
+  assert.ok(codes.includes('RA03-FR001'));
+  // La lecture brute reste en tête : on ne réécrit pas d'autorité.
+  assert.equal(codes[0], 'RAO3-FR001');
+
+  // Un préfixe tout lettres n'a rien à réécrire.
+  assert.deepEqual(
+    extractSetCodes('BLAR-EN001').map((entry) => entry.code),
+    ['BLAR-EN001'],
+  );
+
+  // Les variantes ne fabriquent pas de code là où il n'y en a pas.
+  assert.deepEqual(extractSetCodes('ATK/3000 DEF/2500'), []);
 });
