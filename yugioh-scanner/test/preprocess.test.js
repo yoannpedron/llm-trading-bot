@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   binarize,
   darkRatio,
+  sharpness,
   integralImages,
   invert,
   otsuThreshold,
@@ -136,4 +137,61 @@ test('les variantes couvrent les deux polarités, sans doublon', () => {
   // Une variante et son inverse ne peuvent pas être identiques.
   assert.notDeepEqual(variants[0].pixels, variants[2].pixels);
   assert.deepEqual(invert(variants[0].pixels), variants[2].pixels);
+});
+
+test('la netteté distingue le net du flou, et résiste au bruit', () => {
+  const flouter = (source, rayon) => {
+    const out = new Uint8ClampedArray(source.length);
+    for (let y = 0; y < HEIGHT; y += 1) {
+      for (let x = 0; x < WIDTH; x += 1) {
+        let somme = 0;
+        let n = 0;
+        for (let dy = -rayon; dy <= rayon; dy += 1) {
+          for (let dx = -rayon; dx <= rayon; dx += 1) {
+            const yy = y + dy;
+            const xx = x + dx;
+            if (yy < 0 || yy >= HEIGHT || xx < 0 || xx >= WIDTH) continue;
+            somme += source[yy * WIDTH + xx];
+            n += 1;
+          }
+        }
+        out[y * WIDTH + x] = somme / n;
+      }
+    }
+    return out;
+  };
+
+  // Bruit déterministe : le test ne doit pas dépendre du tirage.
+  const bruiter = (source, amplitude) => {
+    const out = new Uint8ClampedArray(source.length);
+    let graine = 1;
+    for (let i = 0; i < source.length; i += 1) {
+      graine = (graine * 1103515245 + 12345) % 2147483648;
+      out[i] = source[i] + (graine / 2147483648 - 0.5) * amplitude;
+    }
+    return out;
+  };
+
+  const mesure = (image) => sharpness(image, WIDTH, HEIGHT);
+
+  const net = texte();
+  const netBruite = bruiter(net, 30);
+  const flou = flouter(net, 2);
+  const flouBruite = bruiter(flou, 30);
+
+  // Le flou fait chuter la note.
+  assert.ok(mesure(net) > mesure(flou) * 3, `${mesure(net)} vs ${mesure(flou)}`);
+
+  // Et surtout : le bruit ne la gonfle pas. C'est tout l'intérêt du seuil —
+  // une simple énergie de gradient classerait « flou + bruit » au-dessus de
+  // « net », et un garde-fou de netteté rejetterait alors les bonnes images.
+  assert.ok(
+    mesure(netBruite) > mesure(flouBruite) * 3,
+    `net+bruit ${mesure(netBruite)} doit dominer flou+bruit ${mesure(flouBruite)}`,
+  );
+  assert.ok(Math.abs(mesure(net) - mesure(netBruite)) / mesure(net) < 0.2, 'le bruit seul déplace peu la note');
+
+  // Un aplat n'a aucun contour ; une image minuscule ne fait pas planter.
+  assert.equal(mesure(new Uint8ClampedArray(WIDTH * HEIGHT).fill(128)), 0);
+  assert.equal(sharpness(new Uint8ClampedArray(4), 2, 2), 0);
 });

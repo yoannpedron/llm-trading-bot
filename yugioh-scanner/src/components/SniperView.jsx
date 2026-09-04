@@ -23,12 +23,15 @@ export default function SniperView({ sniper }) {
     toggleTorch,
     zoom,
     applyZoom,
+    focusAt,
     modelReady,
     modelProgress,
     reading,
     attempts,
     failure,
     crop,
+    sharpness,
+    minSharpness,
     frozenFrame,
   } = sniper;
 
@@ -52,12 +55,21 @@ export default function SniperView({ sniper }) {
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-black">
+      {/* Toucher l'image y fait la mise au point : sur une carte posée à plat,
+          l'appareil vise souvent le fond plutôt que l'inscription. */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
         className="h-full w-full object-cover"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          focusAt(
+            (event.clientX - rect.left) / rect.width,
+            (event.clientY - rect.top) / rect.height,
+          );
+        }}
       />
 
       {frozenFrame && (
@@ -86,7 +98,7 @@ export default function SniperView({ sniper }) {
             className="absolute left-1/2 -translate-x-1/2 text-center font-mono text-[11px] tracking-[0.18em] text-cyan uppercase"
             style={{ top: (size.height - height) / 2 - 28 }}
           >
-            Placez le code ici
+            Placez le code ici · touchez pour la mise au point
           </p>
 
           <p
@@ -95,6 +107,27 @@ export default function SniperView({ sniper }) {
           >
             {reading ? `« ${reading} »` : 'en attente de lecture…'}
           </p>
+
+          {/* Netteté : la mise au point est la première cause d'échec sur une
+              inscription de deux millimètres. L'indicateur dit à l'utilisateur
+              s'il doit bouger, plutôt que de le laisser insister à l'aveugle. */}
+          <div
+            className="absolute left-1/2 flex w-40 -translate-x-1/2 items-center gap-2"
+            style={{ top: (size.height + height) / 2 + 40 }}
+          >
+            <span className="font-mono text-[9px] tracking-[0.14em] text-white/50 uppercase">
+              Net
+            </span>
+            <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
+              <span
+                className="block h-full rounded-full transition-[width,background-color] duration-200"
+                style={{
+                  width: `${Math.min(100, (sharpness / (minSharpness * 8)) * 100)}%`,
+                  background: sharpness < minSharpness ? '#f59e0b' : '#22d3ee',
+                }}
+              />
+            </span>
+          </div>
         </div>
       )}
 

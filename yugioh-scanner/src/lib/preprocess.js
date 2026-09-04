@@ -272,6 +272,59 @@ export function preprocessVariants(gray, width, height, { autoInvert = true } = 
 }
 
 /**
+ * Seuil de magnitude Sobel en deçà duquel un contour est tenu pour du bruit.
+ *
+ * Un vrai bord d'encre sur fond clair produit une magnitude de plusieurs
+ * centaines ; le bruit d'un capteur de téléphone, quelques dizaines. Ce seuil
+ * est toute la différence entre une mesure de netteté et une mesure de bruit.
+ */
+export const EDGE_THRESHOLD = 100;
+
+/**
+ * Netteté, par la méthode de Tenengrad seuillée.
+ *
+ * Attention au piège : la simple énergie de gradient — la somme des écarts
+ * entre voisins — **mesure le bruit autant que la netteté**. Un capteur de
+ * téléphone en lumière faible ajoute un grain qui crée d'énormes variations
+ * locales, si bien qu'une image floue et bruitée obtient une note plus élevée
+ * qu'une image nette et propre. Mesuré ici :
+ *
+ *     énergie brute   net 0,057 · net+bruit 0,094 · flou+bruit 0,064
+ *     Tenengrad       net 2,53  · net+bruit 2,54   · flou+bruit 0,38
+ *
+ * On ne retient donc que les contours dont la magnitude Sobel dépasse
+ * `EDGE_THRESHOLD` : le bruit n'y arrive pas, l'encre oui. La note s'effondre
+ * dès que la mise au point se perd — ce qu'on cherche à détecter.
+ *
+ * @returns {number} 0 pour une image sans contour franc, quelques unités pour
+ *   du texte net occupant une bonne part de l'image
+ */
+export function sharpness(pixels, width, height, { threshold = EDGE_THRESHOLD } = {}) {
+  if (width < 3 || height < 3) return 0;
+
+  let total = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const top = (y - 1) * width + x;
+      const middle = y * width + x;
+      const bottom = (y + 1) * width + x;
+
+      const gx =
+        pixels[top + 1] + 2 * pixels[middle + 1] + pixels[bottom + 1] -
+        pixels[top - 1] - 2 * pixels[middle - 1] - pixels[bottom - 1];
+      const gy =
+        pixels[bottom - 1] + 2 * pixels[bottom] + pixels[bottom + 1] -
+        pixels[top - 1] - 2 * pixels[top] - pixels[top + 1];
+
+      const magnitude = Math.hypot(gx, gy);
+      if (magnitude > threshold) total += magnitude * magnitude;
+    }
+  }
+
+  return total / ((width - 2) * (height - 2)) / (255 * 255);
+}
+
+/**
  * Réécrit un canal unique dans un ImageData RGBA (opaque, gris).
  */
 export function grayToImageData(pixels, width, height, target) {
@@ -338,11 +391,18 @@ export function cropAndPreprocess(source, rect, { scale = UPSCALE, autoInvert = 
  *
  * @param {CanvasImageSource} source
  * @param {{x:number,y:number,width:number,height:number}} rect
- * @returns {Array<{label: string, canvas: HTMLCanvasElement}>}
+ * @returns {Array<{label: string, canvas: HTMLCanvasElement}>} porte aussi une
+ *   propriété `sharpness`, mesurée avant binarisation.
  */
 export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true } = {}) {
   const width = Math.max(1, Math.round(rect.width * scale));
   const height = Math.max(1, Math.round(rect.height * scale));
+
+  // La netteté se mesure sur un recadrage **1:1**, jamais sur l'agrandissement :
+  // l'interpolation bilinéaire adoucit précisément les contours dont on mesure
+  // la vigueur, et la note dépendrait alors du facteur d'échelle — donc de la
+  // résolution du capteur. Elle ne serait plus comparable d'un appareil à l'autre.
+  const focus = measureSharpness(source, rect);
 
   const base = document.createElement('canvas');
   base.width = width;
@@ -355,7 +415,7 @@ export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true 
 
   const gray = toGrayscale(context.getImageData(0, 0, width, height));
 
-  return preprocessVariants(gray, width, height, { autoInvert }).map(({ label, pixels }) => {
+  const variants = preprocessVariants(gray, width, height, { autoInvert }).map(({ label, pixels }) => {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -365,6 +425,25 @@ export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true 
     target.putImageData(imageData, 0, 0);
     return { label, canvas };
   });
+
+  // La netteté est mesurée sur le gris d'origine, avant binarisation : après,
+  // tous les bords sont francs et la mesure ne veut plus rien dire.
+  return Object.assign(variants, { sharpness: focus });
+}
+
+/** Netteté d'une zone, mesurée sans agrandissement. */
+function measureSharpness(source, rect) {
+  const width = Math.max(3, Math.round(rect.width));
+  const height = Math.max(3, Math.round(rect.height));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(source, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
+
+  return sharpness(toGrayscale(context.getImageData(0, 0, width, height)), width, height);
 }
 
 /**

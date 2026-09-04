@@ -5,19 +5,36 @@ import { recognize, shutdown, warmUp } from './ocr.js';
 import { cropVariants, grabFrame } from './preprocess.js';
 import { scanCode } from './scanApi.js';
 import { reticleRect, toVideoRect } from './viewport.js';
+import { ReadingVote } from './vote.js';
 
 /** Intervalle entre deux lectures. Une douchette de supermarché ne fait pas mieux. */
-const SCAN_INTERVAL_MS = 320;
-
-/** Zoom visé au démarrage : le code fait deux millimètres de haut sur la carte. */
-const TARGET_ZOOM = 2.5;
+const SCAN_INTERVAL_MS = 280;
 
 /**
- * Variantes de binarisation essayées à chaque tour, dans l'ordre.
- * Otsu suffit sur une carte bien éclairée ; Sauvola sauve les reflets du vernis,
- * qui sont la première cause d'échec sur une inscription aussi petite.
+ * Nombre de binarisations essayées par tour.
+ *
+ * Il y en a quatre — Otsu, Sauvola, et leurs polarités inverses — mais les
+ * essayer toutes sur la *même* image coûte quatre passes d'OCR pour une image
+ * qui, si elle est mauvaise, le restera pour les quatre. On en essaie donc deux
+ * par tour en faisant tourner le point de départ : les quatre sont couvertes en
+ * deux tours, sur deux images différentes, avec un reflet qui a bougé entre les
+ * deux.
  */
-const VARIANTS = [0, 1];
+const VARIANTS_PER_TICK = 2;
+const VARIANT_COUNT = 4;
+
+/**
+ * Netteté minimale sous laquelle on ne lance même pas l'OCR.
+ *
+ * Très bas volontairement : il ne s'agit pas de juger de la qualité mais
+ * d'écarter une image sans contenu — objectif obturé, cadre vide, mise au point
+ * partie à l'infini. Le reste est affaire de l'utilisateur, à qui l'indicateur
+ * de netteté donne le retour dont il a besoin.
+ *
+ * Mesuré sur trois cadrages réels : 0,172 net, 0,123 dégradé, 0,046 très
+ * dégradé mais encore lisible. Le seuil passe donc sous les trois.
+ */
+const MIN_SHARPNESS = 0.015;
 
 /**
  * Le viseur.
@@ -34,8 +51,9 @@ export function useSniper() {
   const videoRef = useRef(null);
   const trackRef = useRef(null);
   const busyRef = useRef(false);
-  const pendingRef = useRef(null);
   const abortRef = useRef(null);
+  const voteRef = useRef(new ReadingVote());
+  const variantOffsetRef = useRef(0);
 
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
@@ -49,6 +67,7 @@ export function useSniper() {
   const [attempts, setAttempts] = useState(0);
   const [failure, setFailure] = useState(null);
   const [crop, setCrop] = useState(null);
+  const [sharpness, setSharpness] = useState(0);
   const [result, setResult] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState(null);
 
@@ -78,8 +97,11 @@ export function useSniper() {
           audio: false,
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            // On demande le maximum : le viseur recadre ensuite dans l'image
+            // native, donc chaque pixel supplémentaire va directement à l'OCR.
+            // Le navigateur retombe seul sur ce que le capteur sait faire.
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
           },
         });
         if (cancelled) return stream.getTracks().forEach((track) => track.stop());
@@ -96,15 +118,24 @@ export function useSniper() {
 
         setTorch({ available: Boolean(capabilities.torch), on: false });
 
+        // Mise au point continue. À dix centimètres d'une inscription de deux
+        // millimètres, c'est la première cause d'échec, très loin devant le
+        // seuil de binarisation ou le choix de la police.
+        if (capabilities.focusMode?.includes('continuous')) {
+          await track
+            .applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+            .catch(() => {});
+        }
+
         if (capabilities.zoom) {
           const { min = 1, max = 1, step = 0.1 } = capabilities.zoom;
-          // Les unités varient d'un appareil à l'autre : certains rendent un
-          // multiplicateur (1 à 8), d'autres une échelle arbitraire (100 à 800).
-          // On vise donc un multiplicateur quand la borne basse vaut 1, et un
-          // quart de la course sinon.
-          const target = min <= 1 ? Math.min(max, TARGET_ZOOM) : min + (max - min) * 0.25;
-          await track.applyConstraints({ advanced: [{ zoom: target }] }).catch(() => {});
-          setZoom({ available: max > min, value: target, min, max, step: step || 0.1 });
+          // On ne force **pas** de zoom au démarrage. Sur la plupart des
+          // téléphones il est numérique : le capteur suréchantillonne puis
+          // ré-encode, ce qui rend l'image plus molle. Or le viseur recadre déjà
+          // lui-même dans l'image native — zoomer reviendrait à agrandir une
+          // première fois pour découper ensuite dans un agrandissement.
+          // Le curseur reste là pour qui en a besoin.
+          setZoom({ available: max > min, value: min, min, max, step: step || 0.1 });
         }
 
         setReady(true);
@@ -139,6 +170,23 @@ export function useSniper() {
     }
   }, [torch.on]);
 
+  /**
+   * Mise au point sur un point de l'image, en fractions [0, 1].
+   * Sur une carte posée à plat, l'appareil fait souvent le point sur le fond :
+   * pouvoir désigner l'endroit règle le problème en un geste.
+   */
+  const focusAt = useCallback(async (x, y) => {
+    const track = trackRef.current;
+    if (!track) return;
+    try {
+      await track.applyConstraints({
+        advanced: [{ pointsOfInterest: [{ x, y }], focusMode: 'single-shot' }],
+      });
+    } catch {
+      // Tous les appareils ne l'exposent pas ; l'absence n'est pas une erreur.
+    }
+  }, []);
+
   const applyZoom = useCallback(async (value) => {
     const track = trackRef.current;
     if (!track) return;
@@ -166,10 +214,30 @@ export function useSniper() {
       );
 
       const still = grabFrame(video);
-      const variants = cropVariants(still, rect, { scale: 2 });
+      // Agrandissement adapté : une capture 4K donne un viseur bien plus grand
+      // qu'une capture 1080p, et Tesseract n'aime ni les caractères minuscules
+      // ni les caractères démesurés.
+      const scale = Math.max(1.5, Math.min(4, 240 / rect.height));
+      const variants = cropVariants(still, rect, { scale });
 
-      for (const index of VARIANTS) {
-        const variant = variants[index];
+      setSharpness(variants.sharpness);
+
+      // Image sans contenu exploitable : l'OCR n'y trouverait rien et coûterait
+      // une seconde. On rend la main tout de suite, l'indicateur de netteté
+      // disant à l'utilisateur ce qu'il y a à corriger.
+      if (variants.sharpness < MIN_SHARPNESS) {
+        setReading('image trop floue');
+        setAttempts((count) => count + 1);
+        return;
+      }
+
+      // Deux binarisations par tour, en faisant tourner le point de départ pour
+      // couvrir les quatre polarités sur deux images successives.
+      const start = variantOffsetRef.current;
+      variantOffsetRef.current = (start + VARIANTS_PER_TICK) % VARIANT_COUNT;
+
+      for (let step = 0; step < VARIANTS_PER_TICK; step += 1) {
+        const variant = variants[(start + step) % VARIANT_COUNT];
         if (!variant) continue;
 
         // La vignette de ce qui part au moteur : sans elle, un échec de lecture
@@ -198,21 +266,18 @@ export function useSniper() {
         setFailure(null);
         if (resolved.status === 'no_code' || resolved.status === 'no_match') continue;
 
-        // Un code exact ou régional existe : rien à confirmer. Un approché doit
-        // sortir deux fois — un reflet ne se reproduit pas à l'identique.
+        // Exact ou régional : le code lu existe tel quel, rien à confirmer.
+        // Approché : il faut une deuxième lecture, sur une autre image.
         const certain = resolved.method === 'exact' || resolved.method === 'region';
-        if (certain || pendingRef.current === resolved.matchedCode) {
-          setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
-          setResult(resolved);
-          pendingRef.current = null;
-          // Le bip de la douchette : on sait que c'est lu sans quitter la carte
-          // des yeux. Les deux échouent en silence là où ils ne sont pas offerts.
-          chime();
-          vibrate();
-          return;
-        }
+        const { accepted } = voteRef.current.cast(resolved.matchedCode, { certain });
+        if (!accepted) return;
 
-        pendingRef.current = resolved.matchedCode;
+        setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
+        setResult(resolved);
+        // Le bip de la douchette : on sait que c'est lu sans quitter la carte
+        // des yeux. Les deux échouent en silence là où ils ne sont pas offerts.
+        chime();
+        vibrate();
         return;
       }
 
@@ -249,7 +314,8 @@ export function useSniper() {
   /** Relance la visée : l'image se dégèle et la boucle repart. */
   const rescan = useCallback(() => {
     abortRef.current?.abort();
-    pendingRef.current = null;
+    voteRef.current.reset();
+    variantOffsetRef.current = 0;
     setResult(null);
     setFrozenFrame(null);
     setReading('');
@@ -265,12 +331,15 @@ export function useSniper() {
     toggleTorch,
     zoom,
     applyZoom,
+    focusAt,
     modelReady,
     modelProgress,
     reading,
     attempts,
     failure,
     crop,
+    sharpness,
+    minSharpness: MIN_SHARPNESS,
     result,
     frozenFrame,
     rescan,
