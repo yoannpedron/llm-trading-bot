@@ -3,11 +3,11 @@
  *
  * Ce script existe pour une panne précise, restée invisible pendant toute la
  * vie du projet : `<SniperView>` est démonté puis remonté à chaque aller-retour
- * — onglet Collection, écran de résultat, « Pas ma carte ». React fabrique
+ * — onglet Inventaire, écran de résultat, « Ce n’est pas ma carte ». React fabrique
  * alors un nouvel élément `<video>` vide, alors que l'effet qui ouvre la caméra
  * ne se rejoue pas. Le flux restait attaché au premier élément, détruit depuis.
  *
- * Mesuré avant correction : après un simple aller-retour vers la Collection,
+ * Mesuré avant correction : après un simple aller-retour vers l'Inventaire,
  * `srcObject` absent, `videoWidth` à zéro, vidéo en pause, et **plus aucune
  * lecture n'aboutissait** — sans message, sans erreur console. Le scanner ne
  * marchait qu'une fois par chargement de page.
@@ -64,20 +64,20 @@ await page.goto(URL, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 30000 });
 console.log('démarrage            ', JSON.stringify(await flux()));
 
-// 1. Aller-retour par l'onglet Collection, sans avoir rien scanné : c'est le
+// 1. Aller-retour par l'onglet Inventaire, sans avoir rien scanné : c'est le
 //    chemin le plus court vers la panne.
-await page.getByRole('button', { name: /^Collection/ }).click();
+await page.getByRole('button', { name: /^Inventaire/ }).click();
 await page.waitForTimeout(400);
 await page.getByRole('button', { name: /^Scanner$/ }).click();
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 15000 });
-console.log('après la Collection  ', JSON.stringify(await flux()));
+console.log('après l’Inventaire   ', JSON.stringify(await flux()));
 
 const premier = await verrouille();
 console.log(`première lecture      ${premier ? 'aboutie' : 'ÉCHOUÉE'}`);
 etapes.push(premier);
 
 // 2. Retour depuis l'écran de résultat : second chemin de démontage.
-await page.getByRole('button', { name: /pas ma carte/i }).click();
+await page.getByRole('button', { name: /n’est pas ma carte/i }).click();
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 15000 });
 console.log('après un résultat    ', JSON.stringify(await flux()));
 

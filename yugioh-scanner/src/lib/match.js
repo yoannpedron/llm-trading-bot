@@ -478,14 +478,30 @@ function describe(index, candidate, matchedCode, method, confidence, positions) 
 /**
  * Codes de l'index qui commencent par ce que l'utilisateur a tapé.
  *
- * La saisie manuelle existe pour les cas où la caméra ne peut pas : pas de
- * caméra, carte abîmée, code effacé. Compléter pendant la frappe évite les
- * fautes de frappe (le code n'est jamais tapé en entier) et montre tout de
- * suite si le code existe.
+ * La saisie manuelle existe pour les cas où la caméra ne peut rien : pas de
+ * caméra, carte abîmée, code effacé. Compléter pendant la frappe évite la faute
+ * — on ne tape jamais le code en entier — et montre tout de suite si le code
+ * existe.
  *
- * La région tapée est conservée dans les propositions : quelqu'un qui tape
- * « RA03-FR0 » veut voir « RA03-FR001 », pas la forme anglaise. Tant que la
- * région n'est pas complète, on complète sur le préfixe seul.
+ * DEUX PIÈGES, TOUS DEUX RENCONTRÉS
+ *
+ * 1. **Le numéro tapé était ignoré.** L'index est bâti sur des clés SANS
+ *    région : « LOB-001 », « MRD-060 ». Une première version ne filtrait sur le
+ *    numéro que si la région faisait exactement deux lettres. Or les codes
+ *    anciens n'ont pas de région (« LOB-041 ») et certains n'en ont qu'une
+ *    (« PSV-E088 ») : dans ces cas la liste retombait sur « PRÉFIXE- » et
+ *    cessait de se resserrer au moment précis où l'utilisateur donnait le plus
+ *    d'information. Mesuré : 2 332 des 38 435 codes imprimés, soit 6 %,
+ *    n'apparaissaient jamais dans leurs propres propositions.
+ *
+ * 2. **Le code proposé pouvait ne pas exister.** Il était fabriqué en
+ *    insérant « EN » après le tiret de la clé. Sur « PSV-E088 », dont la lettre
+ *    de série fait partie de la clé, cela donnait « PSV-ENE088 » — une
+ *    référence introuvable, que l'utilisateur ne lira sur aucune carte.
+ *
+ * On cherche donc sur deux formes — avec et sans la tête de région tapée — et
+ * l'on affiche le code **tel qu'il est publié**, en n'y substituant la région
+ * saisie que lorsque le code publié en porte réellement une.
  *
  * @param {object} index résultat de `buildSearchIndex`
  * @param {string} typed saisie brute, casse et espaces libres
@@ -504,27 +520,67 @@ export function suggestSetCodes(index, typed, { limit = 6 } = {}) {
   const [, prefix, region = '', rest = ''] = parts;
   const hasDash = text.includes('-');
 
-  // Région complète : on cherche « PREFIXE-NUMERO » ; sinon « PREFIXE- » ou
-  // « PREFIXE » seul. Une région d'une lettre ne restreint rien : elle peut
-  // encore devenir n'importe laquelle.
-  let wanted = prefix;
-  if (hasDash) wanted += region.length === 2 ? `-${rest}` : '-';
+  // Les formes de clé compatibles avec ce qui est tapé, de la plus précise à
+  // la plus large. « PSV-E088 » : on essaie « PSV-088 » (région lue comme
+  // telle) et « PSV-E088 » (lettre appartenant à la clé).
+  const cibles = [];
+  if (!hasDash) {
+    cibles.push(prefix);
+  } else if (rest) {
+    cibles.push(`${prefix}-${rest}`);
+    if (region) cibles.push(`${prefix}-${region}${rest}`);
+  } else {
+    // Tiret tapé, rien après : une région seule ne peut rien resserrer,
+    // puisque les clés de l'index n'en portent pas. On garde le préfixe.
+    cibles.push(`${prefix}-`);
+    if (region) cibles.push(`${prefix}-${region}`);
+  }
 
   if (!index.sortedCodes) {
     index.sortedCodes = [...index.byCode.keys()].sort();
   }
 
-  const out = [];
+  const trouves = [];
+  const vues = new Set();
   for (const key of index.sortedCodes) {
-    if (!key.startsWith(wanted)) {
-      if (out.length > 0 && key > wanted) break;
-      continue;
-    }
+    if (!cibles.some((cible) => key.startsWith(cible))) continue;
+    if (vues.has(key)) continue;
+    vues.add(key);
+
     const position = [...index.byCode.get(key)][0];
     const card = index.cards[position];
-    const printed = region.length === 2 ? key.replace('-', `-${region}`) : key.replace('-', '-EN');
-    out.push({ code: printed, key, name: card.name });
-    if (out.length >= limit) break;
+    trouves.push({ code: codeProposable(index, key, region), key, name: card.name });
+    if (trouves.length >= limit) break;
   }
-  return out;
+  return trouves;
+}
+
+/**
+ * Le code à montrer pour une clé : celui qui est publié, régionalisé seulement
+ * si cela a un sens.
+ *
+ * L'utilisateur doit reconnaître la référence inscrite sur sa carte. On part
+ * donc d'un code réel de l'index, et l'on n'y substitue la région saisie que
+ * lorsque le code publié porte lui-même une région de deux lettres — ce qui
+ * exclut « DDS-005 » et « PSV-E088 », qui n'en ont pas.
+ */
+function codeProposable(index, key, region) {
+  const separateur = key.lastIndexOf('-');
+  const tete = separateur === -1 ? key : key.slice(0, separateur);
+  const queue = separateur === -1 ? '' : key.slice(separateur + 1);
+
+  // Une région ne s'insère que devant un numéro purement chiffré. C'est le cas
+  // de l'immense majorité des clés, et c'est la forme que porte la carte
+  // française : « LOB-001 » devient « LOB-FR001 ». Là où la queue commence par
+  // une lettre — « PSV-E088 », dont la lettre appartient à la clé — insérer
+  // « FR » fabriquerait « PSV-FRE088 », introuvable.
+  if (region.length === 2 && /^\d+$/.test(queue)) return `${tete}-${region}${queue}`;
+
+  // Sinon on montre un code réellement publié, pris dans l'index.
+  for (const position of index.byCode.get(key) ?? []) {
+    for (const printing of index.cards[position].printings) {
+      if (setCodeMatchKey(printing.setCode) === key) return String(printing.setCode).toUpperCase();
+    }
+  }
+  return key;
 }

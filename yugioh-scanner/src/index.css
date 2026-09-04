@@ -1,25 +1,122 @@
 @import 'tailwindcss';
 
-/* ------------------------------------------------------------------ */
-/* Jetons de thème                                                      */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  SYSTÈME DE DESIGN — « fiche d'inventaire »                           */
+/* ==================================================================== */
+/*
+ * Ce que l'application est vraiment : un instrument de relevé. On braque un
+ * téléphone sur une inscription de deux millimètres, on obtient une
+ * identification et une cote en euros, et l'on constitue un inventaire
+ * exportable. Ce n'est pas un jeu — c'est un outil qui manipule des chiffres
+ * dont dépend la valeur d'un classeur.
+ *
+ * L'interface le dit désormais. Trois principes, et tout le reste en découle :
+ *
+ *  1. ON NE DÉCORE PAS LA DONNÉE. Aucun dégradé, aucune lueur, aucune ombre
+ *     colorée sur le châssis. La hiérarchie vient de la typographie, des
+ *     filets et de l'espacement — les moyens d'un document imprimé.
+ *
+ *  2. LA COULEUR EST UN SIGNAL, JAMAIS UN ORNEMENT. Un seul accent, employé
+ *     pour ce qui est actif ou actionnable. Trois couleurs sémantiques :
+ *     valeur, avertissement, danger. Les couleurs de rareté sont réservées à
+ *     la carte et à sa pastille de rareté ; elles ne débordent jamais sur les
+ *     commandes. Avant, sept familles de couleurs se disputaient l'écran.
+ *
+ *  3. LE SUJET EST L'IMAGE ET LE CHIFFRE. Le châssis s'efface : surfaces
+ *     neutres, traits d'un pixel, deux rayons de coin, trois hauteurs de
+ *     contrôle. Les reflets holographiques restent, eux, à pleine intensité :
+ *     ils ne décorent pas, ils confirment la rareté qui décide du prix.
+ *
+ * CE QUI A ÉTÉ RETIRÉ, ET POURQUOI
+ *   - Le fond « aurore » : trois masses de couleur floutées à 120 px et animées
+ *     en continu, soit trois grandes surfaces recomposées à chaque image, pour
+ *     un décor que personne ne regarde.
+ *   - Le titre en dégradé cyan/violet/ambre : illisible en petit, et il donnait
+ *     le ton d'un jeu vidéo à un outil de relevé de cote.
+ *   - Le verre dépoli généralisé (`backdrop-filter: blur(20px)`) : coûteux, et
+ *     il brouillait la frontière entre les plans au lieu de la marquer.
+ *   - Les ombres colorées sur les éléments d'interface.
+ *
+ * ÉCHELLES, VOLONTAIREMENT COURTES
+ *   Rayons     2 valeurs   4 px (contrôles, lignes) · 8 px (panneaux)
+ *   Contrôles  3 hauteurs  32 px (tertiaire) · 40 px (standard) · 48 px (primaire)
+ *   Espacement base 4 px, employée par pas de 4, 8, 12, 16, 24, 32, 48
+ *   Traits     1 px, deux valeurs seulement
+ *   Texte      6 tailles, décrites dans le bloc @theme
+ *
+ *   L'état antérieur, relevé : 5 rayons, 5 hauteurs de contrôle, 4 tailles de
+ *   police en pixels arbitraires, 8 opacités de blanc différentes.
+ *
+ * CONTRASTES
+ *   Chaque couple texte/fond a été mesuré (WCAG 2.1). Le texte courant est au
+ *   moins à 4,5:1, les éléments d'interface à 3:1. Les valeurs mesurées sont
+ *   notées en commentaire à côté de chaque jeton.
+ */
 
 @theme {
-  --color-abyss: #04060f;
-  --color-abyss-soft: #0a1020;
-  --color-ink: #e8edff;
-  --color-muted: #8b97b8;
-  --color-cyan: #22d3ee;
-  --color-violet: #a855f7;
-  --color-amber: #fbbf24;
+  /* --- Surfaces, du plus profond au plus proche -------------------------- */
+  --color-fond: #0b0c0e; /* page */
+  --color-panneau: #131519; /* panneau, en-tête, barre d'outils */
+  --color-relief: #1a1d22; /* ligne survolée, cellule de tableau */
+  --color-champ: #23272e; /* champ de saisie, bouton secondaire */
 
-  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* --- Filets ------------------------------------------------------------ */
+  --color-trait: #2a2f37; /* séparateur ordinaire */
+  --color-trait-fort: #3a414b; /* bordure d'un contrôle, en-tête de tableau */
+
+  /* --- Texte, contrastes mesurés sur --color-panneau --------------------- */
+  --color-encre: #e7e9ec; /* 15,0:1 — texte principal */
+  --color-second: #a0a7b2; /* 7,5:1  — texte secondaire */
+  --color-tertiaire: #7c858f; /* 4,9:1  — intitulés, unités, mentions */
+
+  /* --- Signal ------------------------------------------------------------ */
+  --color-accent: #5fa0ff; /* 6,9:1 — actif, actionnable */
+  --color-accent-sourd: #2f4a72; /* fond d'un état actif */
+  --color-positif: #57c98a; /* 8,8:1 — valeur, cote, confirmation */
+  --color-alerte: #e0a93c; /* 8,6:1 — attention, lecture approchée */
+  --color-danger: #e4705c; /* 5,9:1 — destruction, échec */
+
+  /* --- Typographie ------------------------------------------------------- */
+  /*
+   * Pas de police d'affichage téléchargée. La pile système est le choix d'un
+   * outil professionnel : elle est neutre, déjà présente, rendue avec le
+   * crénage natif de la plateforme, et elle épargne une requête bloquante vers
+   * un tiers. « Space Grotesk », géométrique et marquée, tirait l'ensemble vers
+   * l'affiche ; elle a été retirée du document.
+   *
+   * La chasse fixe reste, et son rôle s'élargit : elle porte tout ce qui est
+   * une DONNÉE — code d'extension, montant, quantité, date. Un chiffre aligné
+   * sur une colonne se compare d'un coup d'œil ; c'est la raison d'être d'un
+   * tableau.
+   */
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-micro: 0.6875rem; /* 11 px — mentions, unités */
+  --text-micro--line-height: 1rem;
+  --text-intitule: 0.75rem; /* 12 px — intitulés en capitales */
+  --text-intitule--line-height: 1rem;
+  --text-donnee: 0.8125rem; /* 13 px — cellule de tableau */
+  --text-donnee--line-height: 1.125rem;
+  --text-courant: 0.9375rem; /* 15 px — texte lu */
+  --text-courant--line-height: 1.4rem;
+  --text-titre: 1.125rem; /* 18 px — titre de section, nom de carte */
+  --text-titre--line-height: 1.5rem;
+  --text-chiffre: 1.5rem; /* 24 px — chiffre-clé d'un indicateur */
+  --text-chiffre--line-height: 1.75rem;
+
+  /* --- Rayons : deux, pas davantage -------------------------------------- */
+  --radius-controle: 4px;
+  --radius-panneau: 8px;
+
+  /* --- Élévation : une seule ombre, pour ce qui flotte vraiment ---------- */
+  --shadow-flottant: 0 12px 32px -12px rgb(0 0 0 / 75%), 0 2px 8px -2px rgb(0 0 0 / 55%);
 }
 
-/* ------------------------------------------------------------------ */
-/* Base                                                                 */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  Base                                                                 */
+/* ==================================================================== */
 
 html,
 body,
@@ -29,11 +126,17 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-abyss);
-  color: var(--color-ink);
-  font-family: var(--font-display);
+  background: var(--color-fond);
+  color: var(--color-encre);
+  font-family: var(--font-sans);
+  font-size: var(--text-courant);
+  line-height: var(--text-courant--line-height);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  /* Supprime le délai de 300 ms et le zoom au double-tap : on manipule des
+     commandes, pas du texte à agrandir. */
+  touch-action: manipulation;
 }
 
 /* La molette ne doit pas faire rebondir la page pendant qu'on vise. */
@@ -44,162 +147,121 @@ body {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--color-cyan) 40%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
 }
 
-/* ------------------------------------------------------------------ */
-/* Animations                                                           */
-/* ------------------------------------------------------------------ */
-
-@keyframes aurora-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(6vw, -4vh, 0) scale(1.15);
-  }
-  66% {
-    transform: translate3d(-5vw, 5vh, 0) scale(0.92);
-  }
+/*
+ * Focus visible, partout et de la même façon.
+ *
+ * Le contour est doublé d'un liseré sombre : sur un panneau clair comme sur la
+ * vidéo du viseur, l'un des deux ressort toujours. Auparavant le focus était
+ * celui du navigateur, invisible sur fond sombre — un utilisateur au clavier ne
+ * savait pas où il était.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-controle);
 }
 
-@keyframes scan-sweep {
-  0% {
-    transform: translateY(-6%);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  88% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(106%);
-    opacity: 0;
-  }
+/* Les chiffres s'alignent en colonne, toujours. */
+.tabular-nums,
+[class*='font-mono'] {
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes corner-pulse {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
+/* ==================================================================== */
+/*  Utilitaires du système                                               */
+/* ==================================================================== */
+
+/** Surface d'un panneau : le fond et son filet, jamais l'un sans l'autre. */
+@utility panneau {
+  background: var(--color-panneau);
+  border: 1px solid var(--color-trait);
+  border-radius: var(--radius-panneau);
 }
 
-@keyframes card-arrive {
-  0% {
-    opacity: 0;
-    transform: perspective(1400px) rotateY(-62deg) translateZ(-160px) scale(0.82);
-    filter: blur(14px) saturate(0.4);
-  }
-  55% {
-    opacity: 1;
-    filter: blur(0) saturate(1.35);
-  }
-  100% {
-    opacity: 1;
-    transform: perspective(1400px) rotateY(0deg) translateZ(0) scale(1);
-    filter: blur(0) saturate(1);
-  }
+/**
+ * Intitulé de champ : petites capitales espacées.
+ * C'est le vocabulaire du formulaire administratif et de la fiche de
+ * catalogue — il annonce une donnée sans lui voler la vedette.
+ */
+@utility intitule {
+  font-size: var(--text-intitule);
+  line-height: var(--text-intitule--line-height);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-tertiaire);
 }
 
-@keyframes shine-sweep {
-  0% {
-    transform: translateX(-160%) skewX(-18deg);
-  }
-  100% {
-    transform: translateX(260%) skewX(-18deg);
-  }
+/** Valeur mesurée : chasse fixe, chiffres alignés. */
+@utility donnee {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-donnee);
+  line-height: var(--text-donnee--line-height);
 }
 
-@keyframes foil-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+/** Barre de défilement discrète, pour les zones qui débordent. */
+@utility rail {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-trait-fort) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
-@keyframes halo-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.95;
-    transform: scale(1.06);
-  }
+/** Réserve de l'encoche et de la barre d'accueil. */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
 }
 
-@keyframes spark-out {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.2);
-  }
-  25% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--spark-x), var(--spark-y)) scale(1.1);
-  }
+@utility safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
-@keyframes rise-in {
+/* ==================================================================== */
+/*  Animations                                                           */
+/* ==================================================================== */
+/*
+ * Il n'en reste que deux, et chacune porte une information.
+ *
+ * `revelation` accompagne l'arrivée de la carte identifiée : le seul moment de
+ * l'application où quelque chose est *découvert*. `apparition` pose les
+ * panneaux qui entrent, pour que l'œil suive le changement au lieu de le subir.
+ *
+ * Les six autres — dérive du fond, balayage, pulsation d'angles, respiration de
+ * halo, gerbe d'étincelles — ont été supprimées : aucune ne disait rien.
+ */
+
+@keyframes revelation {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Utilitaires                                                          */
-/* ------------------------------------------------------------------ */
-
-@utility glass {
-  background: color-mix(in oklab, white 5%, transparent);
-  border: 1px solid color-mix(in oklab, white 12%, transparent);
-  backdrop-filter: blur(20px) saturate(1.4);
+@keyframes apparition {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-@utility rise {
-  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+@utility apparait {
+  animation: apparition 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Le voile holographique : un dégradé conique qui glisse sous un mode de fusion
-   « color-dodge », donc lumineux sur les zones claires et discret sur le noir. */
-@utility foil {
-  background-image: conic-gradient(
-    from 210deg,
-    #ff3d81,
-    #ffd93d,
-    #6bff8f,
-    #3ddcff,
-    #a855f7,
-    #ff3d81
-  );
-  background-size: 260% 260%;
-  mix-blend-mode: color-dodge;
-  animation: foil-shift 7s ease-in-out infinite;
-}
-
-/* ------------------------------------------------------------------ */
-/* Accessibilité                                                        */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  Accessibilité                                                        */
+/* ==================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -208,38 +270,11 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Mobile                                                               */
-/* ------------------------------------------------------------------ */
-
-/* Supprime le délai de 300 ms et le zoom au double-tap : on manipule des
-   boutons, pas du texte à agrandir. */
-body {
-  touch-action: manipulation;
-}
-
-/* Barre d'onglets basse : elle doit se poser au-dessus de l'indicateur
-   d'accueil des iPhone, pas dessous. */
-@utility safe-bottom {
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-}
-
-@utility safe-top {
-  padding-top: env(safe-area-inset-top);
-}
-
-/* Barre de défilement discrète pour les rails horizontaux. */
-@utility rail {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, white 20%, transparent) transparent;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Coupe-circuit global des animations, piloté par le panneau de réglages.
-   Une seule règle suffit : inutile de conditionner chaque composant. */
+/* Coupe-circuit explicite, piloté par le panneau de réglages. */
 :root[data-motion='off'] *,
 :root[data-motion='off'] *::before,
 :root[data-motion='off'] *::after {

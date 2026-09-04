@@ -3,18 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b1020" />
+    <meta name="theme-color" content="#0b0c0e" />
+    <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Scannez une carte Yu-Gi-Oh! à la webcam, l'OCR lit le titre et le code d'extension, puis affiche la cote Cardmarket."
+      content="Relevez le code d'extension d'une carte Yu-Gi-Oh! à la caméra, identifiez le tirage exact et tenez l'inventaire de votre collection avec sa cote en euros."
     />
+    <!--
+      Une seule police téléchargée, et c'est une chasse fixe : elle porte les
+      données — codes, montants, quantités, dates. Le texte courant utilise la
+      pile système, neutre et déjà présente, ce qui supprime une requête
+      bloquante vers un tiers et donne à l'application l'aspect d'un outil
+      plutôt que d'une affiche.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <title>Scanner Yu-Gi-Oh! — cote Cardmarket par OCR</title>
+    <title>Scanner Yu-Gi-Oh! — relevé de cote et inventaire</title>
   </head>
   <body>
     <div id="root"></div>

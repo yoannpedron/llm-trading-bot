@@ -1,174 +1,252 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { loadCardIndex } from '../lib/cardIndex.js';
 import { suggestSetCodes } from '../lib/match.js';
 import { RETICLE_RATIO } from '../lib/viewport.js';
 
 /**
- * Saisie manuelle du code.
+ * Poste de lecture.
  *
- * Pour les cas où la caméra ne peut pas : pas de caméra (ordinateur, refus
- * d'autorisation), code abîmé ou effacé, carte sous étui. La complétion pendant
- * la frappe évite les fautes — on ne tape jamais le code en entier — et montre
- * tout de suite si le code existe. Ouverte d'office quand la caméra manque.
+ * L'écran est celui d'un instrument : l'image occupe tout, le châssis se limite
+ * à trois zones fixes — une ligne d'état en haut, la fenêtre de visée au
+ * centre, les commandes en bas. Rien ne se déplace d'un état à l'autre, ce qui
+ * permet de garder le pouce au même endroit pendant qu'on cherche le cadrage.
+ *
+ * CE QUI A CHANGÉ, ET POURQUOI
+ *
+ *  - **On ne savait pas quoi faire.** Le viseur affichait le texte brut de
+ *    l'OCR — « rien lu (otsu, conf. 0) » — c'est-à-dire un diagnostic de
+ *    développeur là où il fallait une consigne. Une ligne d'état dit maintenant
+ *    le geste à faire ; la lecture brute reste, en dessous et en petit, parce
+ *    qu'elle distingue « rien » de « illisible » et qu'elle est ce qu'on lit
+ *    dans une capture d'écran de panne.
+ *  - **Le cadre était un néon arrondi.** Il est devenu une fenêtre à angles
+ *    marqués, comme une mire d'appareil de mesure : le trait est fin, ce sont
+ *    les quatre équerres qui portent le repère.
+ *  - **La netteté était une barre continue.** Une jauge continue invite à
+ *    chercher le maximum ; ce qui compte est de franchir un seuil. Elle est
+ *    donc segmentée, avec le seuil marqué.
+ *  - **La torche occupait un bouton de 64 px, grisé quand elle n'existe pas.**
+ *    Les commandes forment maintenant une barre de largeur fixe où chaque
+ *    élément absent laisse sa place aux autres.
  */
-function ManualEntry({ onSubmit, autoFocus }) {
-  const [value, setValue] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
+
+/** Nombre de segments de la jauge de netteté. */
+const SEGMENTS = 12;
+
+/**
+ * Consigne à afficher, d'après ce que la boucle vient de voir.
+ *
+ * L'ordre des cas est celui de l'urgence : ce qui empêche toute lecture passe
+ * avant ce qui la dégrade.
+ */
+export function consigne({ reading, sharpness, minSharpness, modelReady, frozenFrame, manuel }) {
+  if (manuel) return 'Saisie du code';
+  if (frozenFrame) return 'Code identifié';
+  if (!modelReady) return 'Chargement du moteur de lecture';
+  if (!reading) return 'Cadrez le code dans la fenêtre';
+  if (reading === 'image trop floue' || sharpness < minSharpness) {
+    return 'Trop flou — touchez le code pour la mise au point';
+  }
+  if (reading.startsWith('rien lu')) return 'Illisible — rapprochez-vous ou allumez la torche';
+  if (/[A-Z0-9]{2,5}-[A-Z0-9]{2,6}/.test(reading)) return 'Code repéré, vérification';
+  return 'Lecture en cours';
+}
+
+/* ------------------------------------------------------------------ */
+/* Saisie manuelle                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Saisie du code au clavier.
+ *
+ * Pour les cas où la caméra ne peut rien : pas de caméra, autorisation refusée,
+ * code effacé ou abîmé, carte sous étui. La complétion pendant la frappe évite
+ * la faute — on ne tape jamais le code en entier — et montre immédiatement
+ * qu'un code n'existe pas.
+ */
+function SaisieManuelle({ onSubmit, autoFocus }) {
+  const [valeur, setValeur] = useState('');
+  const [propositions, setPropositions] = useState([]);
+  const [erreur, setErreur] = useState(null);
+  const [enCours, setEnCours] = useState(false);
   // 'chargement' | 'prêt' | 'absent'. L'index pèse 1,4 Mo : son arrivée se voit.
-  // Sans ce témoin, une saisie valide semble n'avoir aucune proposition pendant
-  // la première seconde, et on croit le code inconnu. Et s'il ne vient jamais,
-  // il faut le dire : se taire ferait passer une panne de réseau pour un code
-  // inexistant, exactement le faux négatif que ce projet refuse.
+  // Et s'il ne vient jamais, il faut le dire — se taire ferait passer une panne
+  // de réseau pour un code inexistant, le faux négatif que ce projet refuse.
   const [index, setIndex] = useState('chargement');
 
   useEffect(() => {
-    let alive = true;
+    let vivant = true;
     loadCardIndex()
-      .then(() => alive && setIndex('prêt'))
-      .catch(() => alive && setIndex('absent'));
+      .then(() => vivant && setIndex('prêt'))
+      .catch(() => vivant && setIndex('absent'));
     return () => {
-      alive = false;
+      vivant = false;
     };
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    if (value.trim().length < 2) {
-      setSuggestions([]);
+    let annule = false;
+    if (valeur.trim().length < 2) {
+      setPropositions([]);
       return undefined;
     }
     loadCardIndex()
-      .then((found) => !cancelled && setSuggestions(suggestSetCodes(found, value)))
-      .catch(() => !cancelled && setSuggestions([]));
+      .then((trouve) => !annule && setPropositions(suggestSetCodes(trouve, valeur)))
+      .catch(() => !annule && setPropositions([]));
     return () => {
-      cancelled = true;
+      annule = true;
     };
-  }, [value]);
+  }, [valeur]);
 
-  const submit = async (code) => {
-    const text = String(code ?? value).trim();
-    if (!text || busy) return;
-    setBusy(true);
-    setError(null);
+  const envoyer = async (code) => {
+    const texte = String(code ?? valeur).trim();
+    if (!texte || enCours) return;
+    setEnCours(true);
+    setErreur(null);
     try {
-      const resolved = await onSubmit(text);
-      if (resolved.status === 'no_code') setError('Ce n’est pas un code d’extension (ex. RA03-FR001).');
-      else if (resolved.status === 'no_match') {
-        setError(
-          resolved.reason === 'ambiguous'
-            ? 'Ce code hésite entre deux cartes : complétez-le.'
+      const resolu = await onSubmit(texte);
+      if (resolu.status === 'no_code') {
+        setErreur('Ce n’est pas un code d’extension. Exemple : RA03-FR001.');
+      } else if (resolu.status === 'no_match') {
+        setErreur(
+          resolu.reason === 'ambiguous'
+            ? 'Ce code hésite entre deux cartes. Complétez-le.'
             : 'Aucune carte ne porte ce code.',
         );
       }
     } catch (cause) {
-      setError(cause.message);
+      setErreur(cause.message);
     } finally {
-      setBusy(false);
+      setEnCours(false);
     }
   };
 
   return (
     <form
-      className="w-full max-w-sm rounded-2xl bg-black/70 p-3 backdrop-blur-md"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
+      className="panneau w-full max-w-md p-3"
+      onSubmit={(evenement) => {
+        evenement.preventDefault();
+        envoyer();
       }}
     >
-      <label className="block font-mono text-[10px] tracking-[0.16em] text-muted uppercase">
+      <label htmlFor="code-manuel" className="intitule">
         Code d’extension
       </label>
-      <div className="mt-1 flex gap-2">
+      <div className="mt-1.5 flex gap-2">
         <input
+          id="code-manuel"
           type="text"
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value.toUpperCase());
-            setError(null);
+          value={valeur}
+          onChange={(evenement) => {
+            setValeur(evenement.target.value.toUpperCase());
+            setErreur(null);
           }}
           autoFocus={autoFocus}
           autoCapitalize="characters"
           autoCorrect="off"
+          autoComplete="off"
           spellCheck={false}
           enterKeyHint="go"
           placeholder="RA03-FR001"
-          aria-label="Code d’extension"
-          className="h-12 min-w-0 flex-1 rounded-xl border border-white/15 bg-black/50 px-3 font-mono text-base tracking-[0.12em] uppercase outline-none placeholder:text-muted/50 focus:border-cyan/60"
+          aria-describedby="aide-code"
+          className="h-12 min-w-0 flex-1 rounded-controle border border-trait bg-champ px-3 font-mono text-courant tracking-[0.1em] text-encre uppercase outline-none transition-colors placeholder:text-tertiaire hover:border-trait-fort focus:border-accent"
         />
         <button
           type="submit"
-          disabled={busy || !value.trim()}
-          className="h-12 shrink-0 rounded-xl bg-cyan/25 px-4 text-sm font-semibold text-cyan ring-1 ring-cyan/50 transition active:scale-[0.98] disabled:opacity-40"
+          disabled={enCours || !valeur.trim()}
+          className="h-12 shrink-0 rounded-controle bg-accent px-4 text-donnee font-semibold text-fond transition-colors hover:bg-accent/85 disabled:bg-champ disabled:text-tertiaire"
         >
           Chercher
         </button>
       </div>
 
-      {index === 'chargement' && value.trim().length >= 2 && (
-        <p className="mt-2 animate-pulse font-mono text-[11px] text-muted">
-          Chargement de l’index des cartes…
-        </p>
-      )}
+      <p id="aide-code" className="mt-1.5 font-mono text-micro text-tertiaire">
+        Inscrit en bas de la carte, à droite.
+      </p>
 
-      {index === 'absent' && (
-        <p className="mt-2 text-xs text-amber">
-          Index des cartes injoignable : pas de proposition, mais la recherche
-          fonctionne toujours.
-        </p>
-      )}
-
-      {suggestions.length > 0 && (
-        <ul className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/50">
-          {suggestions.map((suggestion) => (
-            <li key={suggestion.key}>
+      {propositions.length > 0 && (
+        <ul className="mt-2 max-h-56 divide-y divide-trait overflow-y-auto rounded-controle border border-trait">
+          {propositions.map((proposition) => (
+            <li key={proposition.key}>
               <button
                 type="button"
                 onClick={() => {
-                  setValue(suggestion.code);
-                  submit(suggestion.code);
+                  setValeur(proposition.code);
+                  envoyer(proposition.code);
                 }}
-                className="flex h-11 w-full items-center gap-3 px-3 text-left transition hover:bg-white/8"
+                className="flex h-11 w-full items-center gap-3 px-3 text-left transition-colors hover:bg-relief"
               >
-                <span className="shrink-0 font-mono text-xs text-cyan">{suggestion.code}</span>
-                <span className="truncate text-sm text-ink/90">{suggestion.name}</span>
+                <span className="donnee shrink-0 text-accent">{proposition.code}</span>
+                <span className="truncate text-donnee text-second">{proposition.name}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      {error && <p className="mt-2 text-xs text-amber">{error}</p>}
+      <div aria-live="polite">
+        {index === 'chargement' && valeur.trim().length >= 2 && (
+          <p className="mt-2 animate-pulse font-mono text-micro text-tertiaire">
+            Chargement de l’index des cartes…
+          </p>
+        )}
+        {index === 'absent' && (
+          <p className="mt-2 font-mono text-micro text-alerte">
+            Index injoignable : pas de proposition, la recherche fonctionne toujours.
+          </p>
+        )}
+        {erreur && <p className="mt-2 text-donnee text-alerte">{erreur}</p>}
+      </div>
     </form>
   );
 }
 
-/**
- * Le viseur.
- *
- * Flux plein écran assombri, sauf une fenêtre rectangulaire très allongée au
- * centre : on y place le code d'extension, rien d'autre. L'assombrissement est
- * obtenu par une ombre portée démesurée depuis la fenêtre elle-même — un seul
- * élément, aucun masque à recalculer au redimensionnement.
- *
- * Deux commandes seulement, larges et atteignables au pouce : la torche et le
- * zoom. Ce sont les deux choses qui décident vraiment de la lisibilité d'une
- * inscription de deux millimètres.
- */
-/** Ce que l'utilisateur doit faire, d'après ce que la boucle vient de voir. */
-function statusFor({ reading, sharpness, minSharpness, modelReady, frozenFrame }) {
-  if (frozenFrame) return 'Code lu';
-  if (!modelReady) return 'Chargement du moteur de lecture…';
-  if (!reading) return 'Cadrez le code dans la fenêtre';
-  if (sharpness < minSharpness || reading === 'image trop floue') {
-    return 'Trop flou : touchez le code pour faire la mise au point';
-  }
-  if (reading.startsWith('rien lu')) return 'Rien de lisible : rapprochez-vous';
-  if (/[A-Z0-9]{2,5}-[A-Z0-9]{2,6}/.test(reading)) return 'Code repéré, vérification…';
-  return 'Lecture en cours…';
+/* ------------------------------------------------------------------ */
+/* Jauge de netteté                                                     */
+/* ------------------------------------------------------------------ */
+
+function Nettete({ valeur, seuil }) {
+  // L'échelle s'arrête à huit fois le seuil : au-delà, la mise au point est
+  // acquise et la graduation n'apprend plus rien.
+  const remplis = Math.round(Math.min(1, valeur / (seuil * 8)) * SEGMENTS);
+  const segmentSeuil = Math.round((1 / 8) * SEGMENTS);
+  const suffisant = valeur >= seuil;
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      role="meter"
+      aria-label="Netteté de l’image"
+      aria-valuenow={remplis}
+      aria-valuemin={0}
+      aria-valuemax={SEGMENTS}
+      aria-valuetext={suffisant ? 'suffisante' : 'insuffisante'}
+    >
+      <span className="intitule">Netteté</span>
+      <span className="flex gap-px" aria-hidden>
+        {Array.from({ length: SEGMENTS }, (_, rang) => (
+          <span
+            key={rang}
+            className={`h-2.5 w-1 ${
+              rang < remplis
+                ? suffisant
+                  ? 'bg-positif'
+                  : 'bg-alerte'
+                : rang === segmentSeuil
+                  ? 'bg-trait-fort'
+                  : 'bg-trait'
+            }`}
+          />
+        ))}
+      </span>
+    </div>
+  );
 }
+
+/* ------------------------------------------------------------------ */
+/* Poste de lecture                                                     */
+/* ------------------------------------------------------------------ */
 
 export default function SniperView({ sniper }) {
   const {
@@ -194,43 +272,32 @@ export default function SniperView({ sniper }) {
     setManualEntry,
   } = sniper;
 
-  const containerRef = useRef(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
   // Sans caméra, la saisie est le seul chemin : on l'ouvre sans attendre.
-  const showManual = manualEntry || Boolean(error);
-
-  // Le viseur est dessiné aux mêmes proportions que celles utilisées pour le
-  // recadrage envoyé à l'OCR : les deux lisent `viewport.js`.
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return undefined;
-    const observer = new ResizeObserver(([entry]) =>
-      setSize({ width: entry.contentRect.width, height: entry.contentRect.height }),
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  const width = Math.min(size.width * 0.82, 420);
-  const height = width / RETICLE_RATIO;
-
-  const status = statusFor({ reading, sharpness, minSharpness, modelReady, frozenFrame });
+  const saisieVisible = manualEntry || Boolean(error);
+  // Six passes sans rien lire : l'utilisateur a besoin d'aide, pas d'attendre.
+  const enPeine = attempts >= 6 && !failure && !frozenFrame && !saisieVisible;
+  const etat = consigne({
+    reading,
+    sharpness,
+    minSharpness,
+    modelReady,
+    frozenFrame,
+    manuel: saisieVisible,
+  });
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-black">
-      {/* Toucher l'image y fait la mise au point : sur une carte posée à plat,
-          l'appareil vise souvent le fond plutôt que l'inscription. */}
+    <div className="relative h-full w-full overflow-hidden bg-fond">
       <video
         ref={attachVideo}
         playsInline
         muted
         autoPlay
         className="h-full w-full object-cover"
-        onClick={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
+        onClick={(evenement) => {
+          const cadre = evenement.currentTarget.getBoundingClientRect();
           focusAt(
-            (event.clientX - rect.left) / rect.width,
-            (event.clientY - rect.top) / rect.height,
+            (evenement.clientX - cadre.left) / cadre.width,
+            (evenement.clientY - cadre.top) / cadre.height,
           );
         }}
       />
@@ -243,181 +310,164 @@ export default function SniperView({ sniper }) {
         />
       )}
 
-      {/* Le voile que portait le cadre du viseur, quand celui-ci s'efface. */}
-      {showManual && <div className="pointer-events-none absolute inset-0 bg-abyss/72" />}
+      {/* --- Ligne d'état, en haut ------------------------------------------ */}
+      <div className="pointer-events-none absolute inset-x-0 top-0">
+        {!modelReady && (
+          <div className="h-0.5 w-full bg-trait">
+            <div
+              className="h-full bg-accent transition-[width] duration-300"
+              style={{ width: `${Math.round(modelProgress * 100)}%` }}
+            />
+          </div>
+        )}
+        <p
+          aria-live="polite"
+          className="border-b border-trait/60 bg-fond/85 px-4 py-2 text-center text-donnee font-medium text-encre"
+        >
+          {etat}
+        </p>
+      </div>
 
-      {/* Pendant la saisie, le viseur n'est plus qu'un décor : le cadre, la
-          consigne « placez le code ici » et l'indicateur de netteté parlent
-          d'une lecture suspendue. Le voile sombre reste, il porte le
-          formulaire. */}
-      {ready && width > 0 && !showManual && (
-        <div className="pointer-events-none absolute inset-0">
+      {/* --- Fenêtre de visée ------------------------------------------------ */}
+      {ready && !saisieVisible && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          {/*
+            La mire est seule dans le flux, et les afficheurs qui la suivent
+            sont posés SOUS elle en position absolue. C'est ce qui garantit
+            qu'elle tombe exactement au centre du conteneur — donc au même
+            endroit que le rectangle calculé par `viewport.reticleRect`, qui
+            décide de ce que reçoit l'OCR. Placés dans le flux, ils
+            repoussaient la mire vers le haut de la moitié de leur hauteur, et
+            l'utilisateur cadrait à côté de ce qui était réellement lu.
+          */}
           <div
-            className="absolute rounded-xl shadow-[0_0_0_9999px_rgb(4_6_15/72%)]"
-            style={{
-              width,
-              height,
-              left: (size.width - width) / 2,
-              top: (size.height - height) / 2,
-              border: '2px solid rgb(34 211 238 / 90%)',
-              boxShadow: '0 0 0 9999px rgb(4 6 15 / 72%), 0 0 30px rgb(34 211 238 / 45%)',
-            }}
-          />
+            className="relative w-[82%] max-w-[420px] border border-accent/70"
+            style={{ aspectRatio: `${RETICLE_RATIO} / 1` }}
+          >
+            {/* Équerres d'angle : le repère d'une mire, pas un cadre lumineux. */}
+            {[
+              'left-0 top-0 border-l-2 border-t-2',
+              'right-0 top-0 border-r-2 border-t-2',
+              'left-0 bottom-0 border-l-2 border-b-2',
+              'right-0 bottom-0 border-r-2 border-b-2',
+            ].map((position) => (
+              <span key={position} className={`absolute h-3 w-3 border-accent ${position}`} />
+            ))}
 
-          <p
-            className="absolute left-1/2 -translate-x-1/2 text-center font-mono text-[11px] tracking-[0.18em] text-cyan uppercase"
-            style={{ top: (size.height - height) / 2 - 28 }}
-          >
-            Placez le code ici · touchez pour la mise au point
-          </p>
-
-          {/* Deux lignes : ce que l'utilisateur doit faire, puis ce que le
-              moteur a lu. La seconde reste : « rien » et « du bruit »
-              n'appellent pas le même geste, et c'est elle qu'on lit dans une
-              capture d'écran de panne. */}
-          <p
-            className="absolute inset-x-6 text-center text-sm font-medium text-white/90"
-            style={{ top: (size.height + height) / 2 + 12 }}
-          >
-            {status}
-          </p>
-          <p
-            className="absolute inset-x-6 truncate text-center font-mono text-[11px] text-white/45"
-            style={{ top: (size.height + height) / 2 + 34 }}
-          >
-            {reading ? `« ${reading} »` : ''}
-          </p>
-
-          {/* Netteté : la mise au point est la première cause d'échec sur une
-              inscription de deux millimètres. L'indicateur dit à l'utilisateur
-              s'il doit bouger, plutôt que de le laisser insister à l'aveugle. */}
-          <div
-            className="absolute left-1/2 flex w-40 -translate-x-1/2 items-center gap-2"
-            style={{ top: (size.height + height) / 2 + 58 }}
-          >
-            <span className="font-mono text-[9px] tracking-[0.14em] text-white/50 uppercase">
-              Net
-            </span>
-            <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
-              <span
-                className="block h-full rounded-full transition-[width,background-color] duration-200"
-                style={{
-                  width: `${Math.min(100, (sharpness / (minSharpness * 8)) * 100)}%`,
-                  background: sharpness < minSharpness ? '#f59e0b' : '#22d3ee',
-                }}
-              />
-            </span>
+            <div className="absolute inset-x-0 top-full mt-3 flex flex-col items-center gap-2">
+              <p className="max-w-full truncate px-4 font-mono text-micro text-encre/70">
+                {reading ? `« ${reading} »` : 'en attente de lecture'}
+              </p>
+              <Nettete valeur={sharpness} seuil={minSharpness} />
+            </div>
           </div>
         </div>
       )}
 
-      {!ready && (
-        <div className="absolute inset-0 grid place-items-center px-8 text-center">
-          {error ? (
-            <p className="max-w-sm text-sm text-amber">{error}</p>
-          ) : (
-            <p className="animate-pulse font-mono text-xs tracking-[0.2em] text-muted uppercase">
-              Ouverture de la caméra…
-            </p>
-          )}
+      {/* Voile sombre pendant la saisie : le formulaire doit dominer l'image. */}
+      {saisieVisible && <div className="pointer-events-none absolute inset-0 bg-fond/80" />}
+
+      {!ready && !error && (
+        <div className="absolute inset-0 grid place-items-center px-8">
+          <p className="intitule animate-pulse">Ouverture de la caméra…</p>
         </div>
       )}
 
-      {/* Ce que le moteur reçoit vraiment, après binarisation. Un appui
-          l'enregistre : c'est la seule façon d'obtenir de vrais recadrages
-          pour les bancs de mesure (voir scripts/harness/real-crops.mjs). */}
-      {crop && !frozenFrame && !showManual && (
-        <a
-          href={crop}
-          download={`viseur-${Date.now()}.png`}
-          title="Enregistrer ce recadrage"
-          className="absolute top-3 left-3 w-40"
-        >
-          <img
-            src={crop}
-            alt="Zone lue, après binarisation"
-            className="w-full rounded-lg border border-white/20 bg-white"
-          />
-        </a>
-      )}
+      {/* --- Commandes, en bas ----------------------------------------------- */}
+      <div className="safe-bottom absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-4 pb-3">
+        {error && (
+          <p className="panneau w-full max-w-md border-alerte/40 px-3 py-2 text-donnee text-alerte">
+            {error}
+          </p>
+        )}
 
-      {!modelReady && (
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-white/10">
-          <div
-            className="h-full bg-cyan transition-[width] duration-300"
-            style={{ width: `${Math.round(modelProgress * 100)}%` }}
-          />
-        </div>
-      )}
-
-      {/* Commandes : larges, en bas, sous le pouce. */}
-      <div className="safe-bottom absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-5 pb-3">
         {failure && (
-          <p className="rounded-xl bg-black/70 px-3 py-2 text-center text-xs text-amber backdrop-blur-md">
+          <p className="panneau w-full max-w-md border-alerte/40 px-3 py-2 text-donnee text-alerte">
             Résolution indisponible : {failure}
           </p>
         )}
 
-        {attempts >= 6 && !failure && !frozenFrame && (
-          <p className="rounded-xl bg-black/60 px-3 py-2 text-center text-xs text-amber backdrop-blur-md">
-            Rien de lisible. Rapprochez-vous, allumez la torche, et évitez que le vernis renvoie la
-            lumière droit dans l’objectif.
-          </p>
+        {/*
+          Aide au diagnostic, montrée seulement quand la lecture piétine. Elle
+          réunit le conseil et ce que le moteur reçoit vraiment : voir la bande
+          binarisée dit en un coup d'œil si le problème vient du cadrage, de la
+          lumière ou de la mise au point. Un appui l'enregistre, ce qui alimente
+          les bancs de mesure en vrais recadrages (scripts/harness/real-crops.mjs).
+        */}
+        {enPeine && (
+          <div className="panneau w-full max-w-md p-3">
+            <p className="text-donnee text-second">
+              Rien de lisible depuis {attempts} essais. Rapprochez-vous, allumez la torche, et
+              évitez que le vernis renvoie la lumière droit dans l’objectif.
+            </p>
+            {crop && (
+              <a
+                href={crop}
+                download={`viseur-${attempts}.png`}
+                className="mt-2 block"
+                title="Enregistrer ce recadrage"
+              >
+                <span className="intitule">Zone transmise au moteur</span>
+                <img
+                  src={crop}
+                  alt="Zone lue, après binarisation"
+                  className="mt-1 w-full rounded-controle border border-trait bg-white"
+                />
+              </a>
+            )}
+          </div>
         )}
 
-        {showManual && <ManualEntry onSubmit={submitCode} autoFocus={manualEntry} />}
+        {saisieVisible && <SaisieManuelle onSubmit={submitCode} autoFocus={manualEntry} />}
 
-        {zoom.available && !showManual && (
-          <div className="flex w-full max-w-sm items-center gap-3 rounded-2xl bg-black/55 px-4 py-2 backdrop-blur-md">
-            <span className="font-mono text-[10px] tracking-[0.16em] text-muted uppercase">Zoom</span>
+        {zoom.available && !saisieVisible && (
+          <div className="panneau flex w-full max-w-md items-center gap-3 px-3 py-2">
+            <span className="intitule shrink-0">Zoom</span>
             <input
               type="range"
               min={zoom.min}
               max={zoom.max}
               step={zoom.step}
               value={zoom.value}
-              onChange={(event) => applyZoom(Number(event.target.value))}
-              className="h-8 flex-1 accent-cyan"
+              onChange={(evenement) => applyZoom(Number(evenement.target.value))}
+              className="h-8 flex-1 accent-[var(--color-accent)]"
               aria-label="Zoom de la caméra"
             />
-            <span className="w-10 text-right font-mono text-xs tabular-nums">
+            <span className="donnee w-10 shrink-0 text-right text-second">
               ×{(zoom.value / (zoom.min || 1)).toFixed(1)}
             </span>
           </div>
         )}
 
-        {/* Toujours accessible, même caméra ouverte : un code abîmé se tape
-            plus vite qu'il ne se lit. */}
-        {!error && (
-          <button
-            type="button"
-            onClick={() => setManualEntry((open) => !open)}
-            aria-expanded={showManual}
-            className="h-11 w-full max-w-sm rounded-2xl border border-white/15 bg-black/55 text-sm font-medium text-white/85 backdrop-blur-md transition active:scale-[0.99]"
-          >
-            {showManual ? 'Revenir au viseur' : 'Saisir le code à la main'}
-          </button>
-        )}
+        {/* Barre de commandes : chaque élément absent laisse sa place aux
+            autres, plutôt qu'un bouton grisé qui n'apprend rien. */}
+        <div className="flex w-full max-w-md gap-2">
+          {torch.available && !saisieVisible && (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              aria-pressed={torch.on}
+              className={`h-12 flex-1 rounded-controle border text-donnee font-medium transition-colors ${
+                torch.on
+                  ? 'border-alerte bg-alerte text-fond'
+                  : 'border-trait-fort bg-panneau text-second hover:text-encre'
+              }`}
+            >
+              {torch.on ? 'Torche allumée' : 'Torche'}
+            </button>
+          )}
 
-        {/* Un bouton de 64 px grisé n'apprend rien : sans torche, on rend la
-            place à l'image. */}
-        {torch.available && !showManual && (
-          <button
-            type="button"
-            onClick={toggleTorch}
-            aria-pressed={torch.on}
-            className={`flex h-16 w-full max-w-sm items-center justify-center gap-3 rounded-2xl text-base font-semibold transition active:scale-[0.99] ${
-              torch.on
-                ? 'bg-amber text-abyss'
-                : 'border border-white/15 bg-black/55 text-white backdrop-blur-md'
-            }`}
-          >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-              <path d="M7 2h10l-1 6h3l-9 14 2-9H8z" />
-            </svg>
-            {torch.on ? 'Torche allumée' : 'Allumer la torche'}
-          </button>
-        )}
+          {!error && (
+            <button
+              type="button"
+              onClick={() => setManualEntry((ouvert) => !ouvert)}
+              aria-expanded={saisieVisible}
+              className="h-12 flex-1 rounded-controle border border-trait-fort bg-panneau text-donnee font-medium text-second transition-colors hover:text-encre"
+            >
+              {saisieVisible ? 'Revenir au viseur' : 'Saisir le code'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

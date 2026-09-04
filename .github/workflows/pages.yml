@@ -8,7 +8,7 @@ name: Pages — scanner Yu-Gi-Oh!
 
 on:
   push:
-    branches: [claude/yugioh-card-price-ocr-daf5fd, main]
+    branches: [claude/yugioh-card-price-ocr-ix9l67, claude/yugioh-card-price-ocr-daf5fd, main]
     paths:
       - 'yugioh-scanner/**'
       - '.github/workflows/pages.yml'

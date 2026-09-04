@@ -274,3 +274,33 @@ test('la complétion porte le nom de la carte et respecte la limite', () => {
   assert.deepEqual(suggestSetCodes(index, 'ZZZ-EN'), []);
   assert.deepEqual(suggestSetCodes(index, ''), []);
 });
+
+test('la complétion tient compte du numéro même sans région à deux lettres', () => {
+  // Le défaut historique : « LOB-041 » retombait sur « LOB- » et proposait
+  // LOB-000 à LOB-005, six cartes qui ne sont jamais la bonne. Mesuré sur
+  // l'index réel : 2 332 codes imprimés sur 38 435 n'apparaissaient jamais
+  // dans leurs propres propositions, tous sur des séries anciennes.
+  const codes = (saisie) => suggestSetCodes(index, saisie).map((s) => s.code);
+
+  assert.deepEqual(codes('LOB-041'), ['LOB-EN041']);
+  assert.deepEqual(codes('LOB-EN041'), ['LOB-EN041']);
+  assert.deepEqual(codes('LOB-FR041'), ['LOB-FR041']);
+
+  // Une région incomplète ne peut rien resserrer : on garde le préfixe plutôt
+  // que de ne rien proposer du tout.
+  assert.deepEqual(codes('LOB-F'), ['LOB-EN001', 'LOB-EN041']);
+  assert.deepEqual(codes('LOB-'), ['LOB-EN001', 'LOB-EN041']);
+});
+
+test('un code proposé existe toujours dans la base', () => {
+  // La proposition était fabriquée en insérant « EN » après le tiret de la
+  // clé, ce qui donnait des références introuvables sur les codes dont la
+  // queue commence par une lettre. Toute proposition doit se résoudre.
+  for (const saisie of ['LOB', 'LOB-0', 'MRD-06', 'LOB-FR0', 'MRD-EN1']) {
+    for (const proposition of suggestSetCodes(index, saisie)) {
+      const resolu = resolveSetCode(index, proposition.code);
+      assert.equal(resolu.status, 'matched', `${proposition.code} ne se résout pas`);
+      assert.equal(resolu.card.name, proposition.name);
+    }
+  }
+});

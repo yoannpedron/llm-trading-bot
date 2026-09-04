@@ -35,7 +35,7 @@ await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 30000 });
 
 // Le viseur.
-await page.waitForSelector('text=Placez le code ici', { timeout: 15000 });
+await page.waitForSelector('text=/Cadrez le code|Lecture en cours|Code repéré/', { timeout: 15000 });
 await page.waitForTimeout(1200);
 await page.screenshot({ path: `${SP}/ui-viseur.png` });
 const torche = await page.getByRole('button', { name: /torche/i }).count();
@@ -50,15 +50,15 @@ if (found) {
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${SP}/ui-resultat.png` });
 
-  const code = await page.locator('.font-mono').first().innerText();
-  const nom = await page.locator('h2').first().innerText();
+  const code = await page.locator('section p.donnee').first().innerText();
+  const nom = await page.locator('section h2').first().innerText();
   const rarete = await page.getByRole('button', { name: /Rare|Common|Secret/ }).count();
-  const valider = await page.getByRole('button', { name: 'Valider' }).count();
+  const valider = await page.getByRole('button', { name: 'Enregistrer' }).count();
   const tier = await page.locator('.ygo-card').getAttribute('data-rarity');
 
   console.log(`viseur : bouton torche=${torche}`);
   console.log(`résultat : code="${code.trim()}" nom="${nom}" palier-holo=${tier}`);
-  console.log(`commandes : ${rarete} bouton(s) de rareté, ${valider} bouton Valider`);
+  console.log(`commandes : ${rarete} bouton(s) de rareté, ${valider} bouton Enregistrer`);
 } else {
   console.log(`viseur : bouton torche=${torche} — AUCUNE lecture aboutie`);
   const lu = await page.locator('text=/« .* »/').count();

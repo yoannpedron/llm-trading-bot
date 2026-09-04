@@ -55,9 +55,35 @@ export function makeEntry(card, printing, { at = Date.now(), condition = DEFAULT
  */
 export function upsertEntry(entries, entry) {
   const existing = entries.find((item) => item.key === entry.key);
-  const merged = existing
-    ? { ...existing, ...entry, scannedAt: existing.scannedAt, count: existing.count + 1, price: entry.price ?? existing.price }
-    : entry;
+  if (!existing) return [entry, ...entries.filter((item) => item.key !== entry.key)];
+
+  // Ce que la nouvelle lecture apporte, et ce que l'ancienne ligne garde.
+  //
+  // L'étalement `{ ...existing, ...entry }` écrasait tout, y compris trois
+  // champs que l'utilisateur avait renseignés ou que le temps avait remplis :
+  //
+  //  - `condition` — l'entrée neuve porte toujours « NM » par défaut, donc
+  //    rescanner une carte déclarée « Played » la remettait à neuf et gonflait
+  //    le total de tout l'inventaire, en silence ;
+  //  - `price` et `pricedAt` — une cote fraîchement relevée était remplacée par
+  //    `null`, ce qui relançait une requête inutile ;
+  //  - `count` — préservé, mais incrémenté même quand rien ne le justifiait.
+  //
+  // On énumère donc explicitement. Un champ ajouté plus tard sera repris de
+  // l'entrée neuve, ce qui est le bon défaut pour une donnée de catalogue.
+  const merged = {
+    ...existing,
+    ...entry,
+    // Ce que l'utilisateur a décidé prime sur ce que la lecture suppose.
+    condition: existing.condition ?? entry.condition,
+    // La date de première rencontre ne se réécrit pas.
+    scannedAt: existing.scannedAt,
+    // Un exemplaire de plus dans le classeur.
+    count: (existing.count ?? 1) + 1,
+    // La cote connue survit à un rescan.
+    price: entry.price ?? existing.price,
+    pricedAt: entry.price ? entry.pricedAt : existing.pricedAt,
+  };
 
   return [merged, ...entries.filter((item) => item.key !== entry.key)];
 }
@@ -80,11 +106,50 @@ export const removeEntry = (entries, key) => entries.filter((entry) => entry.key
 /* Persistance                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Une entrée est-elle exploitable ?
+ *
+ * Le stockage local est modifiable par l'utilisateur, partagé avec d'autres
+ * versions de l'application, et sujet aux écritures interrompues. On ne
+ * vérifiait que le fait d'avoir un tableau : un seul élément `null` suffisait
+ * à faire remonter une `TypeError` depuis `conditionPrice` jusqu'au rendu
+ * racine, et comme rien ne rattrape les erreurs de rendu, l'application
+ * affichait une page blanche — définitivement, puisque la donnée fautive est
+ * relue à chaque ouverture. L'utilisateur n'a alors aucun moyen de s'en sortir.
+ *
+ * On exige donc le minimum sans lequel une ligne ne peut rien afficher : un
+ * objet, une clé, un nom. Le reste est facultatif et retombe sur des valeurs
+ * sûres au moment de l'affichage.
+ */
+function entreeValide(valeur) {
+  return (
+    typeof valeur === 'object' &&
+    valeur !== null &&
+    typeof valeur.key === 'string' &&
+    valeur.key.length > 0 &&
+    typeof valeur.name === 'string'
+  );
+}
+
+/**
+ * Relit l'inventaire, en écartant ce qui n'est pas exploitable.
+ *
+ * @returns {Array} les entrées valides ; jamais d'exception
+ */
 export function loadCollection() {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(entreeValide).map((entree) => ({
+      // Les champs dont dépendent les calculs sont ramenés à un type sûr :
+      // un prix arrivé sous forme de chaîne s'affichait mais était exclu du
+      // total, ce qui donnait un écran où la somme des lignes ne fait pas le
+      // total affiché.
+      ...entree,
+      count: Number.isFinite(entree.count) && entree.count > 0 ? Math.floor(entree.count) : 1,
+      price: typeof entree.price === 'object' ? entree.price : null,
+    }));
   } catch {
     return [];
   }
@@ -110,13 +175,15 @@ const COLUMNS = [
   ['Série', (entry) => entry.setName],
   ['Rareté', (entry) => entry.rarity],
   ['État', (entry) => entry.condition ?? ''],
-  ['Cote EUR', (entry) => conditionPrice(entry.price, entry.condition).value ?? ''],
+  ['Cote unitaire EUR', (entry) => decimal(conditionPrice(entry.price, entry.condition).value)],
+  ['Exemplaires', (entry) => entry.count ?? 1],
+  ['Valeur ligne EUR', (entry) => decimal(entryValue(entry))],
   ['Cote estimée', (entry) => (conditionPrice(entry.price, entry.condition).estimated ? 'oui' : 'non')],
-  ['Cote de référence EUR', (entry) => entry.price?.prices?.trend ?? entry.price?.prices?.from ?? ''],
+  ['Cote de référence EUR', (entry) => decimal(entry.price?.prices?.trend ?? entry.price?.prices?.from)],
   ['Source', (entry) => entry.price?.source ?? ''],
-  ['À partir de EUR', (entry) => entry.price?.prices?.from ?? ''],
-  ['Moyenne 30j EUR', (entry) => entry.price?.prices?.avg30 ?? ''],
-  ['Moyenne 7j EUR', (entry) => entry.price?.prices?.avg7 ?? ''],
+  ['À partir de EUR', (entry) => decimal(entry.price?.prices?.from)],
+  ['Moyenne 30j EUR', (entry) => decimal(entry.price?.prices?.avg30)],
+  ['Moyenne 7j EUR', (entry) => decimal(entry.price?.prices?.avg7)],
   ['Exemplaires en vente', (entry) => entry.price?.prices?.available ?? ''],
   ['Type', (entry) => entry.type],
   ['Catégorie', (entry) => entry.race],
@@ -124,7 +191,7 @@ const COLUMNS = [
   ['ATK', (entry) => entry.atk ?? ''],
   ['DEF', (entry) => entry.def ?? ''],
   ['Niveau', (entry) => entry.level ?? ''],
-  ['Scans', (entry) => entry.count ?? 1],
+
   ['Scannée le', (entry) => toIso(entry.scannedAt)],
   ['Cote relevée le', (entry) => toIso(entry.pricedAt)],
   ['ID YGOPRODeck', (entry) => entry.cardId],
@@ -134,17 +201,55 @@ const COLUMNS = [
 const toIso = (value) => (value ? new Date(value).toISOString() : '');
 
 /**
+ * Décimale à la française.
+ *
+ * Le fichier emploie le point-virgule comme séparateur de champ, précisément
+ * parce qu'Excel francophone attend cela — configuration dans laquelle le
+ * séparateur DÉCIMAL est la virgule. Sortir « 12.50 » dans un tel fichier
+ * donne une colonne de texte : ni somme, ni tri, ni graphique. La conversion
+ * est faite ici, une fois, pour toutes les colonnes monétaires.
+ */
+const decimal = (valeur) =>
+  typeof valeur === 'number' && Number.isFinite(valeur) ? String(valeur).replace('.', ',') : '';
+
+/**
+ * Caractères par lesquels un tableur reconnaît une formule.
+ *
+ * Excel, LibreOffice et Google Sheets évaluent toute cellule commençant par
+ * l'un d'eux. Une valeur comme `=HYPERLINK(...)` ou `@SUM(A1)` devient donc du
+ * code exécuté à l'ouverture du fichier — l'injection de formule CSV. La donnée
+ * vient d'une API tierce et d'une saisie utilisateur : on ne peut pas se fier à
+ * son innocuité, même si aucun nom de carte ne commence aujourd'hui par ces
+ * caractères (vérifié sur les 14 523 noms de l'index, en anglais et en
+ * français). Le jeu contient l'archétype « @Ignister » ; il ne manque qu'une
+ * traduction ou un renommage pour que le cas se présente.
+ */
+const FORMULE = /^[=+\-@\t\r]/;
+
+/**
  * Échappement CSV.
  *
- * Un nom de carte contient volontiers une virgule, un point-virgule ou un
- * guillemet (« Number 39: Utopia », « Harpie's »). La règle RFC 4180 s'applique :
- * on entoure de guillemets et on double ceux qui sont dans la valeur.
+ * Deux règles distinctes, souvent confondues :
+ *
+ *  1. **RFC 4180** — un nom de carte contient volontiers un point-virgule ou un
+ *     guillemet (« Number 39: Utopia », « Harpie's »). On entoure de guillemets
+ *     et on double ceux qui sont dans la valeur.
+ *  2. **Neutralisation des formules** — on préfixe d'une apostrophe simple, que
+ *     les tableurs consomment en marquant la cellule comme texte. La valeur
+ *     reste lisible ; elle cesse d'être exécutable.
+ *
+ * L'apostrophe impose le guillemetage : sans lui, certains tableurs
+ * l'afficheraient telle quelle.
  */
 export function csvEscape(value, separator = ';') {
   const text = value === null || value === undefined ? '' : String(value);
+  const neutralise = FORMULE.test(text) ? `'${text}` : text;
   const needsQuotes =
-    text.includes(separator) || text.includes('"') || /[\r\n]/.test(text);
-  return needsQuotes ? `"${text.replace(/"/g, '""')}"` : text;
+    neutralise !== text ||
+    neutralise.includes(separator) ||
+    neutralise.includes('"') ||
+    /[\r\n]/.test(neutralise);
+  return needsQuotes ? `"${neutralise.replace(/"/g, '""')}"` : neutralise;
 }
 
 /**
@@ -172,6 +277,14 @@ export function csvFilename(now = new Date()) {
  * Le BOM UTF-8 en tête est ce qui évite les accents cassés à l'ouverture dans
  * Excel sous Windows.
  */
+/**
+ * Déclenche le téléchargement de ce qui est passé.
+ *
+ * L'appelant décide du périmètre : l'inventaire entier, ou le sous-ensemble
+ * affiché. Le bouton d'export voisine avec un champ de filtre et un « total
+ * filtré » — exporter autre chose que ce que l'utilisateur a sous les yeux
+ * serait un piège.
+ */
 export function downloadCsv(entries) {
   const blob = new Blob([`﻿${toCsv(entries)}`], {
     type: 'text/csv;charset=utf-8;',
@@ -183,7 +296,10 @@ export function downloadCsv(entries) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Révoquer dans le même tour de boucle coupe l'herbe sous le pied des
+  // navigateurs qui n'engagent le transfert qu'à la tâche suivante : le
+  // fichier arrivait vide ou pas du tout. On laisse passer un tour.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /**
@@ -191,9 +307,28 @@ export function downloadCsv(entries) {
  * On additionne la valeur *à l'état retenu*, pas la cote de référence : sinon
  * un classeur de cartes jouées afficherait un total de cartes neuves.
  */
+/**
+ * Valeur d'une ligne : la cote à l'état déclaré, multipliée par le nombre
+ * d'exemplaires.
+ *
+ * `count` compte les exemplaires, pas les scans. C'est le sens que lui donne
+ * l'usage — on repasse la même carte parce qu'on en a plusieurs dans le
+ * classeur — et c'est celui qu'attend quelqu'un qui lit un total. La colonne
+ * de l'inventaire est intitulée « Ex. » en conséquence, et le CSV aussi.
+ */
+export function entryValue(entry) {
+  const { value } = conditionPrice(entry.price, entry.condition);
+  if (!Number.isFinite(value)) return null;
+  return value * (Number.isFinite(entry.count) && entry.count > 0 ? entry.count : 1);
+}
+
+/**
+ * Somme des cotes connues.
+ *
+ * Elle additionne la valeur **à l'état retenu et pour tous les exemplaires** :
+ * sinon un classeur de cartes jouées afficherait un total de cartes neuves, et
+ * trois exemplaires d'une même carte n'en vaudraient qu'un.
+ */
 export function totalValue(entries) {
-  return entries.reduce((total, entry) => {
-    const { value } = conditionPrice(entry.price, entry.condition);
-    return total + (Number.isFinite(value) ? value : 0);
-  }, 0);
+  return entries.reduce((total, entry) => total + (entryValue(entry) ?? 0), 0);
 }

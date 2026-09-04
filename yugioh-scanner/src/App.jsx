@@ -1,183 +1,188 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import Aurora from './components/Aurora.jsx';
-import DataPanel from './components/DataPanel.jsx';
-import HistoryTab from './components/HistoryTab.jsx';
+import FicheCarte from './components/FicheCarte.jsx';
 import HoloCard from './components/HoloCard.jsx';
+import Inventaire from './components/Inventaire.jsx';
 import SniperView from './components/SniperView.jsx';
+import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
 import { useSniper } from './lib/useSniper.js';
 
-const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+/**
+ * Châssis de l'application.
+ *
+ * Son rôle se limite à trois choses : tenir l'en-tête, aiguiller entre les deux
+ * onglets, et relier le scanner à l'inventaire. Tout le reste a été déplacé —
+ * la construction de l'entrée d'inventaire dans `lib/fiche.js`, les adresses de
+ * visuels dans `lib/images.js`, les formateurs dans `lib/format.js`. Ce fichier
+ * décrivait auparavant la forme d'une entrée de collection et fabriquait des URL
+ * à la main : ce n'est pas le travail d'un composant racine.
+ *
+ * L'état de navigation vit ici parce qu'il ne concerne que ce niveau. L'état du
+ * scanner vit dans `useSniper`, celui de l'inventaire dans `useCollection` :
+ * les deux survivent au changement d'onglet, ce qui est indispensable — la
+ * caméra ne doit pas se rouvrir à chaque aller-retour.
+ */
+
+const ONGLETS = [
+  { id: 'scan', libelle: 'Scanner' },
+  { id: 'inventaire', libelle: 'Inventaire' },
+];
 
 export default function App() {
   const sniper = useSniper();
   const collection = useCollection();
 
-  const [tab, setTab] = useState('scan');
-  const [rarity, setRarity] = useState(null);
+  const [onglet, setOnglet] = useState('scan');
+  const [rarete, setRarete] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [savedKey, setSavedKey] = useState(null);
+  const [chargement, setChargement] = useState(false);
+  const [erreur, setErreur] = useState(null);
+  const [enregistree, setEnregistree] = useState(false);
 
   const scan = sniper.result;
+  const fiche = useMemo(() => ficheDepuisScan(scan, detail), [scan, detail]);
 
-  /* Un code vient d'être résolu : une seule rareté se valide d'office. */
+  /* Un code vient d'être résolu : une seule rareté se retient d'office. */
   useEffect(() => {
+    setEnregistree(false);
     if (!scan) {
-      setRarity(null);
+      setRarete(null);
       setDetail(null);
-      setSavedKey(null);
       return;
     }
-    setRarity(scan.rarities?.length === 1 ? scan.rarities[0] : null);
+    setRarete(scan.rarities?.length === 1 ? scan.rarities[0] : null);
   }, [scan]);
 
-  /* La fiche complète — nom, texte et statistiques en français — arrive après
-     coup : la carte s'affiche sans l'attendre. */
+  /* La fiche complète — nom, texte et caractéristiques en français — arrive
+     après coup : la carte s'affiche sans l'attendre. */
   useEffect(() => {
-    const cardId = scan?.card?.id;
-    if (!cardId) return undefined;
+    const identifiant = scan?.card?.id;
+    if (!identifiant) return undefined;
 
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
+    const controleur = new AbortController();
+    setChargement(true);
+    setErreur(null);
 
-    cardDetail(cardId, { language: 'fr' }, controller.signal)
-      .then((found) => !controller.signal.aborted && setDetail(found))
+    cardDetail(identifiant, { language: 'fr' }, controleur.signal)
+      .then((trouve) => !controleur.signal.aborted && setDetail(trouve))
       .catch((cause) => {
-        if (cause.name !== 'AbortError') setError(cause.message);
+        if (cause.name !== 'AbortError') setErreur(cause.message);
       })
-      .finally(() => !controller.signal.aborted && setLoading(false));
+      .finally(() => !controleur.signal.aborted && setChargement(false));
 
-    return () => controller.abort();
+    return () => controleur.abort();
   }, [scan?.card?.id]);
 
-  const validate = useCallback(() => {
-    if (!scan?.card || !rarity) return;
-    const key = collection.track(
-      {
-        id: scan.card.id,
-        name: detail?.name ?? scan.card.name,
-        image: detail?.image ?? `https://images.ygoprodeck.com/images/cards/${scan.card.id}.jpg`,
-        images: [
-          {
-            small:
-              detail?.image_small ??
-              `https://images.ygoprodeck.com/images/cards_small/${scan.card.id}.jpg`,
-          },
-        ],
-        type: detail?.type,
-        race: detail?.race,
-        attribute: detail?.attribute,
-        atk: detail?.atk,
-        def: detail?.def,
-        level: detail?.level,
-      },
-      {
-        setCode: scan.matchedCode,
-        setName: rarity.setName,
-        rarity: rarity.rarity,
-        rarityCode: rarity.rarityCode,
-      },
-    );
-    setSavedKey(key);
-  }, [scan, rarity, detail, collection]);
+  const enregistrer = useCallback(() => {
+    const entree = entreeDepuisScan(scan, detail, rarete);
+    if (!entree) return;
+    collection.track(entree.carte, entree.tirage);
+    setEnregistree(true);
+  }, [scan, detail, rarete, collection]);
 
-  const cancel = useCallback(() => {
-    setSavedKey(null);
+  const reprendre = useCallback(() => {
+    setEnregistree(false);
     sniper.rescan();
   }, [sniper]);
 
+  /* Ouvrir une carte de l'inventaire ramène au scanner, prêt à viser. */
+  const revenirAuScanner = useCallback(() => {
+    setOnglet('scan');
+  }, []);
+
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
-      <Aurora enabled={!scan} />
-
-      <header className="safe-top flex shrink-0 items-center justify-between gap-3 px-4 py-2">
-        <div className="min-w-0">
-          <p className="font-mono text-[9px] tracking-[0.3em] text-cyan uppercase">
-            Sniper · code d’extension
-          </p>
-          <h1 className="text-base font-bold tracking-tight">
-            Scanner{' '}
-            <span className="bg-gradient-to-r from-cyan via-violet to-amber bg-clip-text text-transparent">
-              Yu-Gi-Oh!
+    <div className="flex h-dvh flex-col overflow-hidden bg-fond">
+      <header className="safe-top shrink-0 border-b border-trait bg-panneau">
+        <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-between gap-4 px-4">
+          <div className="flex min-w-0 items-baseline gap-3">
+            <h1 className="truncate text-donnee font-semibold tracking-[0.14em] text-encre uppercase">
+              Scanner Yu-Gi-Oh
+            </h1>
+            {/* D'où vient la résolution. C'est une donnée d'exploitation, pas
+                une décoration : elle explique pourquoi une lecture aboutit ou
+                non, et elle a sa place dans l'en-tête d'un outil. */}
+            <span
+              className="hidden shrink-0 rounded-controle border border-trait px-1.5 py-0.5 font-mono text-micro text-tertiaire sm:inline"
+              title={
+                usingBackend()
+                  ? 'Résolution par l’API Python (SQLite et rapidfuzz)'
+                  : 'Résolution locale sur l’index embarqué, sans serveur'
+              }
+            >
+              {usingBackend() ? 'API' : 'LOCAL'}
             </span>
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span
-            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] text-muted"
-            title={
-              usingBackend()
-                ? 'Résolution par l’API Python (SQLite + rapidfuzz)'
-                : 'Résolution locale sur l’index embarqué — aucun serveur requis'
-            }
-          >
-            {usingBackend() ? 'API' : 'LOCAL'}
-          </span>
-          <div className="flex rounded-xl border border-white/10 bg-black/40 p-1">
-            {[
-              ['scan', 'Scanner'],
-              ['collection', `Collection${collection.entries.length ? ` ${collection.entries.length}` : ''}`],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                aria-current={tab === id}
-                className={`h-9 rounded-lg px-3 text-xs font-medium transition ${
-                  tab === id ? 'bg-cyan/20 text-cyan' : 'text-muted hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
           </div>
+
+          {/* Onglets soulignés plutôt que pastilles colorées : c'est la
+              convention d'un outil, et l'onglet actif se lit sans couleur de
+              fond. */}
+          <nav aria-label="Sections" className="flex h-full shrink-0 items-stretch">
+            {ONGLETS.map(({ id, libelle }) => {
+              const actif = onglet === id;
+              const compte = id === 'inventaire' ? collection.entries.length : 0;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setOnglet(id)}
+                  aria-current={actif ? 'page' : undefined}
+                  className={`relative flex items-center gap-1.5 px-3 text-donnee font-medium transition-colors ${
+                    actif ? 'text-encre' : 'text-tertiaire hover:text-second'
+                  }`}
+                >
+                  {libelle}
+                  {compte > 0 && (
+                    <span className="donnee text-micro text-tertiaire">{compte}</span>
+                  )}
+                  <span
+                    aria-hidden
+                    className={`absolute inset-x-2 bottom-0 h-0.5 ${actif ? 'bg-accent' : 'bg-transparent'}`}
+                  />
+                </button>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
-      {tab === 'collection' ? (
-        <main className="rail min-h-0 flex-1 overflow-y-auto px-3 pb-6">
-          <div className="mx-auto max-w-3xl">
-            <p className="mb-3 text-sm text-muted">
-              Valeur totale&nbsp;: <strong>{EURO.format(collection.total)}</strong>
-            </p>
-            <HistoryTab collection={collection} onOpen={() => setTab('scan')} />
+      {onglet === 'inventaire' ? (
+        <main className="rail min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-6xl px-4 py-4">
+            <Inventaire collection={collection} onScanner={revenirAuScanner} />
           </div>
         </main>
       ) : scan ? (
-        /* Deux zones : le visuel en haut, les données en bas. En paysage et sur
-           écran large, elles se placent côte à côte plutôt que l'une sous l'autre. */
-        <main className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 pb-3 lg:grid-cols-2 lg:grid-rows-1 lg:items-center">
-          <div className="flex min-h-0 min-w-0 items-center justify-center py-2">
-            <HoloCard
-              image={
-                detail?.image ?? `https://images.ygoprodeck.com/images/cards/${scan.card.id}.jpg`
-              }
-              imageSmall={
-                detail?.image_small ??
-                `https://images.ygoprodeck.com/images/cards_small/${scan.card.id}.jpg`
-              }
-              name={detail?.name ?? scan.card.name}
-              rarity={rarity?.rarity}
+        /* Écran de résultat : le visuel et la fiche. Empilés sur téléphone,
+           côte à côte dès qu'il y a de la largeur. */
+        <main className="min-h-0 flex-1 overflow-hidden">
+          <div className="mx-auto grid h-full w-full max-w-6xl grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:grid-rows-1 lg:items-start">
+            {/* Le visuel s'efface quand une rareté reste à choisir : à ce
+                moment-là, la décision prime sur la contemplation, et sept
+                options ne doivent pas se retrouver sous la ligne de flottaison. */}
+            <div className="flex min-h-0 items-start justify-center">
+              <HoloCard
+                image={fiche?.image}
+                imageSmall={fiche?.imagePetite}
+                name={fiche?.nom ?? ''}
+                rarity={rarete?.rarity}
+                compact={Boolean(fiche?.choixRequis) && !rarete}
+              />
+            </div>
+
+            <FicheCarte
+              fiche={fiche}
+              detail={detail}
+              rarete={rarete}
+              chargement={chargement}
+              erreur={erreur}
+              enregistree={enregistree}
+              onRarete={setRarete}
+              onEnregistrer={enregistrer}
+              onReprendre={reprendre}
             />
           </div>
-
-          <DataPanel
-            scan={scan}
-            detail={detail}
-            loading={loading}
-            error={error}
-            rarity={rarity}
-            onRarity={setRarity}
-            onValidate={validate}
-            onCancel={cancel}
-            saved={Boolean(savedKey)}
-          />
         </main>
       ) : (
         <main className="min-h-0 flex-1">

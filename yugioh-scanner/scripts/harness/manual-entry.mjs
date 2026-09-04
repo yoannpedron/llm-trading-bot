@@ -53,7 +53,7 @@ async function parcours({ nom, camera }) {
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1200);
 
-  const bouton = page.getByRole('button', { name: /saisir le code/i });
+  const bouton = page.getByRole('button', { name: /^Saisir le code$/i });
   const ouvertDOffice = (await bouton.count()) === 0;
   if (!ouvertDOffice) await bouton.click();
   dit(`formulaire ${ouvertDOffice ? 'ouvert d’office' : 'ouvert au bouton'}`);
@@ -81,19 +81,19 @@ async function parcours({ nom, camera }) {
   await page.waitForSelector('.ygo-card', { timeout: 20000 });
   await page.waitForTimeout(600);
 
-  const code = (await page.locator('section p.font-mono').first().innerText()).trim();
+  const code = (await page.locator('section p.donnee').first().innerText()).trim();
   const carte = await page.locator('section h2').first().innerText();
-  const raretes = await page.getByRole('button', { name: /rare|common|secret/i }).count();
-  const valider = await page.getByRole('button', { name: /^Valider$/ }).count();
-  dit(`résultat : ${code} « ${carte} » — ${raretes} rareté(s), ${valider} bouton Valider`);
+  const raretes = await page.locator('fieldset li button').count();
+  const valider = await page.getByRole('button', { name: /^Enregistrer$/ }).count();
+  dit(`résultat : ${code} « ${carte} » — ${raretes} rareté(s), ${valider} bouton Enregistrer`);
   await page.screenshot({ path: `${SP}/manual-${nom}-resultat.png` });
 
   // Enchaînement : valider, puis retour AU FORMULAIRE et non au viseur. Qui
   // saisit un code en saisit dix ; repasser par le bouton à chaque carte
   // rendrait la saisie manuelle inutilisable pour une pile de cartes.
-  await page.getByRole('button', { name: /^Valider$/ }).click();
+  await page.getByRole('button', { name: /^Enregistrer$/ }).click();
   await page.waitForTimeout(400);
-  const collection = await page.getByRole('button', { name: /^Collection/ }).innerText();
+  const collection = await page.getByRole('button', { name: /^Inventaire/ }).innerText();
   dit(`collection : « ${collection.replace(/\s+/g, ' ')} »`);
   if (!/\d/.test(collection)) throw new Error('la carte validée n’apparaît pas dans la collection');
 

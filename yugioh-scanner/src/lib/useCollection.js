@@ -12,7 +12,7 @@ import {
   withPrice,
 } from './collection.js';
 import { DEFAULT_CONDITION } from './condition.js';
-import { fetchPrice } from './price.js';
+import { fetchPrice, hasPriceBackend } from './price.js';
 
 /** Au-delà, la cote en mémoire est considérée comme périmée. */
 const STALE_MS = 10 * 60 * 1000;
@@ -52,6 +52,16 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
   const [errors, setErrors] = useState(() => new Map());
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  /**
+   * L'inventaire est-il réellement conservé ?
+   *
+   * `saveCollection` rend `false` quand le stockage refuse — quota dépassé,
+   * navigation privée, cookies bloqués — et cette valeur était jetée. L'écran
+   * affirmait alors que « rien ne quitte cet appareil » et que l'inventaire y
+   * est conservé, pendant que chaque rechargement le vidait. Une donnée perdue
+   * en silence est le pire des défauts : l'utilisateur ne l'apprend qu'après.
+   */
+  const [persiste, setPersiste] = useState(true);
 
   const bootedRef = useRef(false);
   const abortRef = useRef(null);
@@ -66,7 +76,7 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
     entriesRef.current = entries;
     // Historique désactivé dans les réglages : la session reste utilisable,
     // mais rien n'est écrit sur l'appareil.
-    if (persist) saveCollection(entries);
+    if (persist) setPersiste(saveCollection(entries));
   }, [entries, persist]);
 
   const markPending = useCallback((key, active) => {
@@ -90,7 +100,15 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
       try {
         const price = await fetchPrice(
           {
+            // Le passcode est la clé primaire de la base, identique dans
+            // toutes les langues. Le nom stocké est le nom FRANÇAIS, que le
+            // paramètre `name` de YGOPRODeck n'indexe pas : la requête
+            // partait en 400 et aucune carte n'obtenait jamais de cote sur
+            // l'hébergement statique. Le nom ne reste qu'en repêchage, pour
+            // une entrée ancienne dépourvue d'identifiant.
+            cardId: entry.cardId,
             name: entry.name,
+            language: 'fr',
             setName: entry.setName,
             rarity: entry.rarity,
             code: entry.setCode,
@@ -104,7 +122,10 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
         if (error.name === 'AbortError') return;
         setErrors((current) => new Map(current).set(entry.key, error.message));
       } finally {
-        if (!signal?.aborted) markPending(entry.key, false);
+        // Toujours libéré, y compris sur annulation : sinon la clé reste dans
+        // l'ensemble et la cellule de cote affiche indéfiniment des points de
+        // suspension, sur une ligne qui n'attend plus rien.
+        markPending(entry.key, false);
       }
     },
     [markPending],
@@ -116,8 +137,16 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
    * l'historique, sans bouton à trouver.
    */
   const refreshAll = useCallback(
-    async (list) => {
-      const targets = list ?? entriesRef.current;
+    async (list, { force = false } = {}) => {
+      const candidats = list ?? entriesRef.current;
+      // Une cote relevée il y a moins de dix minutes vaut encore. Le seuil
+      // existait déjà mais n'était consulté qu'à l'enregistrement d'une carte :
+      // rouvrir la page deux fois de suite refaisait la totalité des requêtes,
+      // pour rien, et sur un réseau mobile. Le bouton « Actualiser » force,
+      // parce que c'est précisément ce qu'on lui demande.
+      const targets = force
+        ? candidats
+        : candidats.filter((entry) => Date.now() - (entry.pricedAt ?? 0) >= STALE_MS);
       if (targets.length === 0) return;
 
       abortRef.current?.abort();
@@ -127,10 +156,15 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
       setRefreshing(true);
       setProgress({ done: 0, total: targets.length });
 
+      let faits = 0;
       await pool(targets, CONCURRENCY, async (entry) => {
         if (controller.signal.aborted) return;
         await loadPrice(entry, controller.signal);
-        setProgress((current) => ({ ...current, done: current.done + 1 }));
+        // Le compteur appartient à CE relevé : incrémenter l'état global
+        // laissait les tâches encore en vol d'un relevé abandonné gonfler le
+        // compteur du suivant, jusqu'à dépasser son total.
+        faits += 1;
+        if (!controller.signal.aborted) setProgress({ done: faits, total: targets.length });
       });
 
       if (!controller.signal.aborted) setRefreshing(false);
@@ -144,6 +178,7 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
     bootedRef.current = true;
 
     const stored = loadCollection();
+    // Sans `force` : seules les cotes périmées repartent en requête.
     if (refreshOnLoad && stored.length) refreshAll(stored);
 
     return () => abortRef.current?.abort();
@@ -188,16 +223,62 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
       if (!entry || entry.condition === condition) return;
 
       setEntries((current) => withCondition(current, key, condition));
-      loadPrice({ ...entry, condition });
+
+      // Seul le backend sait filtrer Cardmarket par état ; sans lui, la
+      // réponse serait identique et son échec viendrait peindre un message
+      // d'erreur sur une ligne dont l'estimation par coefficient est
+      // pourtant juste. On ne relance donc que si la requête peut apprendre
+      // quelque chose.
+      if (hasPriceBackend()) loadPrice({ ...entry, condition });
     },
     [loadPrice],
   );
 
-  const remove = useCallback((key) => setEntries((current) => removeEntry(current, key)), []);
+  /** Oublie tout ce qu'on savait d'une clé : cote en cours, erreur passée. */
+  const oublier = useCallback((cle) => {
+    setPending((courant) => {
+      if (!courant.has(cle)) return courant;
+      const suivant = new Set(courant);
+      suivant.delete(cle);
+      return suivant;
+    });
+    setErrors((courant) => {
+      if (!courant.has(cle)) return courant;
+      const suivant = new Map(courant);
+      suivant.delete(cle);
+      return suivant;
+    });
+  }, []);
 
-  const clear = useCallback(() => setEntries([]), []);
+  const remove = useCallback(
+    (key) => {
+      // Sans cet oubli, la clé restait dans `pending` et dans `errors` : une
+      // carte retirée puis rescannée réapparaissait avec l'erreur de son
+      // ancienne vie, ou bloquée sur « en cours ».
+      oublier(key);
+      setEntries((current) => removeEntry(current, key));
+    },
+    [oublier],
+  );
 
-  const exportCsv = useCallback(() => downloadCsv(entriesRef.current), []);
+  const clear = useCallback(() => {
+    // Le relevé en cours n'a plus d'objet : on l'interrompt au lieu de le
+    // laisser écrire dans un inventaire vidé.
+    abortRef.current?.abort();
+    setRefreshing(false);
+    setProgress({ done: 0, total: 0 });
+    setPending(new Set());
+    setErrors(new Map());
+    setEntries([]);
+  }, []);
+
+  /**
+   * Exporte ce qu'on lui donne, et l'inventaire entier par défaut.
+   * Le bouton voisine avec un champ de filtre et un « total filtré » :
+   * exporter autre chose que ce que l'utilisateur a sous les yeux serait un
+   * piège.
+   */
+  const exportCsv = useCallback((liste) => downloadCsv(liste ?? entriesRef.current), []);
 
   const entryFor = useCallback(
     (key) => entries.find((entry) => entry.key === key) ?? null,
@@ -214,6 +295,7 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
     refreshing,
     progress,
     refreshAll,
+    persiste,
     track,
     setCondition,
     remove,

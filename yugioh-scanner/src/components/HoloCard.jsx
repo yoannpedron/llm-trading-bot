@@ -14,7 +14,7 @@ import '../styles/holo.css';
  * L'inclinaison suit le pointeur sur ordinateur et le doigt sur mobile ; à
  * défaut, l'accéléromètre prend le relais quand la plateforme le propose.
  */
-export default function HoloCard({ image, imageSmall, name, rarity }) {
+export default function HoloCard({ image, imageSmall, name, rarity, compact = false }) {
   const frameRef = useRef(null);
   const pointerRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
@@ -82,7 +82,7 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
       // `revealed` déclenche l'arrivée et le balayage : au chargement de
       // l'image, pas au montage. Sinon l'animation joue sur un rectangle noir
       // et la carte apparaît ensuite sans cérémonie — c'est ce qu'on voyait.
-      className={`ygo-card${loaded ? ' ygo-card--revealed' : ''}`}
+      className={`ygo-card${loaded ? ' ygo-card--revealed' : ''}${compact ? ' ygo-card--compact' : ''}`}
       data-rarity={profile.key}
       // Les intensités viennent du profil : le CSS ne connaît pas les raretés.
       style={{

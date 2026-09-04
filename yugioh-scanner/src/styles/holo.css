@@ -37,7 +37,7 @@
   /* Hauteur maximale de la carte. C'est elle qui décide de la largeur, et non
      l'inverse : sur un téléphone, borner la largeur laisserait la carte occuper
      toute la hauteur et repousser le panneau de données hors de l'écran. */
-  --ygo-max-height: 42vh;
+  --ygo-max-height: 38vh;
 
   perspective: 1400px;
   width: 100%;
@@ -46,10 +46,20 @@
   touch-action: none;
 }
 
+/* Une décision attend : la carte cède la place à ce qu'il faut trancher. */
+.ygo-card--compact {
+  --ygo-max-height: 18vh;
+}
+
 /* Sur écran large, les deux zones sont côte à côte : la carte peut respirer. */
 @media (min-width: 1024px) {
   .ygo-card {
-    --ygo-max-height: 74vh;
+    --ygo-max-height: 72vh;
+  }
+
+  /* Sur écran large, la fiche a sa colonne : rien ne justifie de rapetisser. */
+  .ygo-card--compact {
+    --ygo-max-height: 72vh;
   }
 }
 
