@@ -9,6 +9,7 @@ import {
   distinctRarities,
   findCandidates,
   resolveSetCode,
+  suggestSetCodes,
   trigrams,
   zoneSatisfied,
 } from '../src/lib/match.js';
@@ -238,4 +239,38 @@ test('une clé ne se fait pas concurrence à elle-même entre transpositions', (
   // visée. Le second ne doit pas passer pour un rival du premier.
   const resolved = resolveSetCode(index, 'MRD-FR10', { cutoff: 80 });
   assert.equal(resolved.status, 'matched');
+});
+
+/* --- Saisie manuelle ------------------------------------------------------ */
+
+test('la complétion propose les codes qui commencent par la saisie', () => {
+  const names = (typed) => suggestSetCodes(index, typed).map((s) => s.code);
+  assert.deepEqual(names('MRD-EN06'), ['MRD-EN060', 'MRD-EN061']);
+  assert.deepEqual(names('mrd-en 06'), ['MRD-EN060', 'MRD-EN061']);
+  assert.deepEqual(names('LOB-EN0'), ['LOB-EN001', 'LOB-EN041']);
+});
+
+test('la région tapée est conservée dans les propositions', () => {
+  assert.deepEqual(
+    suggestSetCodes(index, 'LOB-FR0').map((s) => s.code),
+    ['LOB-FR001', 'LOB-FR041'],
+  );
+  // Région incomplète : on complète sur le préfixe, en forme anglaise.
+  assert.deepEqual(
+    suggestSetCodes(index, 'LOB-F').map((s) => s.code),
+    ['LOB-EN001', 'LOB-EN041'],
+  );
+  assert.deepEqual(
+    suggestSetCodes(index, 'LO').map((s) => s.code),
+    ['LOB-EN001', 'LOB-EN041'],
+  );
+});
+
+test('la complétion porte le nom de la carte et respecte la limite', () => {
+  const found = suggestSetCodes(index, 'MRD', { limit: 2 });
+  assert.equal(found.length, 2);
+  assert.equal(found[0].name, 'Blue-Eyes Ultimate Dragon');
+  assert.deepEqual(suggestSetCodes(index, 'X'), []);
+  assert.deepEqual(suggestSetCodes(index, 'ZZZ-EN'), []);
+  assert.deepEqual(suggestSetCodes(index, ''), []);
 });

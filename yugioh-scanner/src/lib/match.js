@@ -470,3 +470,61 @@ function describe(index, candidate, matchedCode, method, confidence, positions) 
     rarities: distinctRarities(printings),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Saisie manuelle : complétion d'un code en cours de frappe            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Codes de l'index qui commencent par ce que l'utilisateur a tapé.
+ *
+ * La saisie manuelle existe pour les cas où la caméra ne peut pas : pas de
+ * caméra, carte abîmée, code effacé. Compléter pendant la frappe évite les
+ * fautes de frappe (le code n'est jamais tapé en entier) et montre tout de
+ * suite si le code existe.
+ *
+ * La région tapée est conservée dans les propositions : quelqu'un qui tape
+ * « RA03-FR0 » veut voir « RA03-FR001 », pas la forme anglaise. Tant que la
+ * région n'est pas complète, on complète sur le préfixe seul.
+ *
+ * @param {object} index résultat de `buildSearchIndex`
+ * @param {string} typed saisie brute, casse et espaces libres
+ * @returns {Array<{code: string, key: string, name: string}>}
+ */
+export function suggestSetCodes(index, typed, { limit = 6 } = {}) {
+  const text = String(typed ?? '')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[\u2010-\u2015\u2212_]/g, '-')
+    .replace(/[^A-Z0-9-]/g, '');
+  if (text.length < 2) return [];
+
+  const parts = /^([A-Z0-9]{1,5})(?:-([A-Z]{0,2})([A-Z0-9]*))?$/.exec(text);
+  if (!parts) return [];
+  const [, prefix, region = '', rest = ''] = parts;
+  const hasDash = text.includes('-');
+
+  // Région complète : on cherche « PREFIXE-NUMERO » ; sinon « PREFIXE- » ou
+  // « PREFIXE » seul. Une région d'une lettre ne restreint rien : elle peut
+  // encore devenir n'importe laquelle.
+  let wanted = prefix;
+  if (hasDash) wanted += region.length === 2 ? `-${rest}` : '-';
+
+  if (!index.sortedCodes) {
+    index.sortedCodes = [...index.byCode.keys()].sort();
+  }
+
+  const out = [];
+  for (const key of index.sortedCodes) {
+    if (!key.startsWith(wanted)) {
+      if (out.length > 0 && key > wanted) break;
+      continue;
+    }
+    const position = [...index.byCode.get(key)][0];
+    const card = index.cards[position];
+    const printed = region.length === 2 ? key.replace('-', `-${region}`) : key.replace('-', '-EN');
+    out.push({ code: printed, key, name: card.name });
+    if (out.length >= limit) break;
+  }
+  return out;
+}

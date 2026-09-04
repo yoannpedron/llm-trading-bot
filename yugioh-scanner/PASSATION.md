@@ -62,7 +62,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **96 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **100 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
@@ -293,6 +293,31 @@ raison : confirmer d'un coup d'œil la rareté choisie, qui décide du prix.
 Ils n'aident pas l'identification et coûtent du GPU sur mobile ; s'il faut
 un jour trancher, c'est cet usage-là qu'il faut préserver, pas le spectacle.
 
+### Saisie manuelle du code
+
+La caméra ne peut pas tout : pas de caméra du tout (ordinateur, autorisation
+refusée), code effacé ou abîmé, carte sous étui. Un formulaire dans le viseur
+résout un code tapé **par le même chemin que le scan** — `submitCode()` dans
+`useSniper.js` appelle `scanCode()`, donc backend Python si configuré, index
+local sinon, et le même écran de résultat avec le même choix de rareté.
+
+Trois points qui ne se devinent pas :
+
+- **La boucle de lecture s'arrête pendant la frappe.** Sans cela elle
+  verrouille sur la carte visée et démonte le formulaire au milieu d'un mot.
+  Trouvé par `scripts/harness/manual-entry.mjs`, qui tape caractère par
+  caractère précisément pour cela — le champ disparaissait entre deux touches.
+  D'où l'état `manualEntry` **dans le hook** et non dans le composant.
+- **`rescan()` n'y touche pas.** Valider une carte tapée ramène au formulaire,
+  pas au viseur : qui saisit un code en saisit dix. C'est la seule raison pour
+  laquelle cet état ne vit pas dans `SniperView`.
+- **La complétion évite la faute de frappe.** `suggestSetCodes()` propose les
+  codes de l'index qui commencent par ce qui est tapé, en conservant la région
+  saisie (« LOB-FR0 » propose « LOB-FR001 », pas la forme anglaise). On ne tape
+  jamais le code en entier, et un code inconnu se voit tout de suite. L'index
+  pesant 1,4 Mo, son chargement est annoncé — sans ce témoin, une saisie valide
+  semble sans proposition pendant la première seconde.
+
 ### Le travail suivant
 
 Le mode de défaillance dominant était **en amont du seuil** et il est traité
@@ -432,6 +457,7 @@ src/lib/
   parse.js         extraction et transposition des codes (pur, testé)
   match.js         résolution exact / régional / approché (pur, testé)
   vote.js          confirmation sur plusieurs images (pur, testé)
+  rarity.js        paliers de rareté : zones, finitions, couleurs (pur, testé)
   cardIndex.js     chargement de l'index embarqué
   scanApi.js       backend Python si configuré, sinon local
   collection.js    historique et export CSV (pur, testé)

@@ -39,6 +39,7 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `harness/sniper-shot.mjs` | fabrique une image de viseur réaliste (flou, reflet, bruit, rotation) |
 | `harness/live-crop.mjs` | recadre la vidéo en direct de l'application et la lit |
 | `harness/ui-e2e.mjs` | chaîne complète en navigateur, caméra simulée par un fichier MJPEG |
+| `harness/manual-entry.mjs` | saisie manuelle du code, avec et sans caméra : frappe, complétion, validation, enchaînement |
 
 ## Caméra simulée
 
@@ -102,3 +103,8 @@ Le résultat attendu tient en une ligne : `résultat : code=… nom="Destiny HER
 Malicious"` et `aucune erreur console`. « AUCUNE lecture aboutie » sans erreur
 console est une régression de la boucle de lecture ou du prétraitement — c'est
 ainsi que deux ont été prises.
+
+`manual-entry.mjs` s'exécute sur la même application servie, et n'a pas besoin
+de la caméra simulée pour son second parcours. Il tape le code **caractère par
+caractère avec un délai** : c'est ce qui démasque une boucle de lecture laissée
+en marche, qui verrouille et démonte le champ entre deux touches.

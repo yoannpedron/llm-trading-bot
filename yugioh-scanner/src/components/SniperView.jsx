@@ -1,6 +1,149 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { loadCardIndex } from '../lib/cardIndex.js';
+import { suggestSetCodes } from '../lib/match.js';
 import { RETICLE_RATIO } from '../lib/viewport.js';
+
+/**
+ * Saisie manuelle du code.
+ *
+ * Pour les cas où la caméra ne peut pas : pas de caméra (ordinateur, refus
+ * d'autorisation), code abîmé ou effacé, carte sous étui. La complétion pendant
+ * la frappe évite les fautes — on ne tape jamais le code en entier — et montre
+ * tout de suite si le code existe. Ouverte d'office quand la caméra manque.
+ */
+function ManualEntry({ onSubmit, autoFocus }) {
+  const [value, setValue] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  // 'chargement' | 'prêt' | 'absent'. L'index pèse 1,4 Mo : son arrivée se voit.
+  // Sans ce témoin, une saisie valide semble n'avoir aucune proposition pendant
+  // la première seconde, et on croit le code inconnu. Et s'il ne vient jamais,
+  // il faut le dire : se taire ferait passer une panne de réseau pour un code
+  // inexistant, exactement le faux négatif que ce projet refuse.
+  const [index, setIndex] = useState('chargement');
+
+  useEffect(() => {
+    let alive = true;
+    loadCardIndex()
+      .then(() => alive && setIndex('prêt'))
+      .catch(() => alive && setIndex('absent'));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      return undefined;
+    }
+    loadCardIndex()
+      .then((found) => !cancelled && setSuggestions(suggestSetCodes(found, value)))
+      .catch(() => !cancelled && setSuggestions([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  const submit = async (code) => {
+    const text = String(code ?? value).trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const resolved = await onSubmit(text);
+      if (resolved.status === 'no_code') setError('Ce n’est pas un code d’extension (ex. RA03-FR001).');
+      else if (resolved.status === 'no_match') {
+        setError(
+          resolved.reason === 'ambiguous'
+            ? 'Ce code hésite entre deux cartes : complétez-le.'
+            : 'Aucune carte ne porte ce code.',
+        );
+      }
+    } catch (cause) {
+      setError(cause.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="w-full max-w-sm rounded-2xl bg-black/70 p-3 backdrop-blur-md"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <label className="block font-mono text-[10px] tracking-[0.16em] text-muted uppercase">
+        Code d’extension
+      </label>
+      <div className="mt-1 flex gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value.toUpperCase());
+            setError(null);
+          }}
+          autoFocus={autoFocus}
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="go"
+          placeholder="RA03-FR001"
+          aria-label="Code d’extension"
+          className="h-12 min-w-0 flex-1 rounded-xl border border-white/15 bg-black/50 px-3 font-mono text-base tracking-[0.12em] uppercase outline-none placeholder:text-muted/50 focus:border-cyan/60"
+        />
+        <button
+          type="submit"
+          disabled={busy || !value.trim()}
+          className="h-12 shrink-0 rounded-xl bg-cyan/25 px-4 text-sm font-semibold text-cyan ring-1 ring-cyan/50 transition active:scale-[0.98] disabled:opacity-40"
+        >
+          Chercher
+        </button>
+      </div>
+
+      {index === 'chargement' && value.trim().length >= 2 && (
+        <p className="mt-2 animate-pulse font-mono text-[11px] text-muted">
+          Chargement de l’index des cartes…
+        </p>
+      )}
+
+      {index === 'absent' && (
+        <p className="mt-2 text-xs text-amber">
+          Index des cartes injoignable : pas de proposition, mais la recherche
+          fonctionne toujours.
+        </p>
+      )}
+
+      {suggestions.length > 0 && (
+        <ul className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/50">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.key}>
+              <button
+                type="button"
+                onClick={() => {
+                  setValue(suggestion.code);
+                  submit(suggestion.code);
+                }}
+                className="flex h-11 w-full items-center gap-3 px-3 text-left transition hover:bg-white/8"
+              >
+                <span className="shrink-0 font-mono text-xs text-cyan">{suggestion.code}</span>
+                <span className="truncate text-sm text-ink/90">{suggestion.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {error && <p className="mt-2 text-xs text-amber">{error}</p>}
+    </form>
+  );
+}
 
 /**
  * Le viseur.
@@ -29,7 +172,7 @@ function statusFor({ reading, sharpness, minSharpness, modelReady, frozenFrame }
 
 export default function SniperView({ sniper }) {
   const {
-    videoRef,
+    attachVideo,
     ready,
     error,
     torch,
@@ -46,10 +189,15 @@ export default function SniperView({ sniper }) {
     sharpness,
     minSharpness,
     frozenFrame,
+    submitCode,
+    manualEntry,
+    setManualEntry,
   } = sniper;
 
   const containerRef = useRef(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  // Sans caméra, la saisie est le seul chemin : on l'ouvre sans attendre.
+  const showManual = manualEntry || Boolean(error);
 
   // Le viseur est dessiné aux mêmes proportions que celles utilisées pour le
   // recadrage envoyé à l'OCR : les deux lisent `viewport.js`.
@@ -73,7 +221,7 @@ export default function SniperView({ sniper }) {
       {/* Toucher l'image y fait la mise au point : sur une carte posée à plat,
           l'appareil vise souvent le fond plutôt que l'inscription. */}
       <video
-        ref={videoRef}
+        ref={attachVideo}
         playsInline
         muted
         autoPlay
@@ -95,7 +243,14 @@ export default function SniperView({ sniper }) {
         />
       )}
 
-      {ready && width > 0 && (
+      {/* Le voile que portait le cadre du viseur, quand celui-ci s'efface. */}
+      {showManual && <div className="pointer-events-none absolute inset-0 bg-abyss/72" />}
+
+      {/* Pendant la saisie, le viseur n'est plus qu'un décor : le cadre, la
+          consigne « placez le code ici » et l'indicateur de netteté parlent
+          d'une lecture suspendue. Le voile sombre reste, il porte le
+          formulaire. */}
+      {ready && width > 0 && !showManual && (
         <div className="pointer-events-none absolute inset-0">
           <div
             className="absolute rounded-xl shadow-[0_0_0_9999px_rgb(4_6_15/72%)]"
@@ -171,7 +326,7 @@ export default function SniperView({ sniper }) {
       {/* Ce que le moteur reçoit vraiment, après binarisation. Un appui
           l'enregistre : c'est la seule façon d'obtenir de vrais recadrages
           pour les bancs de mesure (voir scripts/harness/real-crops.mjs). */}
-      {crop && !frozenFrame && (
+      {crop && !frozenFrame && !showManual && (
         <a
           href={crop}
           download={`viseur-${Date.now()}.png`}
@@ -210,7 +365,9 @@ export default function SniperView({ sniper }) {
           </p>
         )}
 
-        {zoom.available && (
+        {showManual && <ManualEntry onSubmit={submitCode} autoFocus={manualEntry} />}
+
+        {zoom.available && !showManual && (
           <div className="flex w-full max-w-sm items-center gap-3 rounded-2xl bg-black/55 px-4 py-2 backdrop-blur-md">
             <span className="font-mono text-[10px] tracking-[0.16em] text-muted uppercase">Zoom</span>
             <input
@@ -229,9 +386,22 @@ export default function SniperView({ sniper }) {
           </div>
         )}
 
+        {/* Toujours accessible, même caméra ouverte : un code abîmé se tape
+            plus vite qu'il ne se lit. */}
+        {!error && (
+          <button
+            type="button"
+            onClick={() => setManualEntry((open) => !open)}
+            aria-expanded={showManual}
+            className="h-11 w-full max-w-sm rounded-2xl border border-white/15 bg-black/55 text-sm font-medium text-white/85 backdrop-blur-md transition active:scale-[0.99]"
+          >
+            {showManual ? 'Revenir au viseur' : 'Saisir le code à la main'}
+          </button>
+        )}
+
         {/* Un bouton de 64 px grisé n'apprend rien : sans torche, on rend la
             place à l'image. */}
-        {torch.available && (
+        {torch.available && !showManual && (
           <button
             type="button"
             onClick={toggleTorch}

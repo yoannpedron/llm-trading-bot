@@ -49,6 +49,7 @@ const MIN_SHARPNESS = 0.015;
  */
 export function useSniper() {
   const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const trackRef = useRef(null);
   const busyRef = useRef(false);
   const abortRef = useRef(null);
@@ -70,6 +71,32 @@ export function useSniper() {
   const [sharpness, setSharpness] = useState(0);
   const [result, setResult] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState(null);
+  /**
+   * Saisie manuelle ouverte.
+   *
+   * L'état vit ici, et pas dans le composant, pour deux raisons.
+   *
+   * Il **suspend la boucle de lecture** : sans cela elle continue pendant qu'on
+   * tape, verrouille sur la carte visée et démonte le formulaire au milieu d'un
+   * mot. Vu en test navigateur — le champ disparaissait entre deux frappes.
+   *
+   * Il **survit au résultat** : `rescan()` n'y touche pas, donc valider une
+   * carte tapée à la main ramène au formulaire, pas au viseur. Qui saisit un
+   * code en saisit dix.
+   */
+  const [manualEntry, setManualEntry] = useState(false);
+  /**
+   * Le même état, lisible depuis la lecture en cours.
+   *
+   * Suspendre la boucle empêche le *prochain* tour, pas celui qui est déjà
+   * parti : une passe d'OCR dure près d'une seconde et se termine en posant un
+   * résultat, ce qui démonterait le formulaire qu'on vient d'ouvrir. L'état de
+   * React n'est pas lisible depuis cette fonction — elle est mémoïsée sans
+   * dépendances pour ne pas relancer la boucle à chaque rendu — d'où la
+   * référence.
+   */
+  const manualRef = useRef(false);
+  manualRef.current = manualEntry;
 
   /* --- modèle OCR : chauffé pendant que l'utilisateur vise ---------------- */
 
@@ -86,6 +113,32 @@ export function useSniper() {
   useEffect(() => () => void shutdown(), []);
 
   /* --- caméra ------------------------------------------------------------- */
+
+  /**
+   * Rattache le flux à l'élément <video>, à chaque fois qu'il apparaît.
+   *
+   * C'est une **référence de rappel**, et non une `useRef` passée telle quelle,
+   * parce que `<SniperView>` est démonté puis remonté à chaque aller-retour :
+   * onglet Collection, écran de résultat, « Pas ma carte ». React fabrique
+   * alors un nouvel élément vide, tandis que l'effet qui ouvre la caméra ne se
+   * rejoue pas — ses dépendances n'ont pas changé.
+   *
+   * Sans cela, le viseur ne fonctionnait **qu'une fois par chargement de
+   * page** : après le premier résultat, ou une simple visite à la collection,
+   * l'image restait noire et plus aucune lecture n'aboutissait, sans le
+   * moindre message. Mesuré : `srcObject` absent, `videoWidth` à zéro, vidéo
+   * en pause. C'est la boucle principale de l'application ; le test navigateur
+   * ne le voyait pas parce qu'il ne scannait qu'une carte.
+   */
+  const attachVideo = useCallback((element) => {
+    videoRef.current = element;
+    const stream = streamRef.current;
+    if (!element || !stream) return;
+    if (element.srcObject !== stream) element.srcObject = stream;
+    // `play()` rejette quand l'élément est retiré entre-temps : sans filet,
+    // l'exception remonte dans le rendu de React.
+    element.play().catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,10 +159,11 @@ export function useSniper() {
         });
         if (cancelled) return stream.getTracks().forEach((track) => track.stop());
 
-        const video = videoRef.current;
-        if (!video) return;
-        video.srcObject = stream;
-        await video.play().catch(() => {});
+        streamRef.current = stream;
+        // Le rattachement passe par `attachVideo` : l'élément <video> est
+        // détruit et recréé à chaque aller-retour vers la Collection ou vers
+        // l'écran de résultat, et cet effet-ci ne se rejoue jamais.
+        attachVideo(videoRef.current);
         if (cancelled) return;
 
         const track = stream.getVideoTracks()[0];
@@ -154,9 +208,10 @@ export function useSniper() {
     return () => {
       cancelled = true;
       stream?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       trackRef.current = null;
     };
-  }, []);
+  }, [attachVideo]);
 
   const toggleTorch = useCallback(async () => {
     const track = trackRef.current;
@@ -271,6 +326,9 @@ export function useSniper() {
         const certain = resolved.method === 'exact' || resolved.method === 'region';
         const { accepted } = voteRef.current.cast(resolved.matchedCode, { certain });
         if (!accepted) return;
+        // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
+        // maintenant démonterait le formulaire sous les doigts.
+        if (manualRef.current) return;
 
         setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
         setResult(resolved);
@@ -293,7 +351,7 @@ export function useSniper() {
   }, []);
 
   useEffect(() => {
-    if (!ready || result) return undefined;
+    if (!ready || result || manualEntry) return undefined;
 
     let stopped = false;
     let timer = 0;
@@ -309,11 +367,33 @@ export function useSniper() {
       clearTimeout(timer);
       abortRef.current?.abort();
     };
-  }, [ready, result, readOnce]);
+  }, [ready, result, manualEntry, readOnce]);
+
+  /**
+   * Saisie manuelle : même résolution que le viseur, même écran de résultat.
+   *
+   * Pour les cas où la caméra ne peut pas — pas de caméra, code abîmé ou
+   * effacé, carte sous étui. Rend la réponse pour que le formulaire dise
+   * « code inconnu » sans quitter l'écran.
+   */
+  const submitCode = useCallback(async (typed) => {
+    const text = String(typed ?? '').trim().toUpperCase();
+    if (!text) return { status: 'no_code' };
+    abortRef.current?.abort();
+    const resolved = await scanCode(text);
+    if (resolved.status === 'no_code' || resolved.status === 'no_match') return resolved;
+    voteRef.current.reset();
+    setFrozenFrame(null);
+    setResult({ ...resolved, source: `${resolved.source ?? 'local'}:manual` });
+    chime();
+    vibrate();
+    return resolved;
+  }, []);
 
   /** Relance la visée : l'image se dégèle et la boucle repart. */
   const rescan = useCallback(() => {
     abortRef.current?.abort();
+    // `manualEntry` n'est volontairement pas remis à zéro : voir sa déclaration.
     voteRef.current.reset();
     variantOffsetRef.current = 0;
     setResult(null);
@@ -324,7 +404,7 @@ export function useSniper() {
   }, []);
 
   return {
-    videoRef,
+    attachVideo,
     ready,
     error,
     torch,
@@ -343,5 +423,8 @@ export function useSniper() {
     result,
     frozenFrame,
     rescan,
+    submitCode,
+    manualEntry,
+    setManualEntry,
   };
 }
