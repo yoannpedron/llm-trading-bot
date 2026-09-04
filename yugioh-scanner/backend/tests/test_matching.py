@@ -27,11 +27,54 @@ def test_lecture_abimee_corrigee_avant_recherche(matcher):
     assert resolution.method == "exact"
 
 
-def test_correspondance_approchee_quand_la_transposition_ne_suffit_pas(matcher):
+def test_une_erreur_sur_le_numero_est_refusee(matcher):
+    # « LOB-EN002 » est à un caractère de « LOB-EN001 » — et, dans la vraie
+    # base, c'est une autre carte. Sur une clé de sept caractères, un seul
+    # écart vaut 85,7 : sous le plancher, donc « je ne sais pas ». Mesuré :
+    # accepter ce genre d'écart rendait autant de mauvaises cartes que de
+    # bonnes (PASSATION.md, § 3).
     resolution = matcher.resolve("LOB-EN0O2")
+    assert resolution.status == "no_match"
+
+
+def test_correspondance_approchee_unique_au_dela_du_plancher(matcher, monkeypatch):
+    # Le plancher est abaissé pour exercer le chemin approché sur les clés
+    # courtes de la base de test ; en production, seules les clés longues y
+    # passent encore.
+    monkeypatch.setattr("app.matching.FUZZY_CUTOFF", 80)
+    resolution = matcher.resolve("MRD-FR10")
     assert resolution.status == "matched"
     assert resolution.method == "fuzzy"
+    # Le code rendu est celui publié, pas la région lue : la lecture contient
+    # l'erreur qu'on vient de rattraper. Même choix que le client.
+    assert resolution.matched_code == "MRD-EN101"
+    assert resolution.synthetic is False
     assert 80 <= resolution.confidence < 100
+
+
+def test_une_hesitation_entre_deux_cartes_ne_designe_rien(matcher, monkeypatch):
+    monkeypatch.setattr("app.matching.FUZZY_CUTOFF", 80)
+    # « LOB-01 » est aussi proche de LOB-EN001 que de LOB-EN041.
+    resolution = matcher.resolve("LOB-EN01")
+    assert resolution.status == "no_match"
+    assert resolution.reason == "ambiguous"
+    assert resolution.as_dict()["reason"] == "ambiguous"
+
+
+def test_sans_marge_la_premiere_venue_l_emporte(matcher, monkeypatch):
+    # C'est le comportement d'avant, conservé derrière un réglage pour que les
+    # bancs de mesure puissent le rejouer.
+    monkeypatch.setattr("app.matching.FUZZY_CUTOFF", 80)
+    monkeypatch.setattr("app.matching.FUZZY_MARGIN", 0)
+    assert matcher.resolve("LOB-EN01").status == "matched"
+
+
+def test_meme_formule_que_le_client(matcher, monkeypatch):
+    # La note doit être la distance de Levenshtein rapportée à la longueur de la
+    # clé sans région : « MRD-10 » contre « MRD-101 », un écart sur sept.
+    monkeypatch.setattr("app.matching.FUZZY_CUTOFF", 80)
+    resolution = matcher.resolve("MRD-EN10")
+    assert round(resolution.confidence, 1) == 85.7
 
 
 def test_prefere_un_code_exact_a_un_approchant(matcher):

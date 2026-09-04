@@ -5,12 +5,20 @@ Trois chemins, du plus sûr au plus permissif :
 1. **exact** — le code lu existe tel quel en base ;
 2. **régional** — le code lu ne s'y trouve pas, mais son équivalent sans région
    oui : la carte française « RA03-FR001 » retombe sur « RA03-EN001 » ;
-3. **approché** — ``rapidfuzz`` cherche le code le plus proche parmi tous ceux
-   connus, au-delà d'une note plancher.
+3. **approché** — ``rapidfuzz`` cherche la clé sans région la plus proche parmi
+   toutes celles connues, au-delà d'une note plancher et à condition qu'aucune
+   autre clé ne la talonne.
 
 Le plancher compte autant que le reste : sous cette note, on répond « je ne sais
 pas ». Désigner une carte au hasard serait pire qu'un échec, parce que l'échec se
 corrige d'une nouvelle photo alors qu'une mauvaise carte passe inaperçue.
+
+La comparaison se fait sur la clé **sans région**, avec la distance de
+Levenshtein rapportée à la longueur du plus long : exactement ce que fait
+``codeSimilarity`` dans ``src/lib/match.js``. Comparer les codes complets avec
+``fuzz.ratio`` donnait des notes différentes pour la même lecture (une
+substitution y compte deux opérations, et « FR » face à « EN » coûtait deux
+caractères) : le client et le serveur ne rendaient pas le même verdict.
 """
 
 from __future__ import annotations
@@ -18,9 +26,10 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 
-from rapidfuzz import fuzz, process
+from rapidfuzz import process
+from rapidfuzz.distance import Levenshtein
 
-from .config import FUZZY_CUTOFF
+from .config import FUZZY_CUTOFF, FUZZY_MARGIN
 from .normalize import extract_candidates
 from .regions import base_code
 
@@ -31,6 +40,8 @@ class Resolution:
 
     status: str
     read: str | None = None
+    #: « ambiguous » quand deux clés distinctes se disputaient l'approché.
+    reason: str | None = None
     candidates: list[str] = field(default_factory=list)
     code: str | None = None
     matched_code: str | None = None
@@ -42,6 +53,7 @@ class Resolution:
         return {
             "status": self.status,
             "read": self.read,
+            "reason": self.reason,
             "candidates": self.candidates,
             "code": self.code,
             "matched_code": self.matched_code,
@@ -68,7 +80,7 @@ class CodeMatcher:
     def refresh(self) -> None:
         rows = self.connection.execute("SELECT DISTINCT set_code, base FROM printings").fetchall()
         self._codes = [row["set_code"] for row in rows]
-        self._bases = {row["base"] for row in rows}
+        self._bases = sorted({row["base"] for row in rows})
 
     @property
     def size(self) -> int:
@@ -90,16 +102,32 @@ class CodeMatcher:
         ).fetchone()
         return row["set_code"] if row else None
 
-    def _fuzzy(self, code: str) -> tuple[str, float] | None:
-        if not self._codes:
-            return None
-        found = process.extractOne(
-            code,
-            self._codes,
-            scorer=fuzz.ratio,
-            score_cutoff=FUZZY_CUTOFF,
+    def _nearest_bases(self, code: str, limit: int = 3) -> list[tuple[str, float]]:
+        """Les clés sans région les plus proches, notées sur 100, au-delà du plancher."""
+        if not self._bases:
+            return []
+        hits = process.extract(
+            base_code(code),
+            self._bases,
+            scorer=Levenshtein.normalized_similarity,
+            score_cutoff=FUZZY_CUTOFF / 100,
+            limit=limit,
         )
-        return (found[0], found[1]) if found else None
+        return [(base, score * 100) for base, score, _ in hits]
+
+    def _printed(self, base: str) -> str:
+        """Le code publié pour une clé — la forme anglaise, jamais une variante.
+
+        Sur un rapprochement approché, la lecture contient précisément l'erreur
+        qu'on vient de rattraper : lui emprunter sa région reviendrait à
+        présenter la faute comme la référence. Même choix que ``describe`` dans
+        ``src/lib/match.js``.
+        """
+        row = self.connection.execute(
+            "SELECT set_code FROM printings WHERE base = ? ORDER BY synthetic, set_code LIMIT 1",
+            (base,),
+        ).fetchone()
+        return row["set_code"] if row else base
 
     # -- résolution complète ----------------------------------------------
 
@@ -117,16 +145,25 @@ class CodeMatcher:
                 if found:
                     return self._describe(candidate, found, method, 100.0, candidates)
 
-        best: tuple[str, str, float] | None = None
+        # Chaque clé garde sa meilleure note, tous candidats confondus : les
+        # candidats sont des transpositions d'une même lecture, et une clé ne
+        # doit pas se faire concurrence à elle-même au moment de juger l'ambiguïté.
+        scores: dict[str, tuple[float, str]] = {}
         for candidate in candidates:
-            found = self._fuzzy(candidate)
-            if found and (best is None or found[1] > best[2]):
-                best = (candidate, found[0], found[1])
+            for base, score in self._nearest_bases(candidate):
+                if score > scores.get(base, (-1.0, ""))[0]:
+                    scores[base] = (score, candidate)
 
-        if best is None:
+        ranked = sorted(scores.items(), key=lambda item: item[1][0], reverse=True)
+        if not ranked:
             return Resolution(status="no_match", read=raw, candidates=candidates)
 
-        return self._describe(best[0], best[1], "fuzzy", best[2], candidates)
+        # Une lecture qui hésite entre deux cartes ne désigne aucune des deux.
+        best_base, (best_score, read) = ranked[0]
+        if len(ranked) > 1 and best_score - ranked[1][1][0] < FUZZY_MARGIN:
+            return Resolution(status="no_match", read=raw, candidates=candidates, reason="ambiguous")
+
+        return self._describe(read, self._printed(best_base), "fuzzy", best_score, candidates)
 
     def _describe(
         self, read: str, matched: str, method: str, confidence: float, candidates: list[str]

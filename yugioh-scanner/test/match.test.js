@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  FUZZY_CUTOFF,
+  FUZZY_MARGIN,
   buildSearchIndex,
   completePasscode,
   distinctRarities,
   findCandidates,
+  resolveSetCode,
   trigrams,
   zoneSatisfied,
 } from '../src/lib/match.js';
@@ -174,4 +177,65 @@ test('la liste est bornée et ordonnée par note décroissante', () => {
   const results = findCandidates(index, { title: 'Blue-Eyes Dragon' }, { limit: 2 });
   assert.ok(results.length <= 2);
   assert.ok(results[0].score >= (results[1]?.score ?? 0));
+});
+
+/* --- Mode sniper : résolution par le seul code ---------------------------- */
+
+test('un code lu tel quel est une correspondance exacte', () => {
+  const resolved = resolveSetCode(index, 'LOB-EN001');
+  assert.equal(resolved.status, 'matched');
+  assert.equal(resolved.method, 'exact');
+  assert.equal(resolved.card.name, 'Blue-Eyes White Dragon');
+});
+
+test('une carte française retombe sur la donnée anglaise en affichant son code', () => {
+  const resolved = resolveSetCode(index, 'LOB-FR001');
+  assert.equal(resolved.method, 'region');
+  assert.equal(resolved.matchedCode, 'LOB-FR001');
+  assert.equal(resolved.sourceCode, 'LOB-EN001');
+});
+
+test('une erreur sur le numéro est refusée plutôt que rapprochée', () => {
+  // « LOB-EN002 » est à un caractère de « LOB-EN001 » — et, dans la vraie
+  // base, c'est une autre carte. Sur une clé de sept caractères, un seul
+  // écart vaut 85,7 : sous le plancher. Mesuré : tolérer cet écart rendait
+  // autant de mauvaises cartes que de bonnes (PASSATION.md, § 3).
+  assert.ok(FUZZY_CUTOFF > 87.5, 'un écart sur huit caractères doit être refusé');
+  assert.equal(resolveSetCode(index, 'LOB-EN0O2').status, 'no_match');
+});
+
+test('une correspondance approchée unique est acceptée au-delà du plancher', () => {
+  // Plancher abaissé pour exercer le chemin sur les clés courtes du jeu de
+  // test ; en production, seules les clés longues y passent encore.
+  const resolved = resolveSetCode(index, 'MRD-FR10', { cutoff: 80 });
+  assert.equal(resolved.status, 'matched');
+  assert.equal(resolved.method, 'fuzzy');
+  assert.equal(resolved.card.name, 'Pot of Greed');
+  // Le code rendu est celui publié, pas la région lue : la lecture contient
+  // l'erreur qu'on vient de rattraper. Même choix que le serveur.
+  assert.equal(resolved.matchedCode, 'MRD-EN101');
+  assert.equal(resolved.regional, false);
+  assert.equal(resolved.confidence, 85.7);
+});
+
+test('une hésitation entre deux cartes ne désigne rien', () => {
+  // « MRD-06 » est aussi proche de MRD-EN060 que de MRD-EN061.
+  assert.ok(FUZZY_MARGIN > 0);
+  const resolved = resolveSetCode(index, 'MRD-EN06', { cutoff: 80 });
+  assert.equal(resolved.status, 'no_match');
+  assert.equal(resolved.reason, 'ambiguous');
+  assert.deepEqual(new Set(resolved.between), new Set(['MRD-060', 'MRD-061']));
+});
+
+test('sans marge, la première venue l’emporte — réservé aux bancs de mesure', () => {
+  const resolved = resolveSetCode(index, 'MRD-EN06', { cutoff: 80, margin: 0 });
+  assert.equal(resolved.status, 'matched');
+  assert.equal(resolved.method, 'fuzzy');
+});
+
+test('une clé ne se fait pas concurrence à elle-même entre transpositions', () => {
+  // « MRD-FR10 » engendre aussi « MR0-FR10 » : deux candidats, une seule clé
+  // visée. Le second ne doit pas passer pour un rival du premier.
+  const resolved = resolveSetCode(index, 'MRD-FR10', { cutoff: 80 });
+  assert.equal(resolved.status, 'matched');
 });

@@ -14,7 +14,17 @@ YGOPRODECK_API = os.environ.get("YGO_API", "https://db.ygoprodeck.com/api/v7/car
 #: Note minimale (0-100) pour qu'une correspondance approchée soit retenue.
 #: En dessous, mieux vaut répondre « je ne sais pas » que désigner une carte au
 #: hasard : l'utilisateur reprendra sa photo, il ne débusquera pas une erreur.
-FUZZY_CUTOFF = float(os.environ.get("YGO_FUZZY_CUTOFF", "82"))
+#:
+#: Même valeur, même formule et même sens que ``FUZZY_CUTOFF`` dans
+#: ``src/lib/match.js`` : à 88, une clé sans région de sept ou huit caractères
+#: doit être lue sans faute. Mesuré par ``scripts/ocr-confusions.mjs`` — voir
+#: ``PASSATION.md`` § 3 avant de changer l'un sans l'autre.
+FUZZY_CUTOFF = float(os.environ.get("YGO_FUZZY_CUTOFF", "88"))
+
+#: Écart minimal (0-100) entre le meilleur candidat approché et le second.
+#: Deux codes différents à la même note ne désignent rien. Miroir de
+#: ``FUZZY_MARGIN`` côté client.
+FUZZY_MARGIN = float(os.environ.get("YGO_FUZZY_MARGIN", "1"))
 
 #: Durée de vie du cache mémoire des fiches détaillées.
 DETAIL_TTL_SECONDS = int(os.environ.get("YGO_DETAIL_TTL", "3600"))

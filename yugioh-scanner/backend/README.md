@@ -29,9 +29,13 @@ Trois chemins, du plus sûr au plus permissif :
 |---|---|
 | `exact` | le code lu existe tel quel |
 | `region` | son équivalent sans région existe (`RA03-FR001` → `RA03-EN001`) |
-| `fuzzy` | `rapidfuzz` trouve le plus proche au-delà de la note plancher |
+| `fuzzy` | `rapidfuzz` trouve la clé sans région la plus proche au-delà de la note plancher, et refuse si une autre clé fait jeu égal (`reason: "ambiguous"`) |
 
-Sous le plancher (`YGO_FUZZY_CUTOFF`, 82 par défaut), la réponse est `no_match`.
+Sous le plancher (`YGO_FUZZY_CUTOFF`, 88 par défaut) ou à moins de
+`YGO_FUZZY_MARGIN` (1) du second candidat, la réponse est `no_match`. La note
+est la distance de Levenshtein rapportée à la longueur de la clé sans région —
+la même formule que `codeSimilarity` côté client, pour que les deux rendent le
+même verdict (mesuré : voir `PASSATION.md`, § 3).
 Désigner une carte au hasard serait pire qu'un échec : l'échec se corrige d'une
 nouvelle photo, une mauvaise carte passe inaperçue.
 
@@ -57,7 +61,8 @@ trancher.
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `YGO_DB_PATH` | `data/cards.sqlite3` | emplacement de la base |
-| `YGO_FUZZY_CUTOFF` | `82` | note plancher de la correspondance approchée |
+| `YGO_FUZZY_CUTOFF` | `88` | note plancher de la correspondance approchée |
+| `YGO_FUZZY_MARGIN` | `1` | écart minimal entre le meilleur candidat approché et le second |
 | `YGO_DETAIL_TTL` | `3600` | durée de vie du cache des fiches |
 | `YGO_CORS_ORIGINS` | `*` | origines autorisées |
 

@@ -291,13 +291,40 @@ export function zoneSatisfied(index, found, zoneId) {
 /* Mode « sniper » : résolution par le seul code d'extension            */
 /* ------------------------------------------------------------------ */
 
-/** Note plancher d'une correspondance approchée, sur 100. */
-export const FUZZY_CUTOFF = 82;
+/**
+ * Note plancher d'une correspondance approchée, sur 100.
+ *
+ * Les clés comparées font sept ou huit caractères pour 99 % de l'index : à
+ * cette longueur, un seul caractère d'écart vaut 85,7 ou 87,5. Un plancher à
+ * 82 acceptait donc *toute* lecture à une erreur près — et sur 37 000 clés,
+ * une lecture abîmée en trouve presque toujours une. À 88, une clé courte doit
+ * être lue sans faute ; seules les clés de neuf caractères et plus tolèrent
+ * encore un écart.
+ *
+ * Mesuré (`scripts/ocr-confusions.mjs`, 60 codes réels × 2 dégradations) :
+ * voir le tableau dans `PASSATION.md`, § 3. C'est le point de bascule : en
+ * dessous, l'approché rend plus de mauvaises cartes que de bonnes.
+ */
+export const FUZZY_CUTOFF = 88;
 
 /**
- * Similarité de deux codes, sur 100.
- * Même formule que `fuzz.ratio` de rapidfuzz côté serveur, pour que les deux
- * implémentations rendent le même verdict sur la même lecture.
+ * Écart minimal, sur 100, entre le meilleur candidat approché et le second.
+ *
+ * Deux codes différents à la même note ne désignent rien : « RA03-10 » est
+ * aussi proche de « RA03-010 » que de « RA03-100 », et choisir le premier
+ * rencontré revient à tirer au sort. Les notes sont quantifiées par la
+ * longueur des clés (pas de 12,5 ou 14,3 entre deux distances d'édition), de
+ * sorte que toute valeur entre 0 exclu et 10 signifie « aucune égalité ».
+ */
+export const FUZZY_MARGIN = 1;
+
+/**
+ * Similarité de deux codes, sur 100 : distance de Levenshtein rapportée à la
+ * longueur du plus long. Le serveur applique la même formule
+ * (`Levenshtein.normalized_similarity` de rapidfuzz, sur la clé sans région),
+ * pour que les deux implémentations rendent le même verdict sur la même
+ * lecture. `fuzz.ratio`, lui, compte une substitution pour deux opérations et
+ * ne donne pas les mêmes notes.
  */
 export function codeSimilarity(a, b) {
   if (!a || !b) return 0;
@@ -312,11 +339,17 @@ export function codeSimilarity(a, b) {
  * la régionalisation se fait donc ici par *retrait* de la région plutôt que par
  * génération des variantes — même résultat, sans multiplier l'index par six.
  *
+ * @param {{cutoff?: number, margin?: number}} options plancher et marge de
+ *   l'approché, sur 100 — surchargeables pour les bancs de mesure
  * @returns {{status: 'no_code'|'no_match'|'matched', read?: string,
- *   code?: string, matchedCode?: string, method?: string, confidence?: number,
- *   card?: object, printings?: object[], rarities?: object[]}}
+ *   reason?: 'ambiguous', code?: string, matchedCode?: string, method?: string,
+ *   confidence?: number, card?: object, printings?: object[], rarities?: object[]}}
  */
-export function resolveSetCode(index, raw, { cutoff = FUZZY_CUTOFF } = {}) {
+export function resolveSetCode(
+  index,
+  raw,
+  { cutoff = FUZZY_CUTOFF, margin = FUZZY_MARGIN } = {},
+) {
   const candidates = extractSetCodes(raw);
   if (candidates.length === 0) return { status: 'no_code', read: raw };
 
@@ -338,17 +371,44 @@ export function resolveSetCode(index, raw, { cutoff = FUZZY_CUTOFF } = {}) {
   // 3. Le plus proche au-delà du plancher. On compare sur la clé sans région :
   // sinon un « FR » face à un « EN » coûterait deux caractères d'écart pour
   // une différence qui n'en est pas une.
-  let best = null;
+  //
+  // Chaque clé garde sa meilleure note, tous candidats confondus : les
+  // candidats sont des transpositions d'une même lecture, et une clé ne doit
+  // pas se faire concurrence à elle-même au moment de juger l'ambiguïté.
+  const scores = new Map();
   for (const candidate of candidates) {
     for (const key of index.byCode.keys()) {
       const score = codeSimilarity(candidate.matchKey, key);
-      if (score >= cutoff && (best === null || score > best.score)) {
-        best = { candidate, key, score };
+      if (score >= cutoff && score > (scores.get(key)?.score ?? -1)) {
+        scores.set(key, { candidate, score });
       }
     }
   }
 
-  if (!best) return { status: 'no_match', read: raw, candidates: candidates.map((c) => c.code) };
+  let best = null;
+  let runnerUp = null;
+  for (const [key, hit] of scores) {
+    if (best === null || hit.score > best.score) {
+      runnerUp = best;
+      best = { key, ...hit };
+    } else if (runnerUp === null || hit.score > runnerUp.score) {
+      runnerUp = { key, ...hit };
+    }
+  }
+
+  const read = candidates.map((c) => c.code);
+  if (!best) return { status: 'no_match', read: raw, candidates: read };
+
+  // Une lecture qui hésite entre deux cartes ne désigne aucune des deux.
+  if (runnerUp && best.score - runnerUp.score < margin) {
+    return {
+      status: 'no_match',
+      reason: 'ambiguous',
+      read: raw,
+      candidates: read,
+      between: [best.key, runnerUp.key],
+    };
+  }
 
   const positions = index.byCode.get(best.key);
   const printed = printedCodeFor(index, positions, best.key, best.candidate.region);

@@ -104,6 +104,19 @@ const shots = await page.evaluate(
     const H = 1080;
     const container = { width: 390, height: 844 };
 
+    // Ce que le viseur découpe réellement dans la vidéo : c'est *dans* ce
+    // rectangle que le code doit tenir, avec une marge, comme le cadre un
+    // utilisateur. Une première version rendait le code à taille fixe, plus
+    // large que le viseur : le banc coupait lui-même le premier et le dernier
+    // caractère, et mesurait ses propres amputations comme des erreurs d'OCR
+    // (« RA03-EN10 » pour « RA03-EN107 »).
+    const rect = viewport.toVideoRect(
+      viewport.reticleRect(container),
+      { width: W, height: H },
+      container,
+    );
+    const FILL = 0.78;
+
     const out = [];
     for (const code of codes) {
       for (const level of levels) {
@@ -126,7 +139,9 @@ const shots = await page.evaluate(
         context.fillStyle = '#1a1208';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-        context.font = 'bold 76px "Liberation Sans", sans-serif';
+        context.font = 'bold 100px "Liberation Sans", sans-serif';
+        const size = Math.floor((100 * rect.width * FILL) / context.measureText(code).width);
+        context.font = `bold ${size}px "Liberation Sans", sans-serif`;
         context.fillText(code, 0, 0);
         context.restore();
 
@@ -147,11 +162,6 @@ const shots = await page.evaluate(
         }
         context.putImageData(bruit, 0, 0);
 
-        const rect = viewport.toVideoRect(
-          viewport.reticleRect(container),
-          { width: W, height: H },
-          container,
-        );
         const scale = Math.max(1.5, Math.min(4, 240 / rect.height));
         const variants = preprocess.cropVariants(canvas, rect, { scale });
 
@@ -224,7 +234,7 @@ for (const shot of shots) {
     else stats[shot.level].faux += 1;
   }
 
-  lectures.push({ level: shot.level, brut, carte: attenduPour.get(attendu) });
+  lectures.push({ level: shot.level, imprime: attendu, brut, carte: attenduPour.get(attendu) });
 
   // Confusions caractère par caractère, seulement quand les longueurs
   // correspondent : une lettre perdue décalerait tout et fabriquerait des
@@ -250,25 +260,45 @@ for (const level of levels) {
   console.log(`${level.padEnd(8)} ${pct(brut)}    ${pct(identifie)}     ${pct(faux)}`);
 }
 
-/* --- Balayage du seuil de correspondance approchée ----------------------- */
+/* --- Balayage du seuil et de la marge d'ambiguïté ----------------------- */
 
-console.log('\nEffet du seuil approché (toutes dégradations confondues) :\n');
-console.log('seuil   identifiées   fausses   abandons');
-for (const cutoff of [82, 86, 88, 90, 92, 94, 96, 100]) {
+/**
+ * Chaque ligne rejoue les lectures conservées avec un autre réglage. Les
+ * correspondances exactes et régionales ne dépendent d'aucun des deux : ce que
+ * la ligne « 100 » affiche est le socle, et le reste dit ce que l'approché
+ * ajoute — en bonnes cartes comme en fausses.
+ */
+function balayage(options) {
   let bonnes = 0;
   let fausses = 0;
   for (const { brut, carte } of lectures) {
-    const resolu = resolveSetCode(index, brut, { cutoff });
+    const resolu = resolveSetCode(index, brut, options);
     if (resolu.status !== 'matched') continue;
     if (resolu.card.id === carte) bonnes += 1;
     else fausses += 1;
   }
-  const abandons = lectures.length - bonnes - fausses;
-  const pct = (n) => `${String(Math.round((n / lectures.length) * 100)).padStart(3)}%`;
+  return { bonnes, fausses, abandons: lectures.length - bonnes - fausses };
+}
+
+const pct = (n) => `${String(Math.round((n / lectures.length) * 100)).padStart(3)}%`;
+const ligne = (libelle, { bonnes, fausses, abandons }) =>
   console.log(
-    `${String(cutoff).padStart(4)}    ${String(bonnes).padStart(3)} ${pct(bonnes)}   ` +
+    `${libelle}    ${String(bonnes).padStart(3)} ${pct(bonnes)}   ` +
       `${String(fausses).padStart(3)} ${pct(fausses)}   ${String(abandons).padStart(3)} ${pct(abandons)}`,
   );
+
+console.log('\nEffet du seuil approché, sans marge (toutes dégradations confondues) :\n');
+console.log('seuil   identifiées   fausses   abandons');
+for (const cutoff of [82, 86, 88, 90, 92, 94, 96, 100]) {
+  ligne(String(cutoff).padStart(4), balayage({ cutoff, margin: 0 }));
+}
+
+console.log('\nEffet de la marge d\'ambiguïté (second candidat distinct trop proche = refus) :\n');
+console.log('seuil  marge   identifiées   fausses   abandons');
+for (const cutoff of [82, 86, 88]) {
+  for (const margin of [0, 1, 12.5]) {
+    ligne(`${String(cutoff).padStart(4)}  ${String(margin).padStart(5)}`, balayage({ cutoff, margin }));
+  }
 }
 
 fs.writeFileSync(path.join(SP, 'lectures.json'), JSON.stringify(lectures, null, 1));

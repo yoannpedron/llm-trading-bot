@@ -19,12 +19,21 @@ Le banc injecte `src/lib/*` dans une page Chromium via `window.YGO`. Mesurer
 avec une réimplémentation donnerait des chiffres qui ne décrivent pas
 l'application.
 
+`playwright` s'importe en ESM : s'il n'est installé que globalement, faire un
+lien (`ln -s "$(npm root -g)/playwright" node_modules/playwright`).
+
+**Regarder les images avant de croire un chiffre.** `ocr-confusions.mjs` écrit
+ce que le moteur a reçu dans `$SP/confusions/`. Sa première version rendait le
+code plus large que le viseur et mesurait ses propres amputations : 25 % de
+mauvaises cartes annoncées, 2 % réelles. Le code est maintenant ajusté à 78 %
+de la largeur du viseur, comme le cadre un utilisateur.
+
 ## Ce qu'il y a
 
 | Script | Ce qu'il mesure |
 |---|---|
 | `build-index.mjs` | génère `public/card-index.json` depuis YGOPRODeck (lancé par `prebuild`) |
-| `ocr-confusions.mjs` | **le plus important** : taux de bonne carte, de mauvaise carte, et effet du seuil approché |
+| `ocr-confusions.mjs` | **le plus important** : taux de bonne carte, de mauvaise carte, effet du seuil approché et de la marge d'ambiguïté (`lectures.json` conserve les lectures pour rejouer sans OCR) |
 | `font-confusions.mjs` | similarité des silhouettes de glyphes — conclusion : non concluant, voir plus bas |
 | `harness/sniper-shot.mjs` | fabrique une image de viseur réaliste (flou, reflet, bruit, rotation) |
 | `harness/live-crop.mjs` | recadre la vidéo en direct de l'application et la lit |

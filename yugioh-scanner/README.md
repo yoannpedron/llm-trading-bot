@@ -104,7 +104,7 @@ Ensuite, trois chemins du plus sûr au plus permissif :
 |---|---|
 | `exact` | le code lu existe tel quel |
 | `region` | son équivalent sans région existe (`RA03-FR001` → `RA03-EN001`) |
-| `fuzzy` | le plus proche au-delà d'une note plancher (82) |
+| `fuzzy` | le plus proche au-delà d'une note plancher (88), à condition qu'aucun autre code ne fasse jeu égal |
 
 Sous le plancher, la réponse est « aucune correspondance ». Désigner une carte au
 hasard serait pire qu'un échec : l'échec se corrige d'une nouvelle visée, une

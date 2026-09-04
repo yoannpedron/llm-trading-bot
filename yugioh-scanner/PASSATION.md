@@ -12,7 +12,7 @@ qu'il ne faut surtout pas croire sur parole.
 | Quoi | Où | État |
 |---|---|---|
 | Dépôt | `github.com/yoannpedron/llm-trading-bot` | — |
-| Branche de travail | `claude/yugioh-card-price-ocr-daf5fd` | ne pas pousser ailleurs sans accord |
+| Branche de travail | `claude/yugioh-card-price-ocr-ix9l67` (suite de `…-daf5fd`) | ne pas pousser ailleurs sans accord |
 | Site en ligne | https://yoannpedron.github.io/llm-trading-bot/ | déployé, fonctionnel |
 | GitHub Pages | Settings → Pages → Source : **GitHub Actions** | ✅ déjà fait |
 | Environnement Pages | Settings → Environments → `github-pages` → Deployment branches | ✅ déjà ouvert à la branche |
@@ -44,7 +44,15 @@ cd backend && pip install -r requirements.txt
 python -m app.cli sync && uvicorn app.main:app --reload
 ```
 
+`backend/requirements.txt` n'existait pas dans le dépôt jusqu'ici : la règle
+`*.txt` du `.gitignore` **racine** l'avalait en silence. Il est maintenant
+réintégré par une exception dans `yugioh-scanner/.gitignore`. Si un autre
+fichier `.txt` semble « ne pas vouloir se commiter », c'est la même cause.
+
 Pour les scripts de mesure : Chromium + `playwright` (voir `scripts/README.md`).
+Si `playwright` est installé globalement et non dans le projet, un lien suffit
+(`ln -s "$(npm root -g)/playwright" node_modules/playwright`) : les scripts
+l'importent en ESM, qui ignore `NODE_PATH`.
 
 ---
 
@@ -54,38 +62,122 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **82 tests JS** (`npm test`) et **40 tests Python** (`python3 -m pytest backend`)
+- **89 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
 ---
 
-## 3. Ce qui bloque — à lire en premier
+## 3. Ce qui bloquait — et ce que la mesure a révélé
 
-**Le scanner identifie autant de mauvaises cartes que de bonnes.**
+La version précédente de ce document annonçait que **le scanner identifiait
+autant de mauvaises cartes que de bonnes** (25 % contre 25 % en dégradation
+moyenne). Le balayage de seuil demandé a été exécuté. Il a d'abord confirmé ce
+chiffre, puis l'a démenti : **le banc de mesure coupait lui-même le code.**
 
-Mesuré sur 40 codes réels rendus à l'échelle du viseur puis dégradés comme une
-vraie prise de vue (`node scripts/ocr-confusions.mjs`) :
+### Le défaut du banc
 
-| Dégradation | Lecture exacte | Bonne carte | **Mauvaise carte** |
-|---|---|---|---|
-| moyenne | 15 % | 25 % | **25 %** |
-| forte | 13 % | 15 % | **23 %** |
+`scripts/ocr-confusions.mjs` rendait le code à taille fixe (76 px) dans une
+vidéo 1920×1080, alors que le viseur n'y découpe qu'une bande de 409 px de
+large. Un code de dix caractères en fait 440 : le premier et le dernier étaient
+tronqués **avant** l'OCR. Vérifié en ouvrant les images soumises au moteur :
+« RA03-EN107 » y apparaît amputé du R et du 7, et Tesseract rend fidèlement
+« RA03-EN10 ». Le banc mesurait ses propres amputations comme des erreurs de
+lecture.
 
-C'est le pire mode de défaillance possible : une mauvaise carte passe inaperçue,
-là où un échec se corrige d'une nouvelle visée.
+Le code est maintenant rendu pour occuper 78 % de la largeur du viseur, comme
+le cadre un utilisateur. Sur les mêmes 60 codes réels, avant et après :
 
-**Cause identifiée.** Le seuil de correspondance approchée vaut 82 sur 100
-(`FUZZY_CUTOFF` dans `src/lib/match.js` et `backend/app/config.py`). Sur 37 000
-clés de neuf caractères, cela autorise près de deux caractères d'écart : une
-lecture abîmée trouve presque toujours *quelque chose*.
+| Banc | Dégradation | Lecture exacte | Bonne carte | Mauvaise carte |
+|---|---|---|---|---|
+| tronqué (ancien) | moyenne | 12 % | 18 % | **17 %** |
+| tronqué (ancien) | forte | 7 % | 12 % | **20 %** |
+| **corrigé** | moyenne | 55 % | 75 % | 2 % |
+| **corrigé** | forte | 80 % | 90 % | 0 % |
 
-### Le travail immédiat
+Ces chiffres sont ceux du seuil 82 d'origine, sans marge. Ils disent deux
+choses : le pipeline lit bien mieux qu'annoncé, et il reste des fausses cartes.
 
-Un balayage de seuil est déjà écrit dans `scripts/ocr-confusions.mjs` : il
-réutilise les lectures OCR sans les refaire et affiche, pour chaque seuil, le
-nombre de bonnes cartes, de mauvaises et d'abandons. **Il n'a pas encore été
-exécuté** — c'est la première chose à faire.
+### Le balayage, sur le banc corrigé (120 lectures)
+
+| Seuil | Marge | Bonnes | Fausses | Abandons |
+|---|---|---|---|---|
+| 82 | 0 | 108 (90 %) | **11 (9 %)** | 1 |
+| 88 | 0 | 106 (88 %) | **10 (8 %)** | 4 |
+| 90 | 0 | 89 (74 %) | 0 | 31 |
+| 82 | 1 | 101 (84 %) | 1 (1 %) | 18 |
+| **88** | **1** | **99 (83 %)** | **1 (1 %)** | **20** |
+
+Lecture du tableau :
+
+- **Le seuil seul ne suffit pas.** Entre 82 et 88 rien ne change ; à 90 les
+  fausses disparaissent mais l'approché ne rattrape plus rien (89 bonnes =
+  exact + régional seuls). Le point de bascule sans marge est entre 88 et 90.
+- **La marge d'ambiguïté fait l'essentiel.** Dix des onze fausses cartes sont
+  des *égalités* : la lecture « LVAL-ENO061 » (un O inséré par Tesseract après
+  la région) devient « LVAL-0061 », à un caractère à la fois de « LVAL-006 » et
+  de « LVAL-061 » — deux cartes réelles. L'ancien code prenait la première
+  rencontrée dans l'ordre de l'index. Refuser dès qu'un second candidat
+  distinct fait jeu égal ramène les fausses de 11 à 1, au prix de 7 bonnes.
+- **Le seuil garde son rôle face à d'autres erreurs.** La marge ne voit pas
+  une substitution isolée qui tombe sur un voisin *unique* (« SENF-066 » pour
+  « GENF-066 », « JOOD-087 » pour « DOOD-087 »). Le banc tronqué, malgré son
+  défaut, en avait produit six fausses pour quatre bonnes. À 88, un écart sur
+  une clé de sept ou huit caractères (99 % de l'index) est refusé ; seules les
+  clés plus longues tolèrent encore une erreur. Coût mesuré par rapport à 82 :
+  deux lectures sur 120, le même code lu deux fois.
+
+### Décisions prises
+
+1. **`FUZZY_CUTOFF` = 88** dans `src/lib/match.js` et `backend/app/config.py`.
+2. **`FUZZY_MARGIN` = 1** aux deux endroits : un rapprochement approché est
+   refusé (`status: 'no_match'`, `reason: 'ambiguous'`) dès qu'une clé
+   distincte obtient une note à moins d'un point de la meilleure. Les notes
+   étant quantifiées par la longueur des clés (pas de 12,5 ou 14,3), toute
+   marge entre 0 exclu et 10 signifie « aucune égalité ».
+3. **Le serveur applique la même formule que le client.** Il comparait les
+   codes *complets* avec `fuzz.ratio` (une substitution y compte deux
+   opérations, et « FR » face à « EN » coûtait deux caractères) : le même seuil
+   n'y voulait pas dire la même chose. Il compare désormais la clé **sans
+   région** avec `Levenshtein.normalized_similarity` — exactement
+   `codeSimilarity` de `match.js` — et rend, sur un approché, le code publié
+   plutôt que la région lue, comme le client. Un test de chaque côté fixe la
+   note attendue (« MRD-10 » contre « MRD-101 » : 85,7).
+4. **Le chemin de vote a été vérifié** (`useSniper.js` l. 271) : exact et
+   régional sont acceptés d'emblée, l'approché exige deux lectures concordantes
+   dans une fenêtre de quatre secondes. Le vote n'est pas passé à trois : sur
+   le banc, les deux niveaux de dégradation d'un même code produisent souvent
+   la *même* lecture erronée (« DTO03-EN018 » deux fois, « SDDE-ENO026 » deux
+   fois) — une troisième image identique ne trancherait rien. C'est la marge
+   qui règle ces cas, pas le nombre de lectures.
+5. **La fausse carte restante** : « BP03-EN008 » lu « BP03-ENO00S », S
+   transposé en 5, O inséré, meilleur voisin unique « BP03-005 ». Un approché,
+   donc soumis au vote ; l'autre image du même code donne une lecture
+   différente, ambiguë. En usage réel, le vote la bloque.
+
+### Le travail suivant
+
+Le mode de défaillance dominant est maintenant identifié et il est **en amont
+du seuil** : Tesseract insère un « O » entre la région et le numéro sur 25 des
+120 lectures (« ENO061 » pour « EN061 »), sur une image parfaitement nette.
+Aucun code de l'index n'a de numéro à quatre chiffres, et les 38 clés en
+« -O… » sont des coquilles YGOPRODeck (« LAVD-ENO34 »). Par ordre de valeur :
+
+1. **`user_patterns` de Tesseract** — contraindre la sortie à la grammaire
+   d'un code (`\A\A\A-\A\A\d\d\d`, préfixes de 2 à 5, numéro de 2 ou 3
+   chiffres). C'est la parade directe au O inséré. Écrire le fichier dans le
+   système de fichiers du worker avec `worker.writeText()`. **Mesurer avec le
+   banc corrigé avant et après** : la ligne « 100 » du balayage (exact +
+   régional seuls) est le chiffre à faire monter.
+2. **Vote caractère par caractère** entre les binarisations, plutôt que de
+   retenir la première qui rend quelque chose.
+3. **Redressement** — inclinaison par variance du profil de projection.
+4. **Étendre le banc** aux substitutions réelles (S/G, J/D, 5/S) : la
+   dégradation synthétique actuelle ne les produit presque plus. Une poignée
+   de vraies photos de téléphone vaudrait mieux que davantage de synthèse.
+
+Ce qui a été fait ici est réversible et rejouable : `margin: 0` rend
+l'ancien comportement, et le balayage complet tient dans
 
 ```bash
 export SP=/tmp/ygo && mkdir -p $SP
@@ -93,30 +185,22 @@ node scripts/harness/build.mjs
 SP=$SP APP=$PWD COUNT=60 node scripts/ocr-confusions.mjs
 ```
 
-Choisir le seuil au point de bascule, puis, par ordre de valeur décroissante :
-
-1. **Marge d'ambiguïté** — refuser quand deux codes différents obtiennent des
-   notes proches. Une lecture qui hésite entre deux cartes ne désigne rien.
-2. **Jamais d'approché sans confirmation** — `src/lib/vote.js` exige déjà deux
-   lectures concordantes pour une correspondance approchée. Vérifier que ce
-   chemin est bien pris partout, et envisager d'exiger trois lectures.
-3. **Assumer le refus.** Mieux vaut « je ne sais pas » que la mauvaise carte.
-   C'est une décision de produit à tenir explicitement, pas un réglage à
-   optimiser vers le taux de reconnaissance.
-4. **Vote caractère par caractère** entre les quatre binarisations, plutôt que de
-   retenir la première qui rend quelque chose.
-5. **`user_patterns` de Tesseract** pour contraindre la sortie à la grammaire
-   d'un code (`\A\A\A-\A\A\d\d\d`). Écrire le fichier dans le système de
-   fichiers du worker avec `worker.writeText()`.
-6. **Redressement** — estimer l'inclinaison par variance du profil de projection
-   et corriger avant l'OCR.
-
----
-
 ## 4. Ce qu'il ne faut pas croire sur parole
 
 Chacun de ces points a coûté du temps. Ils sont tous vérifiés par une mesure ou
 un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
+
+### Le banc
+
+- **Un banc qui ne cadre pas comme l'utilisateur mesure autre chose que le
+  pipeline.** La première version d'`ocr-confusions.mjs` rendait le code plus
+  large que le viseur et concluait à 25 % de mauvaises cartes ; le chiffre
+  réel était 2 %. Avant de croire un taux d'échec, **ouvrir les images que le
+  moteur a reçues** (`$SP/confusions/*.png`). C'est ce qui a tranché ici.
+- **Tesseract insère des caractères sur une image nette.** « ENO061 » pour
+  « EN061 », 25 fois sur 120, sans flou ni bruit particulier. Ce n'est ni le
+  recadrage ni la binarisation : c'est le moteur, et cela se corrige par la
+  grammaire de sortie, pas par le seuil de correspondance.
 
 ### Tesseract
 
@@ -171,6 +255,10 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
 - **Les codes publiés sont uniquement anglais.** Une carte française porte
   `RA03-FR001`. Le backend engendre les variantes régionales ; le client retire
   la région avant de comparer. Deux chemins, même résultat.
+- **Aucun numéro à quatre chiffres, et 38 coquilles.** Un code lu avec quatre
+  chiffres est toujours une erreur de lecture. Les clés « LAVD-O34 » et
+  consœurs viennent de fautes de frappe YGOPRODeck (« LAVD-ENO34 »), pas d'une
+  lettre de série : ne pas les prendre pour une règle.
 
 ### Hébergement
 
@@ -218,4 +306,5 @@ couvrent volontairement les mêmes cas.
   parfaitement silencieuses ont été prises ainsi. Le lancer après toute
   modification de la boucle de lecture.
 - **Préférer l'échec au faux positif.** C'est le fil directeur de tout ce qui
-  reste à faire.
+  reste à faire. La marge d'ambiguïté en est l'application : 7 bonnes cartes
+  sacrifiées pour 10 fausses évitées, et c'est un bon échange.
