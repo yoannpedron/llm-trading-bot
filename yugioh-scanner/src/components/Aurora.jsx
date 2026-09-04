@@ -2,7 +2,13 @@
  * Fond animé : trois masses de couleur qui dérivent derrière une grille fine.
  * Purement décoratif, donc `aria-hidden` et `pointer-events-none`.
  */
-export default function Aurora() {
+export default function Aurora({ enabled = true }) {
+  if (!enabled) {
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-abyss" />
+    );
+  }
+
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-abyss" />

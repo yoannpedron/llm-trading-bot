@@ -10,6 +10,8 @@
  * qui permet de tester la fusion des entrées et l'export CSV sous Node.
  */
 
+import { DEFAULT_CONDITION, conditionPrice } from './condition.js';
+
 export const STORAGE_KEY = 'ygo-scanner:collection:v1';
 
 /** Identité d'une ligne : une même carte dans deux raretés fait deux lignes. */
@@ -19,7 +21,7 @@ export const entryKey = (cardId, setCode, rarity) =>
 /**
  * Construit une entrée à partir d'une carte identifiée et du tirage retenu.
  */
-export function makeEntry(card, printing, { at = Date.now() } = {}) {
+export function makeEntry(card, printing, { at = Date.now(), condition = DEFAULT_CONDITION } = {}) {
   return {
     key: entryKey(card.id, printing?.setCode, printing?.rarity),
     cardId: card.id,
@@ -36,6 +38,7 @@ export function makeEntry(card, printing, { at = Date.now() } = {}) {
     rarityCode: printing?.rarityCode ?? '',
     image: card.image ?? null,
     imageSmall: card.images?.[0]?.small ?? null,
+    condition,
     scannedAt: at,
     seenAt: at,
     count: 1,
@@ -57,6 +60,11 @@ export function upsertEntry(entries, entry) {
     : entry;
 
   return [merged, ...entries.filter((item) => item.key !== entry.key)];
+}
+
+/** Change l'état retenu pour une entrée. */
+export function withCondition(entries, key, condition) {
+  return entries.map((entry) => (entry.key === key ? { ...entry, condition } : entry));
 }
 
 /** Remplace la cote d'une entrée sans toucher au reste. */
@@ -101,7 +109,10 @@ const COLUMNS = [
   ['Code', (entry) => entry.setCode],
   ['Série', (entry) => entry.setName],
   ['Rareté', (entry) => entry.rarity],
-  ['Cote EUR', (entry) => entry.price?.prices?.trend ?? entry.price?.prices?.from ?? ''],
+  ['État', (entry) => entry.condition ?? ''],
+  ['Cote EUR', (entry) => conditionPrice(entry.price, entry.condition).value ?? ''],
+  ['Cote estimée', (entry) => (conditionPrice(entry.price, entry.condition).estimated ? 'oui' : 'non')],
+  ['Cote de référence EUR', (entry) => entry.price?.prices?.trend ?? entry.price?.prices?.from ?? ''],
   ['Source', (entry) => entry.price?.source ?? ''],
   ['À partir de EUR', (entry) => entry.price?.prices?.from ?? ''],
   ['Moyenne 30j EUR', (entry) => entry.price?.prices?.avg30 ?? ''],
@@ -175,10 +186,14 @@ export function downloadCsv(entries) {
   URL.revokeObjectURL(url);
 }
 
-/** Somme des cotes connues, pour l'en-tête de l'historique. */
+/**
+ * Somme des cotes connues, pour l'en-tête de l'historique.
+ * On additionne la valeur *à l'état retenu*, pas la cote de référence : sinon
+ * un classeur de cartes jouées afficherait un total de cartes neuves.
+ */
 export function totalValue(entries) {
   return entries.reduce((total, entry) => {
-    const price = entry.price?.prices?.trend ?? entry.price?.prices?.from ?? 0;
-    return total + (Number.isFinite(price) ? price : 0) ;
+    const { value } = conditionPrice(entry.price, entry.condition);
+    return total + (Number.isFinite(value) ? value : 0);
   }, 0);
 }

@@ -12,7 +12,7 @@
  * L'application reste donc utilisable en toutes circonstances, et le champ
  * `source` de la réponse dit toujours d'où vient le chiffre affiché.
  *
- * Paramètres : `name` (requis), `set`, `rarity`, `code`.
+ * Paramètres : `name` (requis), `set`, `rarity`, `code`, `condition`.
  */
 
 import {
@@ -22,6 +22,10 @@ import {
 } from './_lib/cardmarket.js';
 
 const YGOPRODECK = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+
+/** Échelle d'état de Cardmarket, du meilleur au pire. Doit rester alignée sur
+ *  `src/lib/condition.js`, qui la présente côté interface. */
+const CONDITION_IDS = { MT: 1, NM: 2, EX: 3, GD: 4, LP: 5, PL: 6, PO: 7 };
 
 /** Collecte activable/désactivable sans redéployer le front. */
 const SCRAPE_ENABLED = process.env.CARDMARKET_SCRAPE !== 'false';
@@ -72,10 +76,10 @@ async function fetchWithTimeout(url, options = {}) {
 }
 
 /** Tente de lire la fiche Cardmarket. Renvoie `null` dès que ça coince. */
-async function fromCardmarket({ name, setName, rarity }) {
+async function fromCardmarket({ name, setName, rarity, conditionId }) {
   if (!SCRAPE_ENABLED || !setName) return null;
 
-  for (const url of buildProductUrls({ name, setName, rarity })) {
+  for (const url of buildProductUrls({ name, setName, rarity, conditionId })) {
     try {
       const response = await fetchWithTimeout(url, {
         headers: {
@@ -91,7 +95,15 @@ async function fromCardmarket({ name, setName, rarity }) {
 
       const prices = parsePriceTable(await response.text());
       if (hasUsablePrices(prices)) {
-        return { source: 'cardmarket', currency: 'EUR', prices, productUrl: url };
+        return {
+          source: 'cardmarket',
+          currency: 'EUR',
+          prices,
+          productUrl: url,
+          // Dit à l'interface que le « à partir de » est déjà celui de l'état
+          // demandé : elle l'affiche tel quel au lieu d'estimer.
+          conditionApplied: Boolean(conditionId),
+        };
       }
     } catch {
       // Délai dépassé, blocage, DNS : on passe à l'URL suivante puis au repli.
@@ -149,12 +161,15 @@ export default async (request) => {
   const setName = url.searchParams.get('set')?.trim() || '';
   const rarity = url.searchParams.get('rarity')?.trim() || '';
   const code = url.searchParams.get('code')?.trim() || '';
+  const condition = url.searchParams.get('condition')?.trim().toUpperCase() || '';
+  // Une valeur inconnue est ignorée plutôt que transmise telle quelle.
+  const conditionId = CONDITION_IDS[condition] ?? null;
 
   if (!name) {
     return json({ error: 'Paramètre « name » requis.' }, 400);
   }
 
-  const cacheKey = `${name}|${setName}|${rarity}|${code}`;
+  const cacheKey = `${name}|${setName}|${rarity}|${code}|${condition}`;
   const cached = readCache(cacheKey);
   if (cached) return json({ ...cached, cached: true });
 
@@ -162,7 +177,7 @@ export default async (request) => {
 
   let result = null;
   try {
-    result = await fromCardmarket({ name, setName, rarity });
+    result = await fromCardmarket({ name, setName, rarity, conditionId });
   } catch {
     result = null;
   }
@@ -179,7 +194,7 @@ export default async (request) => {
     return json(
       {
         error: 'Aucune cote trouvée pour cette carte.',
-        card: { name, setName, rarity, code },
+        card: { name, setName, rarity, code, condition },
         searchUrl,
       },
       404,
@@ -188,7 +203,7 @@ export default async (request) => {
 
   const payload = {
     ...result,
-    card: { name, setName, rarity, code },
+    card: { name, setName, rarity, code, condition },
     searchUrl,
     fetchedAt: new Date().toISOString(),
   };

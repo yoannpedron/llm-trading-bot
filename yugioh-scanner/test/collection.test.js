@@ -10,6 +10,7 @@ import {
   toCsv,
   totalValue,
   upsertEntry,
+  withCondition,
   withPrice,
 } from '../src/lib/collection.js';
 
@@ -70,6 +71,19 @@ test('la cote se pose sur la bonne ligne', () => {
   assert.equal(totalValue(priced), 4.5);
 });
 
+test('le total suit l’état retenu, pas la cote neuve', () => {
+  const entries = withPrice(
+    upsertEntry([], makeEntry(card, printing)),
+    entryKey(card.id, printing.setCode, printing.rarity),
+    { source: 'ygoprodeck', prices: { trend: 10 } },
+  );
+
+  // Near Mint par défaut : la cote de référence s'applique telle quelle.
+  assert.equal(totalValue(entries), 10);
+  // Light Played : coefficient 0,55.
+  assert.equal(totalValue(withCondition(entries, entries[0].key, 'LP')), 5.5);
+});
+
 test('supprime une ligne sans toucher aux autres', () => {
   let entries = upsertEntry([], makeEntry(card, printing));
   entries = upsertEntry(entries, makeEntry({ ...card, id: 2 }, printing));
@@ -94,12 +108,18 @@ test('exporte un CSV lisible par un tableur', () => {
 
   const csv = toCsv(entries);
   const [header, row] = csv.split('\r\n');
+  const columns = header.split(';');
 
-  assert.equal(header.split(';')[0], 'Nom');
+  assert.equal(columns[0], 'Nom');
   assert.match(row, /^Blue-Eyes White Dragon;LOB-EN001;/);
   assert.match(row, /;cardmarket;/);
-  assert.match(row, /;4\.5;/);
   assert.match(row, /https:\/\/cm\.test\/p$/);
+
+  // L'état et la nature de la cote voyagent avec la ligne.
+  const cells = row.split(';');
+  assert.equal(cells[columns.indexOf('État')], 'NM');
+  assert.equal(cells[columns.indexOf('Cote EUR')], '4.5');
+  assert.equal(cells[columns.indexOf('Cote estimée')], 'non');
   // Une seule ligne de données pour une seule entrée.
   assert.equal(csv.split('\r\n').length, 2);
 });

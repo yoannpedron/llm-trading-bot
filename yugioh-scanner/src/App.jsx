@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Aurora from './components/Aurora.jsx';
 import CardStage from './components/CardStage.jsx';
+import ConditionPicker from './components/ConditionPicker.jsx';
 import HistoryTab from './components/HistoryTab.jsx';
 import PricePanel from './components/PricePanel.jsx';
 import RarityPicker from './components/RarityPicker.jsx';
 import Scanner from './components/Scanner.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
+import { conditionPrice } from './lib/condition.js';
+import { chime, vibrate } from './lib/feedback.js';
 import { useCardScanner } from './lib/useCardScanner.js';
 import { useCollection } from './lib/useCollection.js';
+import { useSettings } from './lib/useSettings.js';
 
 const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -86,15 +91,28 @@ const entryToSelection = (entry) => ({
     rarity: entry.rarity,
     rarityCode: entry.rarityCode,
   },
+  condition: entry.condition,
   via: null,
 });
 
 export default function App() {
+  const { settings, update, reset, sensitivity } = useSettings();
+
   const [tab, setTab] = useState('scan');
-  const scanner = useCardScanner({ active: tab === 'scan' });
-  const collection = useCollection();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const scanner = useCardScanner({
+    active: tab === 'scan' && !settingsOpen,
+    autoScan: settings.autoScan,
+    sensitivity,
+  });
+  const collection = useCollection({
+    persist: settings.keepHistory,
+    refreshOnLoad: settings.refreshOnLoad,
+  });
 
   const [selection, setSelection] = useState(null);
+  const [condition, setCondition] = useState(settings.defaultCondition);
   const [trackedKey, setTrackedKey] = useState(null);
   const revealRef = useRef(null);
 
@@ -109,25 +127,38 @@ export default function App() {
       card: found.card,
       via: found.via,
       setCode: found.setCode,
-      // Une seule rareté possible : on valide sans rien demander. Plusieurs :
-      // c'est à l'utilisateur de trancher, la caméra ne voit pas l'holographie.
+      // Une seule rareté possible : validée d'office. Plusieurs : l'utilisateur
+      // choisit, la caméra ne voit pas l'holographie.
       printing: printings.length === 1 ? printings[0] : null,
     });
+    setCondition(settings.defaultCondition);
+
+    if (settings.sound) chime();
+    if (settings.haptics) vibrate();
   }, [scanner.result]);
 
-  /* Carte + rareté connues : on l'enregistre et sa cote suit. */
+  /* Carte et rareté connues : on enregistre, et la cote suit. */
   useEffect(() => {
     if (!selection?.card || !selection.printing) {
       setTrackedKey(null);
       return;
     }
-    setTrackedKey(collection.track(selection.card, selection.printing));
+    setTrackedKey(collection.track(selection.card, selection.printing, condition));
+    // `condition` est volontairement hors dépendances : un changement d'état
+    // passe par l'effet suivant. Le faire transiter par `track` compterait un
+    // scan de plus à chaque clic sur l'échelle d'usure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selection?.card?.id,
     selection?.printing?.setCode,
     selection?.printing?.rarity,
     collection.track,
   ]);
+
+  /* L'état change seul : on relève la cote sans rejouer un scan. */
+  useEffect(() => {
+    if (trackedKey) collection.setCondition(trackedKey, condition);
+  }, [condition, trackedKey, collection.setCondition]);
 
   /* Sur téléphone, la révélation est sous la caméra : on l'amène à l'écran. */
   useEffect(() => {
@@ -137,17 +168,19 @@ export default function App() {
   }, [selection?.key, tab]);
 
   const openFromHistory = useCallback((entry) => {
-    setSelection(entryToSelection(entry));
+    const restored = entryToSelection(entry);
+    setSelection(restored);
+    setCondition(restored.condition ?? settings.defaultCondition);
     setTab('scan');
-  }, []);
+  }, [settings.defaultCondition]);
 
   const entry = trackedKey ? collection.entryFor(trackedKey) : null;
   const printings = useMemo(() => selection?.card?.rarities ?? [], [selection]);
-  const rarity = selection?.printing?.rarity ?? null;
+  const estimated = conditionPrice(entry?.price, condition).estimated;
 
   return (
     <div className="min-h-full">
-      <Aurora />
+      <Aurora enabled={settings.aurora} />
 
       <main className="safe-top mx-auto w-full max-w-6xl px-3 pt-6 pb-28 sm:px-6 sm:pb-12 lg:py-12">
         <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
@@ -167,13 +200,26 @@ export default function App() {
             </p>
           </div>
 
-          <div className="glass rounded-2xl px-4 py-2 text-right">
-            <p className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">
-              Collection
-            </p>
-            <p className="text-xl font-bold tabular-nums sm:text-2xl">
-              {EURO.format(collection.total)}
-            </p>
+          <div className="flex items-center gap-2">
+            <div className="glass rounded-2xl px-4 py-2 text-right">
+              <p className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">
+                Collection
+              </p>
+              <p className="text-xl font-bold tabular-nums sm:text-2xl">
+                {EURO.format(collection.total)}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Réglages"
+              className="glass grid h-12 w-12 place-items-center rounded-2xl transition hover:bg-white/10"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4m-1.4-8h2.8l.4 2.3q.8.3 1.5.7l2.1-1 1.4 2.4-1.7 1.5q.1.5.1 1t-.1 1l1.7 1.5-1.4 2.4-2.1-1q-.7.4-1.5.7l-.4 2.3h-2.8l-.4-2.3q-.8-.3-1.5-.7l-2.1 1-1.4-2.4 1.7-1.5q-.1-.5-.1-1t.1-1L3.1 6.4l1.4-2.4 2.1 1q.7-.4 1.5-.7z" />
+              </svg>
+            </button>
           </div>
         </header>
 
@@ -186,16 +232,24 @@ export default function App() {
 
         {tab === 'scan' ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <Scanner scanner={scanner} locked={Boolean(selection)} compact={Boolean(selection)} />
+            <Scanner
+              scanner={scanner}
+              locked={Boolean(selection)}
+              compact={Boolean(selection)}
+              diagnostics={settings.diagnostics}
+              autoScan={settings.autoScan}
+            />
 
-            <div ref={revealRef} className="flex flex-col gap-4 scroll-mt-4">
+            <div ref={revealRef} className="flex scroll-mt-4 flex-col gap-4">
               {selection ? (
                 <>
                   <CardStage
                     key={selection.key}
                     card={selection.card}
-                    rarity={rarity}
+                    rarity={selection.printing?.rarity ?? null}
                     via={selection.via}
+                    animations={settings.animations}
+                    holo={settings.holo}
                   />
 
                   <RarityPicker
@@ -206,6 +260,14 @@ export default function App() {
                     }
                   />
 
+                  {settings.askCondition && selection.printing && (
+                    <ConditionPicker
+                      value={condition}
+                      onSelect={setCondition}
+                      estimated={estimated}
+                    />
+                  )}
+
                   {selection.printing ? (
                     <PricePanel
                       price={entry?.price ?? null}
@@ -213,6 +275,7 @@ export default function App() {
                       error={collection.errors.get(trackedKey) ?? null}
                       card={selection.card}
                       printing={selection.printing}
+                      condition={condition}
                     />
                   ) : (
                     <p className="glass rounded-2xl px-4 py-3 text-sm text-muted">
@@ -251,6 +314,14 @@ export default function App() {
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-abyss/85 px-3 pt-3 backdrop-blur-xl sm:hidden">
         <Tabs tab={tab} onTab={setTab} count={collection.entries.length} />
       </nav>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={update}
+        onReset={reset}
+      />
     </div>
   );
 }

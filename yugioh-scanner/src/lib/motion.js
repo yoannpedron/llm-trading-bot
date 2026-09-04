@@ -17,7 +17,9 @@
 export const SIGNATURE_WIDTH = 16;
 export const SIGNATURE_HEIGHT = 24;
 
-/** Au-delà : l'image bouge, inutile d'OCRiser une carte floue. */
+/** Au-delà : l'image bouge, inutile d'OCRiser une carte floue. Les trois seuils
+ *  qui suivent sont les valeurs par défaut ; le réglage de sensibilité les
+ *  remplace au montage de la boucle. */
 export const MOTION_THRESHOLD = 0.055;
 
 /** En deçà : c'est la même carte, on ne relance rien. */
@@ -58,8 +60,16 @@ export function gradientEnergy(pixels, width, height) {
  * composant a besoin de savoir.
  */
 export class FrameWatcher {
-  constructor({ now = () => performance.now() } = {}) {
+  constructor({
+    now = () => performance.now(),
+    motionThreshold = MOTION_THRESHOLD,
+    sameCardThreshold = SAME_CARD_THRESHOLD,
+    stableMs = STABLE_MS,
+  } = {}) {
     this.now = now;
+    this.motionThreshold = motionThreshold;
+    this.sameCardThreshold = sameCardThreshold;
+    this.stableMs = stableMs;
     this.previous = null;
     this.scanned = null;
     this.stableSince = null;
@@ -86,13 +96,13 @@ export class FrameWatcher {
     const motion = meanAbsDiff(this.previous, signature);
     this.previous = Uint8ClampedArray.from(signature);
 
-    if (motion > MOTION_THRESHOLD) {
+    if (motion > this.motionThreshold) {
       this.stableSince = null;
       return { state: 'moving', shouldScan: false, drift: 1 };
     }
 
     if (this.stableSince === null) this.stableSince = time;
-    if (time - this.stableSince < STABLE_MS) {
+    if (time - this.stableSince < this.stableMs) {
       return { state: 'settling', shouldScan: false, drift: 1 };
     }
 
@@ -102,7 +112,7 @@ export class FrameWatcher {
     }
 
     const drift = meanAbsDiff(this.scanned, signature);
-    if (this.scanned && drift < SAME_CARD_THRESHOLD) {
+    if (this.scanned && drift < this.sameCardThreshold) {
       return { state: 'idle', shouldScan: false, drift };
     }
 

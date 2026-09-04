@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { cardmarketLink, conditionPrice } from '../lib/condition.js';
+
 const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const DOLLAR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' });
 
@@ -46,12 +48,11 @@ function Stat({ label, value, format = EURO }) {
   );
 }
 
-export default function PricePanel({ price, loading, error, card, printing }) {
-  const headline =
-    typeof price?.prices?.trend === 'number'
-      ? price.prices.trend
-      : (price?.prices?.from ?? null);
-  const animated = useCountUp(headline ?? 0);
+export default function PricePanel({ price, loading, error, card, printing, condition }) {
+  // La cote affichée est celle de l'état retenu : relevée sur Cardmarket quand
+  // le filtre a pu être appliqué, estimée par coefficient sinon.
+  const { value, estimated } = conditionPrice(price, condition);
+  const animated = useCountUp(value ?? 0);
 
   const fromCardmarket = price?.source === 'cardmarket';
 
@@ -64,6 +65,7 @@ export default function PricePanel({ price, loading, error, card, printing }) {
           {printing && (
             <p className="font-mono text-[11px] text-muted">
               {printing.setCode} · {printing.rarity}
+              {condition ? ` · ${condition}` : ''}
             </p>
           )}
         </div>
@@ -98,11 +100,26 @@ export default function PricePanel({ price, loading, error, card, printing }) {
               {EURO.format(animated)}
             </span>
             <span className="pb-2 font-mono text-[11px] text-muted">
-              {typeof price.prices.trend === 'number' ? 'tendance' : 'à partir de'}
+              {estimated
+                ? 'estimée'
+                : price.conditionApplied
+                  ? `à partir de · ${condition}`
+                  : typeof price.prices.trend === 'number'
+                    ? 'tendance'
+                    : 'à partir de'}
             </span>
           </div>
 
+          {estimated && (
+            <p className="mt-2 rounded-xl border border-amber/30 bg-amber/10 px-3 py-2 text-xs leading-relaxed text-amber">
+              Aucune API ne publie de prix par état. Ce montant applique le coefficient
+              d’usure {condition} à la cote de référence — le lien ci-dessous ouvre les
+              offres réelles filtrées sur cet état.
+            </p>
+          )}
+
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Stat label="Cote de référence" value={price.prices.trend ?? price.prices.from} />
             <Stat label="À partir de" value={price.prices.from} />
             <Stat label="Moy. 30 j" value={price.prices.avg30} />
             <Stat label="Moy. 7 j" value={price.prices.avg7} />
@@ -122,7 +139,7 @@ export default function PricePanel({ price, loading, error, card, printing }) {
           {price.note && <p className="mt-3 text-xs leading-relaxed text-muted">{price.note}</p>}
 
           <a
-            href={price.productUrl ?? price.searchUrl}
+            href={cardmarketLink(price, condition)}
             target="_blank"
             rel="noreferrer noopener"
             className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:border-cyan/50 hover:bg-cyan/10"

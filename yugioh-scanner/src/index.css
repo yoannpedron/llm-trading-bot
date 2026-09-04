@@ -237,3 +237,12 @@ body {
   scrollbar-color: color-mix(in oklab, white 20%, transparent) transparent;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Coupe-circuit global des animations, piloté par le panneau de réglages.
+   Une seule règle suffit : inutile de conditionner chaque composant. */
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+}

@@ -88,15 +88,19 @@ export function slugify(value) {
  * (« Nom (V.1) », « Nom Secret Rare »). On essaie donc la variante avec rareté
  * avant la variante nue : la première qui répond gagne.
  */
-export function buildProductUrls({ name, setName, rarity }) {
+export function buildProductUrls({ name, setName, rarity, conditionId }) {
   const base = 'https://www.cardmarket.com/en/YuGiOh/Products/Singles';
   const set = slugify(setName);
   const card = slugify(name);
   if (!set || !card) return [];
 
+  // `minCondition` restreint les offres prises en compte : le « à partir de »
+  // renvoyé devient alors le prix réel des exemplaires dans cet état ou mieux.
+  const query = conditionId ? `?minCondition=${conditionId}` : '';
+
   const urls = [];
-  if (rarity) urls.push(`${base}/${set}/${card}-${slugify(rarity)}`);
-  urls.push(`${base}/${set}/${card}`);
+  if (rarity) urls.push(`${base}/${set}/${card}-${slugify(rarity)}${query}`);
+  urls.push(`${base}/${set}/${card}${query}`);
   return urls;
 }
 

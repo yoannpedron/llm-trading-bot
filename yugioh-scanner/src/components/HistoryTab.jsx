@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 
+import { conditionPrice } from '../lib/condition.js';
 import { rarityProfile } from '../lib/rarity.js';
 
 const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
-const priceOf = (entry) => entry.price?.prices?.trend ?? entry.price?.prices?.from ?? null;
+/** Valeur affichée : celle de l'état retenu pour cet exemplaire. */
+const priceOf = (entry) => conditionPrice(entry.price, entry.condition).value;
 
 const SORTS = {
   recent: { label: 'Récentes', compare: (a, b) => b.seenAt - a.seenAt },
@@ -108,12 +110,19 @@ function Row({ entry, pending, onOpen, onRemove }) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{entry.name}</p>
           <p className="truncate font-mono text-[11px] text-muted">{entry.setCode}</p>
-          <span
-            className="mt-1 inline-block rounded-full px-2 py-0.5 font-mono text-[10px]"
-            style={{ color: profile.accent, background: `${profile.glow}1f` }}
-          >
-            {entry.rarity || 'rareté inconnue'}
-          </span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <span
+              className="inline-block rounded-full px-2 py-0.5 font-mono text-[10px]"
+              style={{ color: profile.accent, background: `${profile.glow}1f` }}
+            >
+              {entry.rarity || 'rareté inconnue'}
+            </span>
+            {entry.condition && (
+              <span className="inline-block rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] text-muted">
+                {entry.condition}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="shrink-0 text-right">
@@ -165,7 +174,7 @@ export default function HistoryTab({ collection, onOpen }) {
     return collection.entries
       .filter((entry) =>
         needle
-          ? `${entry.name} ${entry.setCode} ${entry.setName} ${entry.rarity}`
+          ? `${entry.name} ${entry.setCode} ${entry.setName} ${entry.rarity} ${entry.condition ?? ''}`
               .toLowerCase()
               .includes(needle)
           : true,

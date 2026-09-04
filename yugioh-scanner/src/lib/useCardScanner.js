@@ -44,7 +44,7 @@ function stopStream(stream) {
  * - l'ancienne carte reste affichée pendant la recherche de la nouvelle : la
  *   bascule se fait d'un bloc, sans écran vide entre les deux.
  */
-export function useCardScanner({ active = true } = {}) {
+export function useCardScanner({ active = true, autoScan = true, sensitivity } = {}) {
   const videoRef = useRef(null);
   const watcherRef = useRef(null);
   const streamRef = useRef(null);
@@ -52,6 +52,7 @@ export function useCardScanner({ active = true } = {}) {
   const tokenRef = useRef(0);
   const cooldownRef = useRef(0);
   const identifyRef = useRef(null);
+  const signatureRef = useRef(null);
 
   const [deviceId, setDeviceId] = useState(null);
   const [devices, setDevices] = useState([]);
@@ -225,7 +226,7 @@ export function useCardScanner({ active = true } = {}) {
     // faire chauffer le téléphone pendant qu'on consulte l'historique.
     if (!cameraReady || !active) return undefined;
 
-    watcherRef.current = new FrameWatcher();
+    watcherRef.current = new FrameWatcher(sensitivity);
     let timer = 0;
     let stopped = false;
 
@@ -236,8 +237,14 @@ export function useCardScanner({ active = true } = {}) {
         const { signature, sharpness } = frameSignature(video, frame);
         const status = watcherRef.current.update(signature, sharpness);
         setFrameState(status.state);
+        signatureRef.current = signature;
 
-        if (status.shouldScan && !busyRef.current && Date.now() >= cooldownRef.current) {
+        if (
+          autoScan &&
+          status.shouldScan &&
+          !busyRef.current &&
+          Date.now() >= cooldownRef.current
+        ) {
           runScan(signature);
         }
       }
@@ -251,7 +258,14 @@ export function useCardScanner({ active = true } = {}) {
       clearTimeout(timer);
       identifyRef.current?.abort();
     };
-  }, [cameraReady, active, runScan]);
+  }, [cameraReady, active, autoScan, sensitivity, runScan]);
+
+  /** Déclenche une lecture immédiate — le bouton du mode manuel. */
+  const capture = useCallback(() => {
+    if (busyRef.current || !signatureRef.current) return;
+    cooldownRef.current = 0;
+    runScan(signatureRef.current);
+  }, [runScan]);
 
   /** Force un nouveau scan de la carte actuellement dans le cadre. */
   const rescan = useCallback(() => {
@@ -286,6 +300,7 @@ export function useCardScanner({ active = true } = {}) {
     crops,
     result,
     misses,
+    capture,
     rescan,
     clear,
   };

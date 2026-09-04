@@ -23,7 +23,7 @@ function IconButton({ onClick, active, title, children, disabled }) {
   );
 }
 
-export default function Scanner({ scanner, locked, compact = false }) {
+export default function Scanner({ scanner, locked, compact = false, diagnostics = true, autoScan = true }) {
   const {
     videoRef,
     cameraError,
@@ -38,6 +38,7 @@ export default function Scanner({ scanner, locked, compact = false }) {
     scanning,
     reading,
     crops,
+    capture,
     rescan,
   } = scanner;
 
@@ -134,7 +135,19 @@ export default function Scanner({ scanner, locked, compact = false }) {
         </div>
       </div>
 
-      <OcrReadout reading={reading} crops={crops} scanning={scanning} />
+      {/* Mode manuel : c'est ce bouton qui déclenche la lecture. */}
+      {!autoScan && (
+        <button
+          type="button"
+          onClick={capture}
+          disabled={!cameraReady || scanning}
+          className="h-12 rounded-2xl border border-cyan/40 bg-cyan/15 text-sm font-medium text-cyan transition hover:bg-cyan/25 disabled:opacity-40"
+        >
+          {scanning ? 'Lecture…' : 'Lire la carte'}
+        </button>
+      )}
+
+      {diagnostics && <OcrReadout reading={reading} crops={crops} scanning={scanning} />}
     </section>
   );
 }

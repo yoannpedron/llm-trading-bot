@@ -16,7 +16,7 @@ import { rarityProfile } from '../lib/rarity.js';
  * L'inclinaison suit la souris sur ordinateur et l'accéléromètre sur téléphone,
  * la première ayant la priorité dès qu'on touche la carte.
  */
-export default function CardStage({ card, rarity, via }) {
+export default function CardStage({ card, rarity, via, animations = true, holo = true }) {
   const profile = rarityProfile(rarity);
   const frameRef = useRef(null);
   const pointerRef = useRef(false);
@@ -24,6 +24,7 @@ export default function CardStage({ card, rarity, via }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [glare, setGlare] = useState({ x: 50, y: 50 });
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const preview = card.images?.[0]?.small ?? null;
 
@@ -31,7 +32,7 @@ export default function CardStage({ card, rarity, via }) {
   // les ferait sauter d'un endroit à l'autre pendant l'animation.
   const sparks = useMemo(
     () =>
-      profile.sparkle
+      profile.sparkle && animations
         ? Array.from({ length: 16 }, (_, index) => {
             const angle = (index / 16) * Math.PI * 2 + Math.random();
             const distance = 120 + Math.random() * 190;
@@ -44,11 +45,12 @@ export default function CardStage({ card, rarity, via }) {
             };
           })
         : [],
-    [profile.sparkle, card.id],
+    [profile.sparkle, animations, card.id],
   );
 
   useEffect(() => {
     setLoaded(false);
+    setFailed(false);
   }, [card.id]);
 
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function CardStage({ card, rarity, via }) {
         className="pointer-events-none absolute top-1/2 left-1/2 h-[86%] w-[86%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[70px]"
         style={{
           background: `radial-gradient(circle, ${profile.glow} 0%, transparent 70%)`,
-          animation: 'halo-breathe 4.5s ease-in-out infinite',
+          animation: animations ? 'halo-breathe 4.5s ease-in-out infinite' : undefined,
         }}
       />
 
@@ -123,7 +125,9 @@ export default function CardStage({ card, rarity, via }) {
           style={{
             transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
             transformStyle: 'preserve-3d',
-            animation: 'card-arrive 0.85s cubic-bezier(0.16, 1, 0.3, 1) both',
+            animation: animations
+              ? 'card-arrive 0.85s cubic-bezier(0.16, 1, 0.3, 1) both'
+              : undefined,
           }}
         >
           <div
@@ -150,16 +154,30 @@ export default function CardStage({ card, rarity, via }) {
               height="614"
               decoding="async"
               onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
               className={`block w-full transition-opacity duration-500 ${
                 loaded ? 'opacity-100' : 'opacity-0'
               }`}
             />
 
-            <div
-              aria-hidden
-              className="foil pointer-events-none absolute inset-0"
-              style={{ opacity: profile.foil, animationDuration: `${profile.sweep}s` }}
-            />
+            {/* Visuel injoignable : sans ce repli, le voile holographique
+                s'appliquerait à un cadre vide et donnerait un aplat coloré. */}
+            {failed && (
+              <div className="grid aspect-[421/614] w-full place-items-center bg-abyss-soft px-6 text-center">
+                <div>
+                  <p className="text-sm font-medium">{card.name}</p>
+                  <p className="mt-1 text-xs text-muted">Visuel indisponible hors ligne</p>
+                </div>
+              </div>
+            )}
+
+            {holo && !failed && (
+              <div
+                aria-hidden
+                className="foil pointer-events-none absolute inset-0"
+                style={{ opacity: profile.foil, animationDuration: `${profile.sweep}s` }}
+              />
+            )}
 
             <div
               aria-hidden
@@ -170,12 +188,14 @@ export default function CardStage({ card, rarity, via }) {
               }}
             />
 
-            <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-              <div
-                className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent"
-                style={{ animation: 'shine-sweep 1.5s cubic-bezier(0.22,1,0.36,1) 0.35s both' }}
-              />
-            </div>
+            {animations && (
+              <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div
+                  className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent"
+                  style={{ animation: 'shine-sweep 1.5s cubic-bezier(0.22,1,0.36,1) 0.35s both' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

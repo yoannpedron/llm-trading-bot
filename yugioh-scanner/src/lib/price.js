@@ -52,7 +52,8 @@ async function directLookup(query, signal) {
 }
 
 /**
- * @param {{name: string, setName?: string, rarity?: string, code?: string}} query
+ * @param {{name: string, setName?: string, rarity?: string, code?: string,
+ *   condition?: string}} query
  * @param {AbortSignal} [signal]
  */
 export async function fetchPrice(query, signal) {
@@ -61,6 +62,7 @@ export async function fetchPrice(query, signal) {
     if (query.setName) params.set('set', query.setName);
     if (query.rarity) params.set('rarity', query.rarity);
     if (query.code) params.set('code', query.code);
+    if (query.condition) params.set('condition', query.condition);
 
     try {
       const response = await fetch(`/api/price?${params}`, {

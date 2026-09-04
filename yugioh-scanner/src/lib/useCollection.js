@@ -8,8 +8,10 @@ import {
   saveCollection,
   totalValue,
   upsertEntry,
+  withCondition,
   withPrice,
 } from './collection.js';
+import { DEFAULT_CONDITION } from './condition.js';
 import { fetchPrice } from './price.js';
 
 /** Au-delà, la cote en mémoire est considérée comme périmée. */
@@ -44,7 +46,7 @@ async function pool(items, limit, worker) {
  * rouverte depuis l'historique affiche donc immédiatement la valeur déjà connue,
  * et le rafraîchissement se voit partout à la fois.
  */
-export function useCollection() {
+export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
   const [entries, setEntries] = useState(() => loadCollection());
   const [pending, setPending] = useState(() => new Set());
   const [errors, setErrors] = useState(() => new Map());
@@ -62,8 +64,10 @@ export function useCollection() {
 
   useEffect(() => {
     entriesRef.current = entries;
-    saveCollection(entries);
-  }, [entries]);
+    // Historique désactivé dans les réglages : la session reste utilisable,
+    // mais rien n'est écrit sur l'appareil.
+    if (persist) saveCollection(entries);
+  }, [entries, persist]);
 
   const markPending = useCallback((key, active) => {
     setPending((current) => {
@@ -90,6 +94,7 @@ export function useCollection() {
             setName: entry.setName,
             rarity: entry.rarity,
             code: entry.setCode,
+            condition: entry.condition,
           },
           signal,
         );
@@ -139,7 +144,7 @@ export function useCollection() {
     bootedRef.current = true;
 
     const stored = loadCollection();
-    if (stored.length) refreshAll(stored);
+    if (refreshOnLoad && stored.length) refreshAll(stored);
 
     return () => abortRef.current?.abort();
     // Volontairement sans dépendance : ce passage n'a lieu qu'au premier montage.
@@ -151,18 +156,39 @@ export function useCollection() {
    * @returns {string} la clé de l'entrée, à passer à `entryFor`
    */
   const track = useCallback(
-    (card, printing) => {
-      const entry = makeEntry(card, printing);
+    (card, printing, condition = DEFAULT_CONDITION) => {
+      const entry = makeEntry(card, printing, { condition });
       const known = entriesRef.current.find((item) => item.key === entry.key) ?? null;
 
       setEntries((current) => upsertEntry(current, entry));
 
-      // Une cote relevée il y a moins de dix minutes n'a pas bougé : on affiche
-      // celle qu'on a déjà plutôt que de refaire l'aller-retour.
-      const fresh = known?.price && Date.now() - (known.pricedAt ?? 0) < STALE_MS;
+      // Une cote relevée il y a moins de dix minutes vaut encore — sauf si
+      // l'état a changé, auquel cas le filtre Cardmarket n'est plus le même.
+      const fresh =
+        known?.price &&
+        known.condition === condition &&
+        Date.now() - (known.pricedAt ?? 0) < STALE_MS;
       if (!fresh) loadPrice(entry);
 
       return entry.key;
+    },
+    [loadPrice],
+  );
+
+  /**
+   * Change l'état d'une entrée et relève la cote correspondante.
+   *
+   * Sans effet si l'état est déjà celui-là : l'écran de scan rejoue ce rappel
+   * chaque fois qu'une carte est sélectionnée, et une requête de prix par
+   * rendu n'apporterait rien.
+   */
+  const setCondition = useCallback(
+    (key, condition) => {
+      const entry = entriesRef.current.find((item) => item.key === key);
+      if (!entry || entry.condition === condition) return;
+
+      setEntries((current) => withCondition(current, key, condition));
+      loadPrice({ ...entry, condition });
     },
     [loadPrice],
   );
@@ -189,6 +215,7 @@ export function useCollection() {
     progress,
     refreshAll,
     track,
+    setCondition,
     remove,
     clear,
     exportCsv,
