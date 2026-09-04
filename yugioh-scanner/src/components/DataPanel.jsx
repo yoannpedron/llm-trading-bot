@@ -1,14 +1,6 @@
-import { rarityTier } from '../lib/rarity.js';
+import { rarityProfile, sortRarities } from '../lib/rarity.js';
 
 const EURO = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-
-const TIER_COLOR = {
-  common: '#94a3b8',
-  rare: '#cbd5e1',
-  super: '#34d399',
-  ultra: '#fbbf24',
-  secret: '#c084fc',
-};
 
 function PriceBadge({ amount }) {
   return (
@@ -64,7 +56,8 @@ export default function DataPanel({
   saved,
 }) {
   const needsChoice = scan?.status === 'needs_user_selection' && !rarity;
-  const options = scan?.rarities ?? [];
+  // Du plus commun au plus rare : l'ordre des chances et des prix.
+  const options = sortRarities(scan?.rarities ?? []);
   const price = rarity?.priceEur ?? detail?.prices?.cardmarket_eur ?? null;
   // Une correspondance approchée a corrigé la lecture : c'est le visuel qui
   // confirme, pas le code. On le dit, plutôt que d'afficher la même
@@ -124,8 +117,8 @@ export default function DataPanel({
           <span
             className="rounded-lg px-2 py-1 font-mono text-[11px]"
             style={{
-              color: TIER_COLOR[rarityTier(rarity.rarity)],
-              background: `${TIER_COLOR[rarityTier(rarity.rarity)]}1f`,
+              color: rarityProfile(rarity.rarity).accent,
+              background: `${rarityProfile(rarity.rarity).glow}1f`,
             }}
           >
             {rarity.rarity}
@@ -150,7 +143,7 @@ export default function DataPanel({
               défiler. */}
           <div className="grid grid-cols-2 gap-2">
             {options.map((option) => {
-              const tier = rarityTier(option.rarity);
+              const profile = rarityProfile(option.rarity);
               return (
                 <button
                   key={`${option.setCode}-${option.rarity}-${option.setName}`}
@@ -158,14 +151,14 @@ export default function DataPanel({
                   onClick={() => onRarity(option)}
                   className="min-h-14 rounded-2xl border px-3 py-2 text-left transition active:scale-[0.98]"
                   style={{
-                    borderColor: `${TIER_COLOR[tier]}66`,
-                    background: `${TIER_COLOR[tier]}14`,
-                    color: TIER_COLOR[tier],
+                    borderColor: `${profile.glow}66`,
+                    background: `${profile.glow}14`,
+                    color: profile.accent,
                   }}
                 >
                   <span className="block text-sm leading-tight font-semibold">{option.rarity}</span>
                   <span className="mt-0.5 block truncate font-mono text-[10px] text-muted">
-                    {option.setName}
+                    {profile.label} · {option.setName}
                   </span>
                 </button>
               );

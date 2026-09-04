@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { rarityTier } from '../lib/rarity.js';
+import { rarityProfile } from '../lib/rarity.js';
 import '../styles/holo.css';
 
 /**
@@ -27,9 +27,12 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
     setFailed(false);
   }, [image]);
 
-  const tier = rarityTier(rarity);
-  const showFoil = tier !== 'common' && tier !== 'rare';
-  const isSecret = tier === 'secret';
+  const profile = rarityProfile(rarity);
+  const { coverage, finish } = profile;
+  const showName = coverage === 'name' || coverage === 'artname';
+  const showArt = coverage === 'art' || coverage === 'artname';
+  const showFull = coverage === 'full';
+  const showDiagonals = finish === 'rainbow' && (coverage === 'artname' || coverage === 'full');
 
   const setVars = useCallback((x, y) => {
     const element = frameRef.current;
@@ -81,7 +84,15 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
       // l'image, pas au montage. Sinon l'animation joue sur un rectangle noir
       // et la carte apparaît ensuite sans cérémonie — c'est ce qu'on voyait.
       className={`ygo-card${loaded ? ' ygo-card--revealed' : ''}`}
-      data-rarity={tier}
+      data-rarity={profile.key}
+      data-coverage={coverage}
+      data-finish={finish}
+      // Les intensités viennent du profil : le CSS ne connaît pas les raretés.
+      style={{
+        '--ygo-foil': profile.foil,
+        '--ygo-glare': profile.glare,
+        '--ygo-glow': profile.glow,
+      }}
       onPointerMove={handleMove}
       onPointerLeave={handleLeave}
     >
@@ -118,20 +129,12 @@ export default function HoloCard({ image, imageSmall, name, rarity }) {
           style={{ opacity: loaded ? 1 : 0, transition: 'opacity 320ms ease' }}
         />
 
-        {showFoil && !isSecret && (
-          <>
-            <span data-layer className="ygo-card__foil ygo-card__foil--art" />
-            <span data-layer className="ygo-card__foil ygo-card__foil--stars" />
-          </>
-        )}
-
-        {isSecret && (
-          <>
-            <span data-layer className="ygo-card__foil ygo-card__foil--full" />
-            <span data-layer className="ygo-card__diagonals" />
-            <span data-layer className="ygo-card__sparkles" />
-          </>
-        )}
+        {showName && <span data-layer className="ygo-card__foil ygo-card__foil--name" />}
+        {showArt && <span data-layer className="ygo-card__foil ygo-card__foil--art" />}
+        {showFull && <span data-layer className="ygo-card__foil ygo-card__foil--full" />}
+        {finish === 'pattern' && <span data-layer className="ygo-card__pattern" />}
+        {showDiagonals && <span data-layer className="ygo-card__diagonals" />}
+        {profile.sparkle && <span data-layer className="ygo-card__sparkles" />}
 
         <span data-layer className="ygo-card__glare" />
         <span data-layer className="ygo-card__sweep" />

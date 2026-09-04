@@ -11,14 +11,17 @@
  *  - **format** 59 x 86 mm (0,686) au lieu de 63 x 88 (0,716) ;
  *  - **coins** nettement plus carrés — 2,6 % du côté contre ~5 % ;
  *  - **bordure** fine et sombre, là où une carte Pokémon a un liseré jaune épais ;
- *  - **placement du foil** : sur une Super ou une Ultra Rare, le reflet ne
- *    couvre pas la carte entière mais l'illustration et le bandeau des étoiles
- *    de niveau. D'où deux couches positionnées sur ces zones plutôt qu'un
- *    `mask-image` global : les proportions sont écrites en clair et se relisent.
+ *  - **placement du foil** : il suit la carte physique. Une Rare n'a que le
+ *    nom argenté ; une Super, l'illustration ; une Ultra, l'illustration et le
+ *    nom doré ; une Secret, les deux en arc-en-ciel à diagonales ; les
+ *    Parallel, Starlight, Quarter Century, Platinum et Collector's, toute la
+ *    surface ; une Ultimate, un relief sans couleur. D'où des couches par
+ *    zone (`data-coverage`) et des teintes par finition (`data-finish`),
+ *    posées par `HoloCard` depuis la table de `src/lib/rarity.js`.
  *
  * Repères, relevés sur un gabarit officiel (813 x 1185 px) :
- * étoiles 11,8-16,3 % · illustration 17,3-70,9 % en hauteur, 11,5-88,5 % en
- * largeur · cadre de texte 74,3-94,3 %.
+ * nom 4,6-10,4 % · étoiles 11,8-16,3 % · illustration 17,3-70,9 % en hauteur,
+ * 11,5-88,5 % en largeur · cadre de texte 74,3-94,3 %.
  */
 
 .ygo-card {
@@ -143,39 +146,102 @@
   );
 }
 
-/* --- Foil : dégradé conique, en fusion « color-dodge » ------------------- */
+/* --- Foil ------------------------------------------------------------------
+   Une couche par zone couverte (`data-coverage`), une teinte par finition
+   (`data-finish`). Les intensités (--ygo-foil, --ygo-glare, --ygo-glow)
+   viennent du profil de rareté, posées par HoloCard : le CSS ne connaît pas
+   les raretés, seulement ce qu'elles couvrent et de quoi elles sont faites. */
 
 .ygo-card__foil {
   opacity: var(--ygo-foil);
   mix-blend-mode: color-dodge;
-  background-image: conic-gradient(
-    from calc(var(--ygo-angle, 210) * 1deg),
-    #ff2d78, #ffd93d, #5cff9d, #35d6ff, #a855f7, #ff2d78
-  );
+  background-image: var(--ygo-foil-image);
   background-size: 240% 240%;
   background-position: var(--ygo-pointer-x) var(--ygo-pointer-y);
 }
 
-/* Super et Ultra Rare : le foil ne couvre que l'illustration et le bandeau des
-   étoiles, comme sur la carte réelle. */
-.ygo-card__foil--art {
-  inset: 17.3% 11.5% 29.1% 11.5%;
-  border-radius: 1%;
+/* Zones, relevées sur un gabarit officiel (813 x 1185 px). */
+.ygo-card__foil--name  { inset: 4.6% 16% 89.6% 6%; border-radius: 999px; }
+.ygo-card__foil--art   { inset: 17.3% 11.5% 29.1% 11.5%; border-radius: 1%; }
+.ygo-card__foil--full  { inset: 0; }
+
+/* Finitions. */
+.ygo-card[data-finish='rainbow'] {
+  --ygo-foil-image: conic-gradient(
+    from calc(var(--ygo-angle, 210) * 1deg),
+    #ff2d78, #ffd93d, #5cff9d, #35d6ff, #a855f7, #ff2d78
+  );
 }
 
-.ygo-card__foil--stars {
-  inset: 11.8% 10% 83.7% 36%;
-  border-radius: 999px;
+.ygo-card[data-finish='gold'] {
+  --ygo-foil-image: conic-gradient(
+    from calc(var(--ygo-angle, 210) * 1deg),
+    #b45309, #fde68a, #f59e0b, #fff7d6, #d97706, #b45309
+  );
 }
 
-/* Secret Rare : toute la surface, plus des diagonales arc-en-ciel. */
-.ygo-card__foil--full {
+.ygo-card[data-finish='silver'] {
+  --ygo-foil-image: conic-gradient(
+    from calc(var(--ygo-angle, 210) * 1deg),
+    #64748b, #f8fafc, #94a3b8, #ffffff, #64748b
+  );
+}
+
+.ygo-card[data-finish='platinum'] {
+  --ygo-foil-image: conic-gradient(
+    from calc(var(--ygo-angle, 210) * 1deg),
+    #94a3b8, #f1f5f9, #cbd5e1, #ffffff, #a5b4fc, #94a3b8
+  );
+}
+
+/* Ghost : blanc irisé, presque sans couleur, très dépendant de l'angle. */
+.ygo-card[data-finish='ghost'] {
+  --ygo-foil-image: radial-gradient(
+    circle at var(--ygo-pointer-x) var(--ygo-pointer-y),
+    #ffffff, #dbeafe 30%, #e9d5ff 55%, transparent 80%
+  );
+}
+
+/* Motif pleine surface (Parallel, Starfoil, Shatterfoil, Mosaic) : un foil
+   discret et une trame d'étoiles par-dessus. */
+.ygo-card[data-finish='pattern'] {
+  --ygo-foil-image: conic-gradient(
+    from calc(var(--ygo-angle, 210) * 1deg),
+    #a7f3d0, #e0f2fe, #ddd6fe, #fef3c7, #a7f3d0
+  );
+}
+
+.ygo-card__pattern {
   inset: 0;
+  opacity: calc(var(--ygo-foil) * 0.8);
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgb(255 255 255 / 60%) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 70% 20%, rgb(255 255 255 / 60%) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 45% 65%, rgb(255 255 255 / 60%) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 85% 75%, rgb(255 255 255 / 60%) 0 1px, transparent 2.5px);
+  background-size: 28px 28px;
+  background-position: calc(var(--ygo-pointer-x) * -0.4) calc(var(--ygo-pointer-y) * -0.4);
 }
 
+/* Relief (Ultimate) : pas de couleur, une lumière rasante qui suit le
+   pointeur, comme sur une carte embossée. */
+.ygo-card[data-finish='relief'] {
+  --ygo-foil-image: linear-gradient(
+    calc(var(--ygo-angle, 210) * 1deg),
+    rgb(255 255 255 / 0%) 35%, rgb(255 255 255 / 70%) 50%, rgb(255 255 255 / 0%) 65%
+  );
+}
+
+.ygo-card[data-finish='relief'] .ygo-card__foil {
+  mix-blend-mode: soft-light;
+  background-size: 300% 300%;
+}
+
+/* Secret : diagonales arc-en-ciel sur la zone couverte. */
 .ygo-card__diagonals {
-  inset: 0;
-  opacity: calc(var(--ygo-foil) * 0.75);
+  inset: 17.3% 11.5% 29.1% 11.5%;
+  opacity: calc(var(--ygo-foil) * 0.6);
   mix-blend-mode: color-dodge;
   background-image: repeating-linear-gradient(
     115deg,
@@ -188,6 +254,8 @@
   background-size: 200% 200%;
   background-position: var(--ygo-pointer-x) var(--ygo-pointer-y);
 }
+
+.ygo-card[data-coverage='full'] .ygo-card__diagonals { inset: 0; }
 
 .ygo-card__sparkles {
   inset: 0;
@@ -235,13 +303,8 @@
   to { transform: translateX(320%) skewX(-18deg); }
 }
 
-/* --- Profils de rareté ---------------------------------------------------- */
-
-.ygo-card[data-rarity='common'] { --ygo-foil: 0; --ygo-glare: 0.18; --ygo-glow: rgb(100 116 139 / 55%); }
-.ygo-card[data-rarity='rare']   { --ygo-foil: 0; --ygo-glare: 0.3;  --ygo-glow: rgb(148 163 184 / 60%); }
-.ygo-card[data-rarity='super']  { --ygo-foil: 0.5; --ygo-glare: 0.34; --ygo-glow: rgb(52 211 153 / 65%); }
-.ygo-card[data-rarity='ultra']  { --ygo-foil: 0.65; --ygo-glare: 0.38; --ygo-glow: rgb(251 191 36 / 70%); }
-.ygo-card[data-rarity='secret'] { --ygo-foil: 0.85; --ygo-glare: 0.42; --ygo-glow: rgb(168 85 247 / 75%); }
+/* Les intensités et l'aura par rareté ne sont plus ici : voir
+   `src/lib/rarity.js`, seule table, posée en variables par HoloCard. */
 
 @media (prefers-reduced-motion: reduce) {
   .ygo-card__inner { transition: none; }

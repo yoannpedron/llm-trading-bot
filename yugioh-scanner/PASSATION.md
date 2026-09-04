@@ -62,7 +62,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **92 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **96 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
@@ -253,6 +253,31 @@ capture d'écran. À vérifier sur un recadrage natif.
 - **Viseur.** Une ligne de consigne lisible (« Trop flou : touchez le code »,
   « Code repéré, vérification… ») au-dessus de la lecture brute, conservée en
   petit ; le bouton de torche disparaît quand la torche n'existe pas.
+
+### Raretés : une seule table
+
+Trois classifications se contredisaient : `rarityProfile` (six clés, dont
+« ultimate » que le CSS ne connaissait pas, et des intensités que personne ne
+lisait), `rarityTier` (cinq clés, Collector's en « secret » là où le profil
+disait « ultimate »), et une table de couleurs propre à `DataPanel`. Les
+Parallel, Starfoil et Mosaic tombaient dans « rare » (nom argenté) alors que
+ce sont des foils pleine surface ; l'Ultimate recevait un arc-en-ciel alors
+que c'est un relief sans couleur.
+
+`src/lib/rarity.js` est désormais la seule table : onze paliers, chacun avec
+une **couverture** (rien, nom, illustration, illustration + nom, toute la
+surface) et une **finition** (argent, or, arc-en-ciel, motif, relief,
+platine, ghost), plus intensités et couleurs. `HoloCard` pose couverture et
+finition en attributs et les intensités en variables CSS ; `holo.css` ne
+connaît plus les raretés. `test/rarity.test.js` fixe le palier de chaque
+libellé réel de l'index, coquilles comprises (« PLatinum », « Cr », « 2 »).
+
+Deux questions posées, deux réponses : les reflets sont **pertinents pour
+les cartes françaises** — la rareté est celle du tirage, identique dans
+toutes les langues — et ils sont **pertinents tout court** pour une seule
+raison : confirmer d'un coup d'œil la rareté choisie, qui décide du prix.
+Ils n'aident pas l'identification et coûtent du GPU sur mobile ; s'il faut
+un jour trancher, c'est cet usage-là qu'il faut préserver, pas le spectacle.
 
 ### Le travail suivant
 
