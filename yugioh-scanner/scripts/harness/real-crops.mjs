@@ -32,11 +32,10 @@ const APP = process.env.APP ?? path.resolve(import.meta.dirname, '../..');
 const FIXTURES = process.env.FIXTURES ?? path.join(APP, 'scripts/fixtures');
 /** Réglages à comparer : chaque entrée est passée telle quelle à `cropVariants`. */
 const SETTINGS = {
-  'ancien (ni lissage ni rognage)': { smoothRadius: 0, trimToLine: false },
-  'lissage Sauvola seul': { trimToLine: false },
-  'lissage Otsu + Sauvola, sans rognage': { smoothOtsu: true, trimToLine: false },
-  'rognage seul': { smoothRadius: 0 },
-  'lissage Sauvola + rognage (défaut)': {},
+  'sans lissage ni rognage': { smoothRadius: 0, trimToLine: false, stripEdges: false },
+  'lissage seul': { trimToLine: false, stripEdges: false },
+  'lissage + rognage': { stripEdges: false },
+  'défaut (lissage, rognage, bords nettoyés)': {},
 };
 
 const fixtures = fs
@@ -66,7 +65,9 @@ for (const fixture of fixtures) {
         await img.decode();
         const rect = { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight };
         // Même agrandissement que la boucle de lecture.
-        const scale = Math.max(1.5, Math.min(4, 240 / rect.height));
+        // Même règle que la boucle de lecture : viser une bande d'environ
+        // 110 px, mesurée comme la plus rapide ET la plus fiable.
+        const scale = window.YGO.preprocess.echelleDeLecture(rect.height);
         const variants = window.YGO.preprocess.cropVariants(img, rect, { scale, ...options });
         return {
           sharpness: variants.sharpness,
@@ -87,8 +88,10 @@ for (const fixture of fixtures) {
 }
 await browser.close();
 
-const { createWorker } = await import(path.join(APP, 'node_modules/tesseract.js/src/index.js'));
-const { configureSetCodeWorker } = await import(path.join(APP, 'src/lib/ocr.js'));
+const { createWorker, PSM } = await import(path.join(APP, 'node_modules/tesseract.js/src/index.js'));
+const { PROFILES, configureSetCodeWorker, numberRectangle, spliceNumber } = await import(
+  path.join(APP, 'src/lib/ocr.js')
+);
 const { buildSearchIndex, resolveSetCode } = await import(path.join(APP, 'src/lib/match.js'));
 const index = buildSearchIndex(
   JSON.parse(fs.readFileSync(path.join(APP, 'public/card-index.json'), 'utf8')),
@@ -96,6 +99,29 @@ const index = buildSearchIndex(
 
 const worker = await createWorker('eng', 1, { cachePath: SP });
 await configureSetCodeWorker(worker);
+
+/**
+ * Deuxième passe, en chiffres seuls, comme la boucle de lecture.
+ *
+ * Sans elle, ce banc mesurerait autre chose que l'application — le piège que ce
+ * projet a déjà connu une fois. La boucle ne la paie que lorsque la première
+ * passe échoue ; on reproduit cette condition ici.
+ */
+const chiffres = await createWorker('eng', 1, { cachePath: SP });
+await chiffres.setParameters(PROFILES.setCodeNumber);
+
+/** Dimensions d'un PNG, lues dans son en-tête : pas de dépendance à installer. */
+function tailleePng(fichier) {
+  const tete = fs.readFileSync(fichier).subarray(16, 24);
+  return { width: tete.readUInt32BE(0), height: tete.readUInt32BE(4) };
+}
+
+async function relireNumero(fichier) {
+  // Même rectangle que l'application, par la même fonction.
+  const rectangle = numberRectangle(tailleePng(fichier));
+  const { data } = await chiffres.recognize(fichier, { rectangle }, { text: true, blocks: false });
+  return (data.text ?? '').replace(/\D/g, '');
+}
 
 let current = '';
 for (const job of jobs) {
@@ -106,7 +132,24 @@ for (const job of jobs) {
   }
   const { data } = await worker.recognize(job.file, {}, { text: true, blocks: false });
   const text = (data.text ?? '').trim().replace(/\s+/g, '');
-  const resolved = resolveSetCode(index, text);
+  let lu = text;
+  let resolved = resolveSetCode(index, lu);
+
+  // Même règle que la boucle : la seconde passe se déclenche sur un échec ET
+  // sur une correspondance approchée, et ne remplace que si elle fait mieux.
+  const RANG = { exact: 3, region: 3, fuzzy: 1 };
+  const qualite = (r) => (r?.status === 'matched' ? (RANG[r.method] ?? 1) : 0);
+  if (qualite(resolved) < 3) {
+    const corrige = spliceNumber(text, await relireNumero(job.file));
+    if (corrige) {
+      const second = resolveSetCode(index, corrige);
+      if (qualite(second) >= qualite(resolved)) {
+        lu = `${text} → ${corrige}`;
+        resolved = second;
+      }
+    }
+  }
+
   let verdict = resolved.status;
   if (resolved.status === 'matched') {
     const ok = resolved.printings.some(
@@ -114,7 +157,8 @@ for (const job of jobs) {
     );
     verdict = `${ok ? 'BONNE' : 'FAUSSE'} ${resolved.matchedCode} (${resolved.method})`;
   } else if (resolved.reason) verdict += ` (${resolved.reason})`;
-  console.log(`  ${job.setting.padEnd(32)} ${job.label.padEnd(16)} « ${text} »  → ${verdict}`);
+  console.log(`  ${job.setting.padEnd(42)} ${job.label.padEnd(16)} « ${lu} »  → ${verdict}`);
 }
 
 await worker.terminate();
+await chiffres.terminate();

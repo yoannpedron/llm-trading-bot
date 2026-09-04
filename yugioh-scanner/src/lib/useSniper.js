@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { chime, vibrate } from './feedback.js';
-import { recognize, shutdown, warmUp } from './ocr.js';
-import { cropVariants, grabFrame } from './preprocess.js';
+import { recognize, recognizeNumber, shutdown, spliceNumber, warmUp } from './ocr.js';
+import { cropVariants, echelleDeLecture, grabFrame } from './preprocess.js';
 import { scanCode } from './scanApi.js';
 import { reticleRect, toVideoRect } from './viewport.js';
 import { ReadingVote } from './vote.js';
@@ -20,8 +20,56 @@ const SCAN_INTERVAL_MS = 280;
  * deux tours, sur deux images différentes, avec un reflet qui a bougé entre les
  * deux.
  */
-const VARIANTS_PER_TICK = 2;
-const VARIANT_COUNT = 4;
+/**
+ * Temps que l'on s'autorise, par tour, à essayer des binarisations.
+ *
+ * La boucle essaie les variantes dans l'ordre de leur efficacité mesurée et
+ * s'arrête au premier succès. Ce budget borne ce qu'on dépense quand aucune ne
+ * réussit : au-delà, mieux vaut reprendre une image fraîche, où le reflet et
+ * la mise au point auront bougé, que continuer à travailler une image qui ne
+ * donne rien.
+ *
+ * Réglé sur la mesure (`scripts/ocr-bench.mjs`) : une reconnaissance Sauvola
+ * coûte 50 ms, une reconnaissance Otsu 230 à 361 ms. 450 ms laissent donc
+ * passer les deux Sauvola et une Otsu — l'ordre exact dans lequel elles
+ * paient.
+ */
+const TICK_BUDGET_MS = 450;
+
+/**
+ * Ordre d'essai des binarisations, et ce que chacune coûte.
+ *
+ * Établi par `scripts/ocr-bench.mjs` sur les trois recadrages réels de
+ * `scripts/fixtures/`, et non par intuition :
+ *
+ *     binarisation   reconnaissance   cartes retrouvées
+ *     sauvola             50 ms             2/3
+ *     otsu               230-361 ms         0/3
+ *
+ * Otsu ne lit AUCUNE carte réelle et coûte cinq à sept fois plus cher, parce
+ * que Tesseract passe son temps à tenter de segmenter du bruit. Il reste
+ * excellent sur une image très propre — la caméra simulée du banc — donc on
+ * le garde, en dernier et seulement s'il reste du budget.
+ *
+ * L'ancienne boucle prenait deux variantes par tour en faisant tourner le
+ * point de départ : un tour sur deux commençait donc par Otsu, et dépensait
+ * l'essentiel de son temps sur la binarisation qui ne rend rien.
+ */
+const ORDRE_VARIANTES = ['sauvola', 'sauvola-inverse', 'otsu', 'otsu-inverse'];
+
+/** Ce qu'on calcule d'emblée ; le reste n'est produit qu'en cas d'échec. */
+const VARIANTES_RAPIDES = ['sauvola', 'sauvola-inverse'];
+
+/**
+ * Qualité d'une résolution, du plus sûr au plus douteux.
+ *
+ * Sert à décider si une seconde lecture mérite de remplacer la première : on ne
+ * remplace jamais une correspondance sûre par une approchée.
+ */
+const RANG_METHODE = { exact: 3, region: 3, fuzzy: 1 };
+const qualite = (resolu) =>
+  resolu?.status === 'matched' ? (RANG_METHODE[resolu.method] ?? 1) : 0;
+
 
 /**
  * Netteté minimale sous laquelle on ne lance même pas l'OCR.
@@ -54,11 +102,30 @@ export function useSniper() {
   const busyRef = useRef(false);
   const abortRef = useRef(null);
   const voteRef = useRef(new ReadingVote());
-  const variantOffsetRef = useRef(0);
 
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
-  const [torch, setTorch] = useState({ available: false, on: false });
+  /**
+   * Torche.
+   *
+   * `available` était calculé sur le seul `getCapabilities().torch`. Or
+   * plusieurs navigateurs mobiles ne déclarent pas la capacité tant qu'aucune
+   * contrainte n'a été appliquée, et cachaient donc le bouton sur des appareils
+   * dont la lampe fonctionne parfaitement. On propose désormais la commande dès
+   * qu'une piste vidéo existe, et l'on ne la retire QUE si un essai réel
+   * échoue — c'est la lumière qui décide de la lisibilité d'une inscription de
+   * deux millimètres, elle mérite le bénéfice du doute.
+   */
+  const [torch, setTorch] = useState({ available: false, on: false, declaree: false });
+
+  /**
+   * La torche reste allumée d'une carte à l'autre.
+   *
+   * On dépouille un classeur : la rallumer à chaque carte est une corvée, et
+   * `rescan()` remontait l'état complet du hook. La préférence survit donc au
+   * verrouillage et se réapplique à la piste.
+   */
+  const torcheVoulueRef = useRef(false);
   const [zoom, setZoom] = useState({ available: false, value: 1, min: 1, max: 1, step: 0.1 });
 
   const [modelReady, setModelReady] = useState(false);
@@ -170,7 +237,21 @@ export function useSniper() {
         trackRef.current = track;
         const capabilities = track?.getCapabilities?.() ?? {};
 
-        setTorch({ available: Boolean(capabilities.torch), on: false });
+        // Déclarée par la plateforme, ou simplement possible : dans les deux
+        // cas on montre la commande.
+        setTorch({
+          available: true,
+          on: false,
+          declaree: Boolean(capabilities.torch),
+        });
+
+        // La torche voulue avant un rescan est rallumée sur la nouvelle piste.
+        if (torcheVoulueRef.current) {
+          await track
+            .applyConstraints({ advanced: [{ torch: true }] })
+            .then(() => setTorch((etat) => ({ ...etat, on: true })))
+            .catch(() => {});
+        }
 
         // Mise au point continue. À dix centimètres d'une inscription de deux
         // millimètres, c'est la première cause d'échec, très loin devant le
@@ -219,9 +300,14 @@ export function useSniper() {
     const next = !torch.on;
     try {
       await track.applyConstraints({ advanced: [{ torch: next }] });
-      setTorch((current) => ({ ...current, on: next }));
+      torcheVoulueRef.current = next;
+      setTorch((current) => ({ ...current, on: next, available: true }));
     } catch {
-      setTorch((current) => ({ ...current, available: false }));
+      // L'appareil n'en a pas, ou la refuse : on retire la commande plutôt que
+      // de laisser un bouton qui ne fait rien. C'est le seul chemin qui
+      // conclut à l'absence de torche — un essai, pas une déclaration.
+      torcheVoulueRef.current = false;
+      setTorch({ available: false, on: false, declaree: false });
     }
   }, [torch.on]);
 
@@ -269,11 +355,11 @@ export function useSniper() {
       );
 
       const still = grabFrame(video);
-      // Agrandissement adapté : une capture 4K donne un viseur bien plus grand
-      // qu'une capture 1080p, et Tesseract n'aime ni les caractères minuscules
-      // ni les caractères démesurés.
-      const scale = Math.max(1.5, Math.min(4, 240 / rect.height));
-      const variants = cropVariants(still, rect, { scale });
+      // Agrandissement visant une bande d'environ 110 px, où Tesseract lit le
+      // mieux. Le réglage précédent visait 240 px : mesuré, c'était à la fois
+      // le plus lent et le moins fiable. Voir `echelleDeLecture`.
+      const scale = echelleDeLecture(rect.height);
+      const variants = cropVariants(still, rect, { scale, only: VARIANTES_RAPIDES });
 
       setSharpness(variants.sharpness);
 
@@ -286,13 +372,23 @@ export function useSniper() {
         return;
       }
 
-      // Deux binarisations par tour, en faisant tourner le point de départ pour
-      // couvrir les quatre polarités sur deux images successives.
-      const start = variantOffsetRef.current;
-      variantOffsetRef.current = (start + VARIANTS_PER_TICK) % VARIANT_COUNT;
+      // Les binarisations dans l'ordre de leur efficacité mesurée, tant qu'il
+      // reste du budget. On s'arrête au premier succès : dans le cas courant,
+      // c'est la première, et le tour aura coûté une seule reconnaissance.
+      const debut = Date.now();
+      let disponibles = variants;
 
-      for (let step = 0; step < VARIANTS_PER_TICK; step += 1) {
-        const variant = variants[(start + step) % VARIANT_COUNT];
+      for (const label of ORDRE_VARIANTES) {
+        if (Date.now() - debut > TICK_BUDGET_MS) break;
+
+        let variant = disponibles.find((entry) => entry.label === label);
+        if (!variant) {
+          // Les variantes lentes ne sont produites que si les rapides ont
+          // échoué : les calculer d'avance serait payer pour rien neuf tours
+          // sur dix.
+          disponibles = cropVariants(still, rect, { scale, only: ORDRE_VARIANTES });
+          variant = disponibles.find((entry) => entry.label === label);
+        }
         if (!variant) continue;
 
         // La vignette de ce qui part au moteur : sans elle, un échec de lecture
@@ -313,12 +409,42 @@ export function useSniper() {
         // Une panne de résolution — index absent, API injoignable — doit se voir.
         // Avalée, elle se manifeste seulement par un viseur qui ne verrouille
         // jamais, ce qui n'oriente vers rien.
-        const resolved = await scanCode(trimmed, controller.signal).catch((cause) => {
-          if (cause.name !== 'AbortError') setFailure(cause.message);
-          return null;
-        });
+        const resoudre = (texte) =>
+          scanCode(texte, controller.signal).catch((cause) => {
+            if (cause.name !== 'AbortError') setFailure(cause.message);
+            return null;
+          });
+
+        let resolved = await resoudre(trimmed);
+        if (resolved) setFailure(null);
+
+        // Seconde passe : on relit le numéro en chiffres seuls et l'on
+        // réessaie. Elle se déclenche non seulement sur un échec, mais aussi
+        // sur une correspondance APPROCHÉE — c'est justement le cas où la
+        // lecture est douteuse. Une première version ne la lançait que sur
+        // « aucune correspondance », et un rapprochement approché vers la
+        // MAUVAISE carte court-circuitait la correction qui aurait donné la
+        // bonne : « CMAMA-FRIIZ » se rapprochait de MAMA-112 et l'affaire
+        // était close, alors que relire « 113 » donnait la carte exacte.
+        //
+        // Dans le cas courant — lecture exacte du premier coup — elle ne se
+        // déclenche pas et ne coûte donc rien.
+        if (qualite(resolved) < 3) {
+          const chiffres = await recognizeNumber(variant.canvas).catch(() => '');
+          const corrige = spliceNumber(trimmed, chiffres);
+          if (corrige) {
+            setReading(`${trimmed} → ${corrige}`);
+            const secondEssai = await resoudre(corrige);
+            // À qualité égale, la lecture corrigée l'emporte, et ce n'est pas
+            // un pari : elle a le MÊME préfixe et des chiffres lus avec un
+            // alphabet où une lettre est impossible. Elle est donc meilleure
+            // par construction. On ne descend jamais en dessous, en revanche —
+            // le test compare les rangs, il ne fait pas confiance à l'ordre.
+            if (qualite(secondEssai) >= qualite(resolved)) resolved = secondEssai;
+          }
+        }
+
         if (!resolved) continue;
-        setFailure(null);
         if (resolved.status === 'no_code' || resolved.status === 'no_match') continue;
 
         // Exact ou régional : le code lu existe tel quel, rien à confirmer.
@@ -395,7 +521,6 @@ export function useSniper() {
     abortRef.current?.abort();
     // `manualEntry` n'est volontairement pas remis à zéro : voir sa déclaration.
     voteRef.current.reset();
-    variantOffsetRef.current = 0;
     setResult(null);
     setFrozenFrame(null);
     setReading('');

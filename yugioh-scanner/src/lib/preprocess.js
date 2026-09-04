@@ -321,6 +321,81 @@ const TEXT_ROW_MIN = 0.02;
 const TEXT_ROW_MAX = 0.6;
 
 /**
+ * Efface l'encre qui touche le bord gauche ou droit de la bande.
+ *
+ * POURQUOI. Le viseur ne tombe jamais exactement sur le code : il mord sur ce
+ * qui l'entoure, et le liseré de la carte laisse un fragment vertical au bord
+ * du recadrage. Tesseract le lit comme une lettre. Mesuré sur un vrai
+ * recadrage : « MAMA-FR113 » devient « COMAMA-FRIIZ » — le « CO » vient
+ * entièrement du bord gauche. Or un préfixe de six caractères sort de la
+ * grammaire d'un code d'extension, et la lecture est perdue alors que tout le
+ * reste était juste.
+ *
+ * COMMENT. Un parcours en largeur depuis chaque pixel d'encre des colonnes
+ * extrêmes efface la composante connexe à laquelle il appartient.
+ *
+ * LA GARDE QUI COMPTE. On n'efface QUE les composantes plus étroites qu'un
+ * vrai caractère. Un fragment de bordure est un trait fin et haut ; une lettre
+ * est large d'environ la moitié de sa hauteur. Sans cette garde, un code
+ * légèrement décadré perdrait son premier ou son dernier caractère — on
+ * remplacerait un faux positif par un autre.
+ *
+ * @param {Uint8ClampedArray} binary 0 pour l'encre, 255 pour le fond
+ * @param {{largeurMax?: number}} options largeur maximale d'une composante
+ *   effaçable, en fraction de la hauteur de la bande
+ * @returns {Uint8ClampedArray} nouveau tableau
+ */
+export function stripEdgeInk(binary, width, height, { largeurMax = 0.34 } = {}) {
+  const out = Uint8ClampedArray.from(binary);
+  if (width < 3 || height < 3) return out;
+
+  const seuilLargeur = Math.max(2, Math.round(height * largeurMax));
+  const vus = new Uint8Array(width * height);
+
+  const composante = (departX, departY) => {
+    const pile = [departY * width + departX];
+    const pixels = [];
+    let minX = departX;
+    let maxX = departX;
+
+    while (pile.length > 0) {
+      const index = pile.pop();
+      if (vus[index]) continue;
+      vus[index] = 1;
+      if (out[index] !== 0) continue;
+
+      const x = index % width;
+      const y = (index - x) / width;
+      pixels.push(index);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+
+      // Huit voisins : un liseré en diagonale reste une seule composante.
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const vx = x + dx;
+          const vy = y + dy;
+          if (vx < 0 || vx >= width || vy < 0 || vy >= height) continue;
+          const voisin = vy * width + vx;
+          if (!vus[voisin] && out[voisin] === 0) pile.push(voisin);
+        }
+      }
+    }
+
+    // Assez étroite pour n'être pas un caractère : on l'efface.
+    if (maxX - minX + 1 <= seuilLargeur) {
+      for (const index of pixels) out[index] = 255;
+    }
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    if (out[y * width] === 0) composante(0, y);
+    if (out[y * width + width - 1] === 0) composante(width - 1, y);
+  }
+  return out;
+}
+
+/**
  * Bande de lignes qui porte le texte, dans une image binarisée.
  *
  * Le viseur est plus haut que le code : sur un téléphone au conteneur court,
@@ -365,30 +440,83 @@ export function preprocessVariants(
   gray,
   width,
   height,
-  { autoInvert = true, smoothRadius = Math.round(height / 120), smoothOtsu = false } = {},
+  {
+    autoInvert = true,
+    smoothRadius = Math.round(height / 120),
+    smoothOtsu = false,
+    /**
+     * Gris déjà lissé, fourni par l'appelant.
+     *
+     * `cropVariants` obtient ce lissage du canvas, dont le flou est natif :
+     * mesuré 9 ms là où la double passe en JavaScript en coûte 30 sur la même
+     * image. Quand il est absent — les tests appellent cette fonction
+     * directement — on retombe sur `smooth()`.
+     */
+    smoothed = null,
+    /** Variantes à produire. Les autres ne sont pas calculées du tout. */
+    only = null,
+  } = {},
 ) {
   // Le lissage ne sert qu'à Sauvola. Otsu ne lit de toute façon pas une vraie
   // carte de près (bordure et trame ruinent un seuil global), mais il lit une
   // image propre mieux que quiconque — et le lissage lui coûte alors un
   // caractère (« RA03 » devient « RAO03 » sur la caméra simulée). Chaque
   // binarisation garde donc le terrain où elle gagne.
-  const smoothed = smooth(gray, width, height, smoothRadius);
-  const otsu = preprocessGray(smoothOtsu ? smoothed : gray, { autoInvert });
-  const local = sauvolaThreshold(smoothed, width, height);
-  const localDark = darkRatio(local) > 0.5 ? invert(local) : local;
+  const veut = (label) => !only || only.includes(label);
+  const besoinSauvola = veut('sauvola') || veut('sauvola-inverse');
+  const besoinOtsu = veut('otsu') || veut('otsu-inverse');
+
+  const lisse = besoinSauvola || smoothOtsu ? (smoothed ?? smooth(gray, width, height, smoothRadius)) : gray;
+  const otsu = besoinOtsu ? preprocessGray(smoothOtsu ? lisse : gray, { autoInvert }) : null;
+  const local = besoinSauvola ? sauvolaThreshold(lisse, width, height) : null;
+  const localDark = local ? (darkRatio(local) > 0.5 ? invert(local) : local) : null;
 
   // `trim` : la variante accepte d'être rognée à sa ligne de texte. Réservé à
   // Sauvola, pour la même raison que le lissage : Otsu reste la lecture de
   // référence d'une image propre, et le rognage lui a fait perdre le
   // verrouillage sur la caméra simulée alors qu'il sauve Sauvola sur une
   // vraie carte dont la bordure entre dans le viseur.
-  return [
-    { label: 'otsu', pixels: otsu.pixels, trim: false },
+  //
+  // L'ORDRE EST CELUI DE LA MESURE, PAS DE L'HABITUDE.
+  //
+  // `scripts/ocr-bench.mjs`, sur les trois recadrages réels de
+  // `scripts/fixtures/` : Sauvola retrouve la carte dans deux cas sur trois et
+  // coûte 50 ms de reconnaissance ; Otsu n'en retrouve AUCUN et coûte 230 à
+  // 361 ms — cinq à sept fois plus, parce que Tesseract passe son temps à
+  // tenter de segmenter du bruit. Otsu reste néanmoins utile sur une image
+  // très propre et très contrastée, où il est excellent : on le garde, mais
+  // en dernier recours et seulement s'il reste du temps dans le tour.
+  const toutes = [
     { label: 'sauvola', pixels: localDark, trim: true },
-    { label: 'otsu-inverse', pixels: invert(otsu.pixels), trim: false },
-    { label: 'sauvola-inverse', pixels: invert(localDark), trim: true },
+    { label: 'sauvola-inverse', pixels: localDark ? invert(localDark) : null, trim: true },
+    { label: 'otsu', pixels: otsu?.pixels ?? null, trim: false },
+    { label: 'otsu-inverse', pixels: otsu ? invert(otsu.pixels) : null, trim: false },
   ];
+  return toutes.filter((variante) => variante.pixels !== null && veut(variante.label));
 }
+
+/**
+ * Hauteur de bande visée avant reconnaissance, en pixels.
+ *
+ * Tesseract lit le mieux une ligne dont les capitales font trente à cinquante
+ * pixels ; au-delà, il ne gagne rien et paie chaque pixel. Le réglage
+ * précédent visait 240 px de bande, soit environ 120 px de capitale — mesuré :
+ * la configuration la PLUS LENTE et la MOINS fiable des quatre essayées.
+ *
+ *     bande   agrandissement   reconnaissance   cartes retrouvées
+ *      102          ×1,5            50 ms             2/3
+ *      136          ×2              41 ms             1/3
+ *      170          ×2,5            72 ms             2/3
+ *      238          ×3,5           109 ms             1/3
+ *
+ * On vise donc 110, et l'on ne réduit jamais en deçà de la taille native :
+ * jeter des pixels que le capteur a réellement produits ne se rattrape pas.
+ */
+export const BANDE_VISEE = 110;
+
+/** Agrandissement à appliquer à un recadrage pour viser cette bande. */
+export const echelleDeLecture = (hauteurRecadrage) =>
+  Math.max(1, Math.min(4, BANDE_VISEE / Math.max(1, hauteurRecadrage)));
 
 /**
  * Seuil de magnitude Sobel en deçà duquel un contour est tenu pour du bruit.
@@ -516,7 +644,15 @@ export function cropAndPreprocess(source, rect, { scale = UPSCALE, autoInvert = 
 export function cropVariants(
   source,
   rect,
-  { scale = UPSCALE, autoInvert = true, smoothRadius, smoothOtsu, trimToLine = true } = {},
+  {
+    scale = UPSCALE,
+    autoInvert = true,
+    smoothRadius,
+    smoothOtsu,
+    trimToLine = true,
+    stripEdges = true,
+    only = null,
+  } = {},
 ) {
   const width = Math.max(1, Math.round(rect.width * scale));
   const height = Math.max(1, Math.round(rect.height * scale));
@@ -538,7 +674,26 @@ export function cropVariants(
 
   const gray = toGrayscale(context.getImageData(0, 0, width, height));
 
-  const options = { autoInvert };
+  // Le flou passe par le canvas : le navigateur l'exécute en natif, trois fois
+  // plus vite que la double passe en JavaScript, pour un résultat identique à
+  // trois dixièmes de pour cent de pixels près (mesuré). C'est le poste de
+  // prétraitement le plus lourd, on ne le laisse pas au JavaScript.
+  const rayon = smoothRadius ?? Math.round(height / 120);
+  let smoothed = null;
+  if (rayon > 0) {
+    const flou = document.createElement('canvas');
+    flou.width = width;
+    flou.height = height;
+    const dessin = flou.getContext('2d', { willReadFrequently: true });
+    dessin.filter = `blur(${rayon}px)`;
+    dessin.imageSmoothingEnabled = true;
+    dessin.imageSmoothingQuality = 'high';
+    dessin.drawImage(source, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
+    dessin.filter = 'none';
+    smoothed = toGrayscale(dessin.getImageData(0, 0, width, height));
+  }
+
+  const options = { autoInvert, smoothed, only };
   if (smoothRadius !== undefined) options.smoothRadius = smoothRadius;
   if (smoothOtsu !== undefined) options.smoothOtsu = smoothOtsu;
 
@@ -547,18 +702,30 @@ export function cropVariants(
     // inversée, le fond est majoritaire et compterait comme de l'encre, et la
     // bande retenue serait une ligne de transition d'un pixel de haut. Vu sur
     // la caméra simulée, où ce sont ces variantes-là qui verrouillaient.
+    const sombre = darkRatio(pixels) > 0.5 ? invert(pixels) : pixels;
     const band =
-      trimToLine && trim
-        ? textBand(darkRatio(pixels) > 0.5 ? invert(pixels) : pixels, width, height)
-        : { top: 0, bottom: height - 1 };
+      trimToLine && trim ? textBand(sombre, width, height) : { top: 0, bottom: height - 1 };
     const bandHeight = band.bottom - band.top + 1;
+
+    let bande = pixels.subarray(band.top * width, (band.bottom + 1) * width);
+
+    // Le liseré de la carte, happé par le bord du viseur, devient une lettre
+    // fantôme : « MAMA-FR113 » lu « COMAMA-FRIIZ », dont le préfixe à six
+    // caractères sort de la grammaire d'un code. On l'efface, sur les mêmes
+    // variantes que le rognage — celles dont on sait qu'elles portent l'encre
+    // en sombre après normalisation.
+    if (stripEdges && trim) {
+      const sombreBande = darkRatio(bande) > 0.5 ? invert(bande) : bande;
+      const nettoyee = stripEdgeInk(sombreBande, width, bandHeight);
+      bande = darkRatio(bande) > 0.5 ? invert(nettoyee) : nettoyee;
+    }
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = bandHeight;
     const target = canvas.getContext('2d');
     const imageData = target.createImageData(width, bandHeight);
-    grayToImageData(pixels.subarray(band.top * width, (band.bottom + 1) * width), width, bandHeight, imageData);
+    grayToImageData(bande, width, bandHeight, imageData);
     target.putImageData(imageData, 0, 0);
     return { label, canvas, band };
   });

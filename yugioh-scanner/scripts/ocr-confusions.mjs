@@ -162,7 +162,9 @@ const shots = await page.evaluate(
         }
         context.putImageData(bruit, 0, 0);
 
-        const scale = Math.max(1.5, Math.min(4, 240 / rect.height));
+        // Même règle que la boucle de lecture : viser une bande d'environ
+        // 110 px, mesurée comme la plus rapide ET la plus fiable.
+        const scale = preprocess.echelleDeLecture(rect.height);
         const variants = preprocess.cropVariants(canvas, rect, { scale });
 
         out.push({

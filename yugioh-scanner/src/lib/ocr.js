@@ -53,6 +53,24 @@ export const PROFILES = {
     tessedit_char_whitelist:
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -'#&,.:!?()@",
   },
+  /**
+   * Deuxième passe, sur le seul numéro : CHIFFRES ET RIEN D'AUTRE.
+   *
+   * C'est la parade la plus efficace mesurée contre les confusions du moteur.
+   * Sur la police à empattements des cartes, il lit « 113 » comme « IIZ » et
+   * « 040 » comme « O40 » — de façon systématique, à chaque image, si bien que
+   * ni le vote entre images ni l'appariement approché n'y peuvent rien.
+   * Retirer les lettres de l'alphabet rend la classe d'erreurs *impossible*,
+   * exactement comme pour le passcode.
+   *
+   * Mesuré sur les trois recadrages réels (`scripts/ocr-strategies.mjs`) :
+   * une passe → 1 bonne carte sur 3, et une fausse ; deux passes → 2 sur 3,
+   * aucune fausse. Coût : 22 ms, et seulement quand la première passe a échoué.
+   */
+  setCodeNumber: {
+    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    tessedit_char_whitelist: '0123456789',
+  },
   passcode: {
     // Huit chiffres et rien d'autre. Retirer les lettres de l'alphabet supprime
     // d'un coup toute la classe d'erreurs qui plombe le code d'extension : il
@@ -165,10 +183,11 @@ export function getWorker(profile, onProgress) {
 
 /** Lance le téléchargement du modèle sans attendre le premier scan. */
 export function warmUp(onProgress) {
+  // Le worker « numéro » est chauffé lui aussi : il sert dès la première
+  // lecture difficile, et l'attendre à ce moment-là coûterait une seconde.
   return Promise.all([
     getWorker('setCode', onProgress),
-    getWorker('title'),
-    getWorker('passcode'),
+    getWorker('setCodeNumber'),
   ]);
 }
 
@@ -182,6 +201,59 @@ export async function recognize(profile, image) {
   const worker = await getWorker(profile);
   const { data } = await worker.recognize(image, {}, TEXT_ONLY);
   return { text: data.text ?? '', confidence: data.confidence ?? 0 };
+}
+
+/**
+ * Part droite de la bande relue en chiffres seuls.
+ *
+ * Le numéro occupe la fin du code. Balayé de 0,28 à 0,52 sur les recadrages
+ * réels : en deçà de 0,40 le premier chiffre est coupé (« 13 » pour « 113 »),
+ * au-delà de 0,46 on n'y gagne rien et l'on ramène des lettres du préfixe.
+ */
+export const PART_NUMERO = 0.42;
+
+/**
+ * Relit le numéro d'un code, en chiffres seuls.
+ * @param {HTMLCanvasElement} canvas bande complète, déjà binarisée
+ * @returns {Promise<string>} les chiffres lus, sans rien d'autre
+ */
+export async function recognizeNumber(canvas, { fraction = PART_NUMERO } = {}) {
+  const worker = await getWorker('setCodeNumber');
+  // Tesseract sait restreindre sa lecture à un rectangle : inutile de
+  // fabriquer un canvas intermédiaire à chaque tour.
+  const { data } = await worker.recognize(canvas, { rectangle: numberRectangle(canvas, fraction) }, TEXT_ONLY);
+  return (data.text ?? '').replace(/\D/g, '');
+}
+
+/**
+ * Rectangle du numéro dans une bande, en pixels.
+ * Exporté pour que les bancs de mesure découpent exactement comme
+ * l'application — un banc qui cadre autrement mesure autre chose.
+ */
+export function numberRectangle({ width, height }, fraction = PART_NUMERO) {
+  const largeur = Math.max(1, Math.round(width * fraction));
+  return { left: Math.max(0, width - largeur), top: 0, width: largeur, height };
+}
+
+/**
+ * Remplace la fin d'une lecture par les chiffres relus.
+ *
+ * On ne substitue que trois caractères, et seulement si la deuxième passe en a
+ * rendu au moins trois : sans cette garde, un numéro à deux chiffres — quatorze
+ * codes dans tout l'index — verrait son préfixe amputé.
+ *
+ * Le résultat est proposé **en plus** de la lecture d'origine, jamais à sa
+ * place : la boucle essaie les deux, et l'on ne peut donc rien perdre de ce
+ * qui fonctionnait.
+ *
+ * @returns {string|null} la lecture corrigée, ou `null` s'il n'y a rien à faire
+ */
+export function spliceNumber(texte, chiffres) {
+  const lu = String(texte ?? '');
+  const numero = String(chiffres ?? '').slice(-3);
+  if (numero.length < 3 || lu.length < 4) return null;
+  const corrige = lu.slice(0, -3) + numero;
+  return corrige === lu ? null : corrige;
 }
 
 /** Libère les workers (démontage du composant, changement de page). */

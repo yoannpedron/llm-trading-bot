@@ -34,6 +34,10 @@ de la largeur du viseur, comme le cadre un utilisateur.
 |---|---|
 | `build-index.mjs` | génère `public/card-index.json` depuis YGOPRODeck (lancé par `prebuild`) |
 | `ocr-confusions.mjs` | **le plus important** : taux de bonne carte, de mauvaise carte, effet du seuil approché et de la marge d'ambiguïté (`lectures.json` conserve les lectures pour rejouer sans OCR) |
+| `ocr-bench.mjs` | **où passe le temps** : coût de chaque étage de prétraitement, puis de la reconnaissance selon l'agrandissement, le mode de segmentation et le modèle |
+| `ocr-multiframe.mjs` | ce que plusieurs images successives apportent — conclusion : rien, les erreurs sont systématiques |
+| `ocr-strategies.mjs` | compare une passe, le modèle « best » et la double passe avec numéro en chiffres seuls |
+| `harness/time-to-lock.mjs` | le délai réel entre le cadrage et l'affichage de la carte, dans le navigateur |
 | `font-confusions.mjs` | similarité des silhouettes de glyphes — conclusion : non concluant, voir plus bas |
 | `harness/real-crops.mjs` | rejoue les vrais recadrages de `scripts/fixtures/` avec et sans lissage et rognage — **à lancer avant toute décision sur le prétraitement** |
 | `harness/sniper-shot.mjs` | fabrique une image de viseur réaliste (flou, reflet, bruit, rotation) |

@@ -442,17 +442,28 @@ export default function SniperView({ sniper }) {
         {/* Barre de commandes : chaque élément absent laisse sa place aux
             autres, plutôt qu'un bouton grisé qui n'apprend rien. */}
         <div className="flex w-full max-w-md gap-2">
+          {/* La lumière décide de la lisibilité d'une inscription de deux
+              millimètres : la commande est proposée dès qu'une piste vidéo
+              existe, et ne disparaît que si un essai réel échoue. */}
           {torch.available && !saisieVisible && (
             <button
               type="button"
               onClick={toggleTorch}
               aria-pressed={torch.on}
-              className={`h-12 flex-1 rounded-controle border text-donnee font-medium transition-colors ${
+              title={
+                torch.declaree
+                  ? undefined
+                  : 'Votre navigateur ne déclare pas la torche ; l’essai dira si elle répond.'
+              }
+              className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-controle border text-donnee font-medium transition-colors ${
                 torch.on
                   ? 'border-alerte bg-alerte text-fond'
                   : 'border-trait-fort bg-panneau text-second hover:text-encre'
               }`}
             >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
+                <path d="M7 2h10l-1 6h3l-9 14 2-9H8z" />
+              </svg>
               {torch.on ? 'Torche allumée' : 'Torche'}
             </button>
           )}

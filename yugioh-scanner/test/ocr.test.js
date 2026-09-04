@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PROFILES, setCodePatterns } from '../src/lib/ocr.js';
+import { PART_NUMERO, PROFILES, setCodePatterns, spliceNumber } from '../src/lib/ocr.js';
 
 test('le profil du code lit un bloc, pas une ligne', () => {
   // PSM 7 (« ligne unique ») suppose que l'image ne contient que la ligne à
@@ -45,4 +45,36 @@ test('la grammaire des codes couvre les formes réelles et rien de plus', () => 
   // Le fichier se termine par un saut de ligne : Tesseract ignore sinon la
   // dernière ligne.
   assert.ok(setCodePatterns().endsWith('\n'));
+});
+
+test('le profil du numéro n’accepte que des chiffres', () => {
+  // C'est toute la parade : sur la police des cartes, le moteur lit « 113 »
+  // comme « IIZ » et « 040 » comme « O40 », systématiquement. Retirer les
+  // lettres rend cette classe d'erreurs impossible plutôt que rattrapable.
+  assert.equal(PROFILES.setCodeNumber.tessedit_char_whitelist, '0123456789');
+  assert.ok(PART_NUMERO > 0.35 && PART_NUMERO < 0.5, 'part balayée : 0,40 à 0,46');
+});
+
+test('la recomposition ne remplace que le numéro, et jamais à l’aveugle', () => {
+  // Cas nominal : les trois derniers caractères cèdent la place aux chiffres.
+  assert.equal(spliceNumber('MAMA-FRIIZ', '113'), 'MAMA-FR113');
+  assert.equal(spliceNumber('STOK-FRO40', '040'), 'STOK-FR040');
+  // Seuls les trois derniers chiffres comptent : la passe peut en ramener plus.
+  assert.equal(spliceNumber('MAMA-FRIIZ', '42113'), 'MAMA-FR113');
+
+  // Moins de trois chiffres lus : on ne touche à rien. Sans cette garde, un
+  // numéro à deux chiffres — quatorze codes dans tout l'index — verrait son
+  // préfixe amputé.
+  assert.equal(spliceNumber('MAMA-FRIIZ', '13'), null);
+  assert.equal(spliceNumber('MAMA-FRIIZ', ''), null);
+
+  // Lecture trop courte pour porter un numéro : on s'abstient.
+  assert.equal(spliceNumber('ABC', '113'), null);
+
+  // Rien à corriger : on ne propose pas un doublon à la boucle.
+  assert.equal(spliceNumber('MAMA-FR113', '113'), null);
+
+  // Entrées absentes : jamais d'exception.
+  assert.equal(spliceNumber(null, null), null);
+  assert.equal(spliceNumber(undefined, '113'), null);
 });

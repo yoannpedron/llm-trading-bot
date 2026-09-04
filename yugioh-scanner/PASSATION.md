@@ -62,7 +62,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **100 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **109 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
@@ -318,6 +318,96 @@ Trois points qui ne se devinent pas :
   pesant 1,4 Mo, son chargement est annoncé — sans ce témoin, une saisie valide
   semble sans proposition pendant la première seconde.
 
+### Vitesse et fiabilité de la lecture : ce que la mesure a dit
+
+Reproche de l'utilisateur, mot pour mot : « ça prend encore trop de temps » et
+« même super net et sous la lampe ça marche pas bien ». Les deux étaient
+fondés, et pour des raisons différentes.
+
+Deux bancs ont été écrits pour répondre : `scripts/ocr-bench.mjs` (où passe le
+temps, poste par poste) et `scripts/harness/time-to-lock.mjs` (le délai réel
+entre le cadrage et l'affichage de la carte, dans le navigateur).
+
+#### La lenteur : trois causes, toutes mesurées
+
+| Poste | Avant | Après |
+|---|---|---|
+| **Délai jusqu'au verrouillage** | 1,66 s (étendue 1,36–2,26) | **0,49 s** (0,48–0,51) |
+
+1. **L'agrandissement était le pire des quatre essayés.** La règle visait une
+   bande de 240 px, soit des capitales d'environ 120 px. Tesseract lit le mieux
+   des capitales de trente à cinquante pixels ; au-delà il ne gagne rien et
+   paie chaque pixel.
+
+   | bande | agrandissement | reconnaissance | cartes retrouvées |
+   |---|---|---|---|
+   | 102 | ×1,5 | 50 ms | 2/3 |
+   | 136 | ×2 | 41 ms | 1/3 |
+   | 170 | ×2,5 | 72 ms | 2/3 |
+   | **238** | **×3,5 (l'ancien réglage)** | **109 ms** | **1/3** |
+
+   La règle vise désormais 110 px (`echelleDeLecture`), et ne réduit jamais en
+   deçà du natif.
+
+2. **La moitié du temps partait dans une binarisation qui ne lit rien.** Otsu
+   coûte 230 à 361 ms de reconnaissance et retrouve **zéro** carte réelle sur
+   trois ; Sauvola coûte 50 ms et en retrouve deux. Tesseract passe ce temps à
+   tenter de segmenter du bruit. L'ancienne boucle prenait deux variantes par
+   tour en faisant tourner le point de départ : un tour sur deux commençait
+   donc par Otsu. Les variantes sont maintenant essayées **dans l'ordre de leur
+   efficacité mesurée**, on s'arrête au premier succès, et Otsu — excellent sur
+   une image propre, donc conservé — n'est calculé qu'en dernier recours.
+
+3. **Le lissage était fait en JavaScript.** C'était le poste de prétraitement
+   le plus lourd : 57 à 86 ms. Le flou du canvas est natif : 9 ms sur la même
+   image, pour 0,3 % de pixels de différence.
+
+#### La fiabilité : ce qui ne marchait pas, et pourquoi
+
+Le vote entre images successives, inscrit depuis longtemps sur la liste des
+choses à faire, a été **implémenté, mesuré, et il n'apporte rien**
+(`scripts/ocr-multiframe.mjs`, six images simulées par carte). La raison est
+nette : les erreurs ne sont pas aléatoires, elles se répètent à l'identique.
+Le moteur lit « STOK » à chaque image, jamais « STOR ». Voter sur des erreurs
+constantes ne fait que les confirmer. `CharacterVote` reste dans `vote.js`,
+avec ce résultat négatif écrit noir sur blanc : ne pas le rebrancher sans
+nouvelle mesure.
+
+Ce qui marche, c'est de rendre l'erreur **impossible** plutôt que rattrapable :
+
+- **Une deuxième passe sur le numéro, en chiffres seuls.** Le moteur lit « 113 »
+  comme « IIZ » et « 040 » comme « O40 » sur la police à empattements des
+  cartes. Avec un alphabet réduit aux chiffres, un « I » ou un « Z » ne peut
+  plus sortir. C'est la parade que le projet employait déjà pour le passcode.
+  Elle ne se déclenche que si la première passe a échoué **ou n'a rendu qu'une
+  correspondance approchée** — dans le cas courant elle ne coûte rien.
+- **L'encre qui touche le bord du recadrage est effacée** (`stripEdgeInk`). Le
+  liseré de la carte devenait une lettre fantôme : « MAMA-FR113 » lu
+  « COMAMA-FRIIZ », dont le préfixe à six caractères sort de la grammaire d'un
+  code. Une garde protège les vraies lettres : on n'efface que les composantes
+  plus étroites qu'un glyphe.
+
+| Sur les trois recadrages réels | Bonnes | Fausses |
+|---|---|---|
+| avant | 1/3 | 1 |
+| **après** | **2/3** | **0** |
+
+Sur le banc synthétique, 60 codes × 2 dégradations : **100 % et 98 %** de
+cartes retrouvées, **zéro fausse**.
+
+#### Ce qui résiste encore, et pourquoi
+
+`STOR-FR040` reste refusé. Le moteur lit le R comme un K, à chaque image. Or
+« STOK-040 » est à exactement un caractère de **deux** codes réels,
+« STOR-040 » et « STON-040 » : le refus est correct, pas un défaut. Le seul
+remède serait un modèle entraîné sur la police des cartes.
+
+Le modèle « best » de Tesseract a été essayé et **écarté** : il exige une
+compilation SIMD que le moteur WebAssembly du projet n'embarque pas — il
+s'interrompt sur `missing function: DotProductSSE`, hors de toute portée `try`
+puisque l'erreur vient du worker — et il pèse 12,8 Mo contre 5,2, rédhibitoire
+sur un réseau mobile.
+
 ### Le travail suivant
 
 Le mode de défaillance dominant était **en amont du seuil** et il est traité
@@ -331,16 +421,20 @@ Aucun code de l'index n'a de numéro à quatre chiffres, et les 38 clés en
    empattements : c'est là que R devient K et 3 devient Z, et le banc
    synthétique ne le produit pas. Cinq à dix recadrages réels valent plus que
    n'importe quelle dégradation de synthèse.
-2. **Bords du recadrage.** Le « C » parasite de MAMA vient du bord gauche du
-   viseur ; un caractère collé au préfixe suffit à sortir des motifs. Écarter
-   les composantes qui touchent le bord avant l'OCR, et mesurer.
+2. **Un modèle entraîné sur la police des cartes.** C'est désormais la seule
+   piste qui puisse débloquer les confusions R/K, et elle demande des données :
+   quelques centaines de recadrages annotés, que la vignette de diagnostic du
+   viseur permet de collecter.
 3. **Proposer le choix sur une ambiguïté.** `resolveSetCode` rend déjà les
    deux clés en concurrence (`between`) ; deux lectures ambiguës concordantes
    pourraient présenter les deux visuels à l'utilisateur au lieu d'un refus
    silencieux. C'est le seul moyen de transformer les abandons restants en
    décisions.
-4. **Vote caractère par caractère** entre les binarisations.
-5. **Redressement** — inclinaison par variance du profil de projection.
+4. **Redressement** — inclinaison par variance du profil de projection. C'est
+   la dernière transformation d'image qui n'ait pas été essayée.
+
+Le vote caractère par caractère, qui figurait ici, en a été retiré : il a été
+mesuré et ne rend rien (voir plus haut).
 
 Ce qui a été fait ici est réversible et rejouable : `margin: 0` rend
 l'ancien comportement, et le balayage complet tient dans
@@ -452,7 +546,7 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
 src/lib/
   useSniper.js     caméra, boucle de lecture, torche, zoom, mise au point
   viewport.js      viseur -> pixels vidéo   (pur, testé)
-  preprocess.js    lissage, binarisations, bande de texte, netteté (pur, testé)
+  preprocess.js    lissage, binarisations, bande de texte, bords, netteté (pur, testé)
   ocr.js           profils Tesseract, un worker par profil
   parse.js         extraction et transposition des codes (pur, testé)
   match.js         résolution exact / régional / approché (pur, testé)

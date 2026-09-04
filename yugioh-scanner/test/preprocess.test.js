@@ -10,6 +10,7 @@ import {
   otsuThreshold,
   preprocessGray,
   preprocessVariants,
+  echelleDeLecture,
   sauvolaThreshold,
   smooth,
   stretchContrast,
@@ -130,15 +131,63 @@ test('sous éclairage inégal, Sauvola tient là où Otsu lâche', () => {
   );
 });
 
-test('les variantes couvrent les deux polarités, sans doublon', () => {
+test('les variantes sont ordonnées par efficacité mesurée, sans doublon', () => {
   const variants = preprocessVariants(texte(), WIDTH, HEIGHT);
+
+  // L'ordre n'est pas arbitraire : sur les recadrages réels, Sauvola retrouve
+  // la carte deux fois sur trois pour 50 ms, Otsu aucune pour 230 à 361 ms.
+  // La boucle de lecture essaie dans cet ordre et s'arrête au premier succès ;
+  // changer l'ordre ici, c'est ralentir l'application.
   assert.deepEqual(
     variants.map((entry) => entry.label),
-    ['otsu', 'sauvola', 'otsu-inverse', 'sauvola-inverse'],
+    ['sauvola', 'sauvola-inverse', 'otsu', 'otsu-inverse'],
   );
+
   // Une variante et son inverse ne peuvent pas être identiques.
-  assert.notDeepEqual(variants[0].pixels, variants[2].pixels);
-  assert.deepEqual(invert(variants[0].pixels), variants[2].pixels);
+  const parLabel = Object.fromEntries(variants.map((v) => [v.label, v.pixels]));
+  assert.notDeepEqual(parLabel.otsu, parLabel['otsu-inverse']);
+  assert.deepEqual(invert(parLabel.otsu), parLabel['otsu-inverse']);
+  assert.deepEqual(invert(parLabel.sauvola), parLabel['sauvola-inverse']);
+});
+
+test('on ne calcule que les variantes demandées', () => {
+  // Otsu coûte peu, mais sa reconnaissance coûte cinq à sept fois celle de
+  // Sauvola : la boucle ne la demande qu'en dernier recours, et il ne faut pas
+  // la calculer pour rien.
+  const sauvolaSeul = preprocessVariants(texte(), WIDTH, HEIGHT, {
+    only: ['sauvola', 'sauvola-inverse'],
+  });
+  assert.deepEqual(
+    sauvolaSeul.map((entry) => entry.label),
+    ['sauvola', 'sauvola-inverse'],
+  );
+
+  const otsuSeul = preprocessVariants(texte(), WIDTH, HEIGHT, { only: ['otsu'] });
+  assert.deepEqual(
+    otsuSeul.map((entry) => entry.label),
+    ['otsu'],
+  );
+
+  // Le résultat ne dépend pas de ce qui a été demandé à côté.
+  const tout = preprocessVariants(texte(), WIDTH, HEIGHT);
+  assert.deepEqual(sauvolaSeul[0].pixels, tout.find((v) => v.label === 'sauvola').pixels);
+});
+
+test('l’agrandissement vise une bande lisible, sans jamais réduire', () => {
+  // Tesseract lit le mieux des capitales de trente à cinquante pixels. Viser
+  // 240 px de bande — le réglage précédent — était mesuré comme la
+  // configuration la plus lente ET la moins fiable des quatre essayées.
+  assert.equal(echelleDeLecture(110), 1);
+  assert.ok(Math.abs(echelleDeLecture(68) - 110 / 68) < 1e-9);
+
+  // Jamais de réduction : les pixels que le capteur a produits ne se
+  // rattrapent pas.
+  assert.equal(echelleDeLecture(240), 1);
+  assert.equal(echelleDeLecture(1000), 1);
+
+  // Et jamais d'agrandissement démesuré sur un recadrage minuscule.
+  assert.equal(echelleDeLecture(1), 4);
+  assert.equal(echelleDeLecture(0), 4);
 });
 
 test('la netteté distingue le net du flou, et résiste au bruit', () => {
