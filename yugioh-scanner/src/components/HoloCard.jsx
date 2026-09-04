@@ -14,10 +14,18 @@ import '../styles/holo.css';
  * L'inclinaison suit le pointeur sur ordinateur et le doigt sur mobile ; à
  * défaut, l'accéléromètre prend le relais quand la plateforme le propose.
  */
-export default function HoloCard({ image, name, rarity }) {
+export default function HoloCard({ image, imageSmall, name, rarity }) {
   const frameRef = useRef(null);
   const pointerRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // Nouvelle carte : on repart de zéro, sinon l'ancienne image resterait
+  // affichée « chargée » pendant que la nouvelle arrive.
+  useEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+  }, [image]);
 
   const tier = rarityTier(rarity);
   const showFoil = tier !== 'common' && tier !== 'rare';
@@ -69,12 +77,34 @@ export default function HoloCard({ image, name, rarity }) {
   return (
     <div
       ref={frameRef}
-      className="ygo-card"
+      // `revealed` déclenche l'arrivée et le balayage : au chargement de
+      // l'image, pas au montage. Sinon l'animation joue sur un rectangle noir
+      // et la carte apparaît ensuite sans cérémonie — c'est ce qu'on voyait.
+      className={`ygo-card${loaded ? ' ygo-card--revealed' : ''}`}
       data-rarity={tier}
       onPointerMove={handleMove}
       onPointerLeave={handleLeave}
     >
       <div className="ygo-card__inner">
+        {/* Vignette basse définition (~15 Ko) : quelque chose à regarder
+            pendant que le visuel complet (~150 Ko) arrive en 4G. */}
+        {imageSmall && !loaded && !failed && (
+          <img
+            className="ygo-card__placeholder"
+            src={imageSmall}
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+          />
+        )}
+
+        {failed && (
+          <div className="ygo-card__fallback">
+            <span>{name}</span>
+            <small>visuel indisponible</small>
+          </div>
+        )}
+
         <img
           className="ygo-card__front"
           src={image}
@@ -82,7 +112,9 @@ export default function HoloCard({ image, name, rarity }) {
           width="421"
           height="614"
           decoding="async"
+          fetchPriority="high"
           onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
           style={{ opacity: loaded ? 1 : 0, transition: 'opacity 320ms ease' }}
         />
 

@@ -197,11 +197,11 @@ shots.forEach((shot, index) => {
 const { createWorker } = await import(
   path.join(APP, 'node_modules/tesseract.js/src/index.js')
 );
-const { PROFILES } = await import(path.join(APP, 'src/lib/ocr.js'));
+const { configureSetCodeWorker } = await import(path.join(APP, 'src/lib/ocr.js'));
 const { extractSetCodes } = await import(path.join(APP, 'src/lib/parse.js'));
 
 const worker = await createWorker('eng', 1, { cachePath: SP });
-await worker.setParameters(PROFILES.setCode);
+await configureSetCodeWorker(worker);
 
 const confusions = new Map();
 const stats = Object.fromEntries(

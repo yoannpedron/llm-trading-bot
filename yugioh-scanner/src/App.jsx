@@ -158,6 +158,10 @@ export default function App() {
               image={
                 detail?.image ?? `https://images.ygoprodeck.com/images/cards/${scan.card.id}.jpg`
               }
+              imageSmall={
+                detail?.image_small ??
+                `https://images.ygoprodeck.com/images/cards_small/${scan.card.id}.jpg`
+              }
               name={detail?.name ?? scan.card.name}
               rarity={rarity?.rarity}
             />

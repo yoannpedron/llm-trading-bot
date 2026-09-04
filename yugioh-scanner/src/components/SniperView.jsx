@@ -14,6 +14,19 @@ import { RETICLE_RATIO } from '../lib/viewport.js';
  * zoom. Ce sont les deux choses qui décident vraiment de la lisibilité d'une
  * inscription de deux millimètres.
  */
+/** Ce que l'utilisateur doit faire, d'après ce que la boucle vient de voir. */
+function statusFor({ reading, sharpness, minSharpness, modelReady, frozenFrame }) {
+  if (frozenFrame) return 'Code lu';
+  if (!modelReady) return 'Chargement du moteur de lecture…';
+  if (!reading) return 'Cadrez le code dans la fenêtre';
+  if (sharpness < minSharpness || reading === 'image trop floue') {
+    return 'Trop flou : touchez le code pour faire la mise au point';
+  }
+  if (reading.startsWith('rien lu')) return 'Rien de lisible : rapprochez-vous';
+  if (/[A-Z0-9]{2,5}-[A-Z0-9]{2,6}/.test(reading)) return 'Code repéré, vérification…';
+  return 'Lecture en cours…';
+}
+
 export default function SniperView({ sniper }) {
   const {
     videoRef,
@@ -52,6 +65,8 @@ export default function SniperView({ sniper }) {
 
   const width = Math.min(size.width * 0.82, 420);
   const height = width / RETICLE_RATIO;
+
+  const status = statusFor({ reading, sharpness, minSharpness, modelReady, frozenFrame });
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-black">
@@ -101,11 +116,21 @@ export default function SniperView({ sniper }) {
             Placez le code ici · touchez pour la mise au point
           </p>
 
+          {/* Deux lignes : ce que l'utilisateur doit faire, puis ce que le
+              moteur a lu. La seconde reste : « rien » et « du bruit »
+              n'appellent pas le même geste, et c'est elle qu'on lit dans une
+              capture d'écran de panne. */}
           <p
-            className="absolute left-1/2 -translate-x-1/2 text-center font-mono text-xs text-white/70"
-            style={{ top: (size.height + height) / 2 + 14 }}
+            className="absolute inset-x-6 text-center text-sm font-medium text-white/90"
+            style={{ top: (size.height + height) / 2 + 12 }}
           >
-            {reading ? `« ${reading} »` : 'en attente de lecture…'}
+            {status}
+          </p>
+          <p
+            className="absolute inset-x-6 truncate text-center font-mono text-[11px] text-white/45"
+            style={{ top: (size.height + height) / 2 + 34 }}
+          >
+            {reading ? `« ${reading} »` : ''}
           </p>
 
           {/* Netteté : la mise au point est la première cause d'échec sur une
@@ -113,7 +138,7 @@ export default function SniperView({ sniper }) {
               s'il doit bouger, plutôt que de le laisser insister à l'aveugle. */}
           <div
             className="absolute left-1/2 flex w-40 -translate-x-1/2 items-center gap-2"
-            style={{ top: (size.height + height) / 2 + 40 }}
+            style={{ top: (size.height + height) / 2 + 58 }}
           >
             <span className="font-mono text-[9px] tracking-[0.14em] text-white/50 uppercase">
               Net
@@ -204,22 +229,25 @@ export default function SniperView({ sniper }) {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={toggleTorch}
-          disabled={!torch.available}
-          aria-pressed={torch.on}
-          className={`flex h-16 w-full max-w-sm items-center justify-center gap-3 rounded-2xl text-base font-semibold transition active:scale-[0.99] disabled:opacity-35 ${
-            torch.on
-              ? 'bg-amber text-abyss'
-              : 'border border-white/15 bg-black/55 text-white backdrop-blur-md'
-          }`}
-        >
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-            <path d="M7 2h10l-1 6h3l-9 14 2-9H8z" />
-          </svg>
-          {torch.available ? (torch.on ? 'Torche allumée' : 'Allumer la torche') : 'Torche indisponible'}
-        </button>
+        {/* Un bouton de 64 px grisé n'apprend rien : sans torche, on rend la
+            place à l'image. */}
+        {torch.available && (
+          <button
+            type="button"
+            onClick={toggleTorch}
+            aria-pressed={torch.on}
+            className={`flex h-16 w-full max-w-sm items-center justify-center gap-3 rounded-2xl text-base font-semibold transition active:scale-[0.99] ${
+              torch.on
+                ? 'bg-amber text-abyss'
+                : 'border border-white/15 bg-black/55 text-white backdrop-blur-md'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+              <path d="M7 2h10l-1 6h3l-9 14 2-9H8z" />
+            </svg>
+            {torch.on ? 'Torche allumée' : 'Allumer la torche'}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -23,6 +23,18 @@ function PriceBadge({ amount }) {
   );
 }
 
+function EffectText({ detail, loading, error }) {
+  return (
+    <div className="rail max-h-44 min-h-16 shrink-0 overflow-y-auto rounded-2xl bg-black/35 p-3 text-sm leading-relaxed">
+      {loading && <p className="animate-pulse text-muted">Chargement de la fiche…</p>}
+      {!loading && error && <p className="text-amber">{error}</p>}
+      {!loading && !error && (
+        <p className="whitespace-pre-line">{detail?.desc ?? 'Texte indisponible.'}</p>
+      )}
+    </div>
+  );
+}
+
 function Stat({ label, value }) {
   if (value === null || value === undefined) return null;
   return (
@@ -54,9 +66,29 @@ export default function DataPanel({
   const needsChoice = scan?.status === 'needs_user_selection' && !rarity;
   const options = scan?.rarities ?? [];
   const price = rarity?.priceEur ?? detail?.prices?.cardmarket_eur ?? null;
+  // Une correspondance approchée a corrigé la lecture : c'est le visuel qui
+  // confirme, pas le code. On le dit, plutôt que d'afficher la même
+  // assurance qu'une lecture exacte.
+  const approximate = scan?.method === 'fuzzy';
+
+  const RescanButton = ({ wide = false }) => (
+    <button
+      type="button"
+      onClick={onCancel}
+      aria-label="Ce n'est pas ma carte : relancer le scan"
+      className={`flex h-14 shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-4 text-sm font-medium text-muted transition active:scale-95 hover:border-amber/50 hover:text-amber ${
+        wide ? 'w-full' : ''
+      }`}
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+        <path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" />
+      </svg>
+      Pas ma carte
+    </button>
+  );
 
   return (
-    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 rounded-t-3xl border-t border-white/12 bg-white/6 p-4 backdrop-blur-2xl sm:rounded-3xl sm:border">
+    <section className="rail flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-t-3xl border-t border-white/12 bg-white/6 p-4 backdrop-blur-2xl sm:rounded-3xl sm:border">
       {/* En-tête : nom français et cote. */}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -64,7 +96,12 @@ export default function DataPanel({
             {scan?.matchedCode ?? '—'}
             {scan?.regional && <span className="ml-2 text-muted">variante régionale</span>}
           </p>
-          <h2 className="truncate text-xl font-bold sm:text-2xl">
+          {approximate && (
+            <p className="text-[11px] leading-snug text-amber">
+              Lecture approchée (« {scan.read} ») — vérifiez le visuel
+            </p>
+          )}
+          <h2 className="line-clamp-2 text-xl leading-tight font-bold sm:text-2xl">
             {detail?.name ?? scan?.card?.name ?? 'Carte inconnue'}
           </h2>
           <p className="mt-0.5 font-mono text-[11px] text-muted">
@@ -96,23 +133,22 @@ export default function DataPanel({
         )}
       </div>
 
-      {/* Texte d'effet, dans sa propre zone de défilement. */}
-      <div className="rail min-h-[64px] flex-1 overflow-y-auto rounded-2xl bg-black/35 p-3 text-sm leading-relaxed">
-        {loading && <p className="animate-pulse text-muted">Chargement de la fiche…</p>}
-        {!loading && error && <p className="text-amber">{error}</p>}
-        {!loading && !error && (
-          <p className="whitespace-pre-line">{detail?.desc ?? 'Texte indisponible.'}</p>
-        )}
-      </div>
+      {/* Texte d'effet, dans sa propre zone de défilement. Hauteur bornée :
+          il ne doit pas repousser les commandes hors de l'écran — et quand une
+          rareté est à choisir, ce choix passe avant le texte. */}
+      {!needsChoice && <EffectText detail={detail} loading={loading} error={error} />}
 
       {/* Commandes. */}
       {needsChoice ? (
-        <div>
-          <p className="mb-2 text-sm text-muted">
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted">
             Ce code existe en {options.length} raretés. La caméra ne voit pas l’holographie —
             choisissez la vôtre.
           </p>
-          <div className="rail flex gap-2 overflow-x-auto pb-1">
+          {/* Grille plutôt que rail : sept raretés coupées au bord de l'écran
+              ne se devinent pas, et rien n'indiquait qu'il fallait faire
+              défiler. */}
+          <div className="grid grid-cols-2 gap-2">
             {options.map((option) => {
               const tier = rarityTier(option.rarity);
               return (
@@ -120,42 +156,49 @@ export default function DataPanel({
                   key={`${option.setCode}-${option.rarity}-${option.setName}`}
                   type="button"
                   onClick={() => onRarity(option)}
-                  className="h-14 shrink-0 rounded-2xl border px-4 text-left transition active:scale-[0.98]"
+                  className="min-h-14 rounded-2xl border px-3 py-2 text-left transition active:scale-[0.98]"
                   style={{
                     borderColor: `${TIER_COLOR[tier]}66`,
                     background: `${TIER_COLOR[tier]}14`,
                     color: TIER_COLOR[tier],
                   }}
                 >
-                  <span className="block text-sm font-semibold">{option.rarity}</span>
-                  <span className="block max-w-[13rem] truncate font-mono text-[10px] text-muted">
+                  <span className="block text-sm leading-tight font-semibold">{option.rarity}</span>
+                  <span className="mt-0.5 block truncate font-mono text-[10px] text-muted">
                     {option.setName}
                   </span>
                 </button>
               );
             })}
           </div>
+          {/* Sans cette sortie, une mauvaise carte à plusieurs raretés
+              obligeait à en choisir une pour pouvoir annuler. */}
+          <RescanButton wide />
+          <EffectText detail={detail} loading={loading} error={error} />
+        </div>
+      ) : saved ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-center text-sm text-emerald-300">Ajoutée à la collection</p>
+          {/* Le geste suivant est toujours le même : scanner la carte
+              d'après. Il ne doit pas se chercher dans un coin. */}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-14 w-full rounded-2xl bg-cyan/25 text-base font-semibold text-cyan ring-1 ring-cyan/50 transition active:scale-[0.99] hover:bg-cyan/35"
+          >
+            Carte suivante
+          </button>
         </div>
       ) : (
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onValidate}
-            disabled={saved}
-            className="h-14 flex-1 rounded-2xl bg-cyan/25 text-base font-semibold text-cyan ring-1 ring-cyan/50 transition active:scale-[0.99] hover:bg-cyan/35 disabled:opacity-50"
+            className="h-14 flex-1 rounded-2xl bg-cyan/25 text-base font-semibold text-cyan ring-1 ring-cyan/50 transition active:scale-[0.99] hover:bg-cyan/35"
           >
-            {saved ? 'Ajoutée à la collection' : 'Valider'}
+            Valider
           </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Annuler et relancer le scan"
-            className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/12 bg-white/5 transition active:scale-95 hover:border-amber/50 hover:text-amber"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-              <path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" />
-            </svg>
-          </button>
+          <RescanButton />
         </div>
       )}
     </section>

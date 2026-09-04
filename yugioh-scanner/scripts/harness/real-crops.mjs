@@ -88,14 +88,14 @@ for (const fixture of fixtures) {
 await browser.close();
 
 const { createWorker } = await import(path.join(APP, 'node_modules/tesseract.js/src/index.js'));
-const { PROFILES } = await import(path.join(APP, 'src/lib/ocr.js'));
+const { configureSetCodeWorker } = await import(path.join(APP, 'src/lib/ocr.js'));
 const { buildSearchIndex, resolveSetCode } = await import(path.join(APP, 'src/lib/match.js'));
 const index = buildSearchIndex(
   JSON.parse(fs.readFileSync(path.join(APP, 'public/card-index.json'), 'utf8')),
 );
 
 const worker = await createWorker('eng', 1, { cachePath: SP });
-await worker.setParameters(PROFILES.setCode);
+await configureSetCodeWorker(worker);
 
 let current = '';
 for (const job of jobs) {

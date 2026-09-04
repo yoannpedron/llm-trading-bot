@@ -62,6 +62,62 @@ export const PROFILES = {
   },
 };
 
+/**
+ * Grammaire d'un code d'extension, pour `user_patterns` de Tesseract.
+ *
+ * Syntaxe des motifs : `\\n` alphanumérique, `\\A` majuscule, `\\d` chiffre.
+ * Les formes viennent d'un recensement des 44 499 codes de l'index :
+ *
+ *     préfixe-RR999    41 000   région de deux lettres, trois chiffres
+ *     préfixe-RRL99     2 400   lettre de série, puis DEUX chiffres (« ENA01 »)
+ *     préfixe-999       1 800   codes anciens sans région (« LOB-001 »)
+ *     préfixe-A999        730   codes anciens à région d'une lettre (« PSV-E088 »)
+ *
+ * Le préfixe fait de deux à cinq caractères alphanumériques (« LOB », « RA03 »,
+ * « LC5D »). Aucune forme « lettre de série + trois chiffres » : un premier
+ * jeu de motifs l'admettait, et le « O » que le moteur insère après la région
+ * (« ENO002 ») y trouvait refuge. La forme à deux chiffres seuls (« AA-RR99 »,
+ * 14 codes) est laissée de côté pour la même raison.
+ *
+ * Pourquoi c'est la parade la plus rentable : le moteur insérait un « O »
+ * entre la région et le numéro sur un quart des lectures d'une image nette, et
+ * lisait « 3 » comme « Z » qu'une table de transposition changeait en « 2 » —
+ * une autre carte, valide. Contraint à un chiffre à cette position, il choisit
+ * le chiffre le plus proche de la forme. Mesuré sur 120 images du banc :
+ * lecture exacte 87 → 111, bonnes cartes 105 → 117, fausses 1 → 0.
+ *
+ * Un premier jeu de motifs n'admettait pas de chiffre au milieu du préfixe :
+ * « LC5D » devenait « LCSD ». D'où `\\n` partout dans le préfixe.
+ */
+export function setCodePatterns() {
+  const lines = [];
+  for (let length = 2; length <= 5; length += 1) {
+    const prefix = '\\n'.repeat(length);
+    lines.push(`${prefix}-\\A\\A\\d\\d\\d`);
+    lines.push(`${prefix}-\\A\\A\\A\\d\\d`);
+    lines.push(`${prefix}-\\d\\d\\d`);
+    lines.push(`${prefix}-\\A\\d\\d\\d`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+const PATTERNS_PATH = '/setcode-patterns.txt';
+
+/**
+ * Applique le profil « code d'extension » à un worker fraîchement créé.
+ *
+ * `user_patterns_file` est un réglage d'initialisation, pas un paramètre : il
+ * faut écrire le fichier dans le système de fichiers du worker puis
+ * réinitialiser le moteur avec. Partagé par l'application et les bancs de
+ * mesure, pour que ce qui est mesuré soit ce qui tourne.
+ */
+export async function configureSetCodeWorker(worker) {
+  await worker.writeText(PATTERNS_PATH, setCodePatterns());
+  await worker.reinitialize('eng', 1, { user_patterns_file: PATTERNS_PATH });
+  await worker.setParameters(PROFILES.setCode);
+  return worker;
+}
+
 /** Ne demander que le texte : le HOCR et les blocs coûtent une sérialisation inutile. */
 const TEXT_ONLY = { text: true, blocks: false, hocr: false, tsv: false };
 
@@ -93,6 +149,7 @@ function startWorker(profile, onProgress) {
   }
 
   const promise = createWorker('eng', 1, options).then(async (worker) => {
+    if (profile === 'setCode') return configureSetCodeWorker(worker);
     await worker.setParameters(PROFILES[profile]);
     return worker;
   });

@@ -82,6 +82,46 @@
   background: #0a0d16;
 }
 
+/* Vignette floutée sous le visuel, le temps qu'il arrive. Le léger
+   agrandissement cache le halo que le flou crée sur les bords. */
+.ygo-card__placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--ygo-radius);
+  filter: blur(6px) saturate(1.1);
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+.ygo-card__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.35rem;
+  padding: 8%;
+  text-align: center;
+  font-weight: 700;
+  color: #e8edff;
+  background: linear-gradient(160deg, #141a2c, #0a0d16);
+  border-radius: var(--ygo-radius);
+}
+
+.ygo-card__fallback small {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: #8b97b8;
+}
+
+/* --- Arrivée : la carte se retourne et se pose, une fois l'image là ------- */
+
+.ygo-card--revealed {
+  animation: card-arrive 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Couches d'effet : toutes inertes au pointeur et hors du flux. */
 .ygo-card__inner > [data-layer] {
   position: absolute;
@@ -184,7 +224,11 @@
   width: 34%;
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 62%), transparent);
   transform: translateX(-160%) skewX(-18deg);
-  animation: ygo-sweep 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+
+/* Le balayage suit l'arrivée : il part quand la carte est posée. */
+.ygo-card--revealed .ygo-card__sweep::after {
+  animation: ygo-sweep 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
 }
 
 @keyframes ygo-sweep {
@@ -201,6 +245,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ygo-card__inner { transition: none; }
+  .ygo-card--revealed { animation: none; }
   .ygo-card__sparkles { animation: none; }
-  .ygo-card__sweep::after { animation: none; opacity: 0; }
+  .ygo-card--revealed .ygo-card__sweep::after { animation: none; opacity: 0; }
 }

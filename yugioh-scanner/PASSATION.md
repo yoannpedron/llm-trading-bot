@@ -62,7 +62,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **91 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **92 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
@@ -212,28 +212,71 @@ fausse que le vote arrête déjà — mais elle est le premier réglage à
 reconsidérer si de vrais recadrages montrent des fausses cartes par erreur de
 numéro.
 
+### `user_patterns` : fait, et mesuré
+
+La grammaire d'un code (`setCodePatterns()` dans `ocr.js`, quatre formes
+issues d'un recensement des 44 499 codes de l'index) est écrite dans le
+système de fichiers du worker puis passée à `reinitialize` — c'est un réglage
+d'initialisation, pas un paramètre. Sur les 120 images du banc, sans les
+regénérer :
+
+| | Lecture exacte | Bonnes | Fausses | Abandons |
+|---|---|---|---|---|
+| sans motifs | 87 | 105 | 1 | 14 |
+| motifs, premier jeu | 111 | 117 | 0 | 3 |
+| **motifs, jeu final** | 104 | **119** | **0** | **1** |
+
+Le premier jeu admettait « lettre de série + trois chiffres », forme qui
+n'existe pas dans l'index et par laquelle le « O » inséré (« ENO002 »)
+passait ; il n'admettait pas non plus de chiffre au milieu du préfixe, et
+« LC5D » devenait « LCSD ». Le jeu final lit moins souvent au caractère près
+(le O revient sous la forme « ENO61 », que la transposition répare) mais
+retrouve plus de cartes, sans fausse. Les motifs sont un dictionnaire souple,
+pas une contrainte dure : sur la fixture MAMA, un « C » parasite collé au
+préfixe (« CMAMA-… », six caractères) sort de toutes les formes et le moteur
+lit alors librement — la carte fausse « MAMA-FR112 » subsiste sur cette
+capture d'écran. À vérifier sur un recadrage natif.
+
+### Interface : ce qui a changé et pourquoi
+
+- **Reveal.** L'arrivée (`card-arrive`, définie mais jamais utilisée) et le
+  balayage se déclenchent au chargement de l'image, plus au montage : ils
+  jouaient sur un rectangle noir. Une vignette basse définition floutée tient
+  lieu de visuel pendant les 150 Ko du grand format ; un visuel injoignable
+  affiche le nom plutôt que du noir.
+- **Panneau.** Nom sur deux lignes au lieu d'une troncature ; raretés en
+  grille plutôt qu'en rail coupé au bord de l'écran sans indice de
+  défilement ; le choix de rareté passe avant le texte d'effet ; « Pas ma
+  carte » est proposé aussi pendant ce choix (auparavant il fallait choisir
+  une rareté pour pouvoir annuler) ; après validation, le bouton devient
+  « Carte suivante » ; une lecture approchée est annoncée comme telle.
+- **Viseur.** Une ligne de consigne lisible (« Trop flou : touchez le code »,
+  « Code repéré, vérification… ») au-dessus de la lecture brute, conservée en
+  petit ; le bouton de torche disparaît quand la torche n'existe pas.
+
 ### Le travail suivant
 
-Le mode de défaillance dominant est maintenant identifié et il est **en amont
-du seuil** : Tesseract insère un « O » entre la région et le numéro sur 25 des
+Le mode de défaillance dominant était **en amont du seuil** et il est traité
+par `user_patterns`. Ce qui reste, par ordre de valeur : Tesseract insère un « O » entre la région et le numéro sur 25 des
 120 lectures (« ENO061 » pour « EN061 »), sur une image parfaitement nette.
 Aucun code de l'index n'a de numéro à quatre chiffres, et les 38 clés en
 « -O… » sont des coquilles YGOPRODeck (« LAVD-ENO34 »). Par ordre de valeur :
 
-1. **`user_patterns` de Tesseract** — contraindre la sortie à la grammaire
-   d'un code (`\A\A\A-\A\A\d\d\d`, préfixes de 2 à 5, numéro de 2 ou 3
-   chiffres). C'est la parade directe au O inséré. Écrire le fichier dans le
-   système de fichiers du worker avec `worker.writeText()`. **Mesurer avec le
-   banc corrigé avant et après** : la ligne « 100 » du balayage (exact +
-   régional seuls) est le chiffre à faire monter.
-2. **Vote caractère par caractère** entre les binarisations, plutôt que de
-   retenir la première qui rend quelque chose.
-3. **Redressement** — inclinaison par variance du profil de projection.
-4. **Nourrir `scripts/fixtures/` de recadrages natifs** (appui sur la
+1. **Nourrir `scripts/fixtures/` de recadrages natifs** (appui sur la
    vignette du viseur), en particulier des cartes sombres et des polices à
    empattements : c'est là que R devient K et 3 devient Z, et le banc
    synthétique ne le produit pas. Cinq à dix recadrages réels valent plus que
    n'importe quelle dégradation de synthèse.
+2. **Bords du recadrage.** Le « C » parasite de MAMA vient du bord gauche du
+   viseur ; un caractère collé au préfixe suffit à sortir des motifs. Écarter
+   les composantes qui touchent le bord avant l'OCR, et mesurer.
+3. **Proposer le choix sur une ambiguïté.** `resolveSetCode` rend déjà les
+   deux clés en concurrence (`between`) ; deux lectures ambiguës concordantes
+   pourraient présenter les deux visuels à l'utilisateur au lieu d'un refus
+   silencieux. C'est le seul moyen de transformer les abandons restants en
+   décisions.
+4. **Vote caractère par caractère** entre les binarisations.
+5. **Redressement** — inclinaison par variance du profil de projection.
 
 Ce qui a été fait ici est réversible et rejouable : `margin: 0` rend
 l'ancien comportement, et le balayage complet tient dans
