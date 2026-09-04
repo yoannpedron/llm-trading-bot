@@ -143,13 +143,22 @@ export default function SniperView({ sniper }) {
         </div>
       )}
 
-      {/* Ce que le moteur reçoit vraiment, après binarisation. */}
+      {/* Ce que le moteur reçoit vraiment, après binarisation. Un appui
+          l'enregistre : c'est la seule façon d'obtenir de vrais recadrages
+          pour les bancs de mesure (voir scripts/harness/real-crops.mjs). */}
       {crop && !frozenFrame && (
-        <img
-          src={crop}
-          alt="Zone lue, après binarisation"
-          className="absolute top-3 left-3 w-40 rounded-lg border border-white/20 bg-white"
-        />
+        <a
+          href={crop}
+          download={`viseur-${Date.now()}.png`}
+          title="Enregistrer ce recadrage"
+          className="absolute top-3 left-3 w-40"
+        >
+          <img
+            src={crop}
+            alt="Zone lue, après binarisation"
+            className="w-full rounded-lg border border-white/20 bg-white"
+          />
+        </a>
       )}
 
       {!modelReady && (

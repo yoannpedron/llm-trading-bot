@@ -35,6 +35,7 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `build-index.mjs` | génère `public/card-index.json` depuis YGOPRODeck (lancé par `prebuild`) |
 | `ocr-confusions.mjs` | **le plus important** : taux de bonne carte, de mauvaise carte, effet du seuil approché et de la marge d'ambiguïté (`lectures.json` conserve les lectures pour rejouer sans OCR) |
 | `font-confusions.mjs` | similarité des silhouettes de glyphes — conclusion : non concluant, voir plus bas |
+| `harness/real-crops.mjs` | rejoue les vrais recadrages de `scripts/fixtures/` avec et sans lissage et rognage — **à lancer avant toute décision sur le prétraitement** |
 | `harness/sniper-shot.mjs` | fabrique une image de viseur réaliste (flou, reflet, bruit, rotation) |
 | `harness/live-crop.mjs` | recadre la vidéo en direct de l'application et la lit |
 | `harness/ui-e2e.mjs` | chaîne complète en navigateur, caméra simulée par un fichier MJPEG |
@@ -62,3 +63,42 @@ disponible.
 Le script est conservé parce que la conclusion est utile : **ce n'est pas la
 forme des glyphes qu'il faut mesurer, c'est ce que le pipeline confond**. C'est
 ce que fait `ocr-confusions.mjs`.
+
+## Fixtures réelles
+
+`scripts/fixtures/viseur-<code>.png` sont des recadrages de viseur pris sur un
+téléphone ; le code attendu est dans le nom. Dans l'application, un appui sur
+la vignette binarisée en haut à gauche enregistre le recadrage tel que le
+moteur le reçoit. Les deux premières fixtures sont des captures d'écran
+recadrées — résolution de l'affichage, pas du capteur — à remplacer par des
+recadrages natifs dès que possible.
+
+Ce que le banc synthétique ne produit pas et que ces fixtures ont révélé : la
+trame d'impression résolue par le capteur, la bordure de la carte dans le
+viseur, un code gris sur fond sombre. Les trois ont fait échouer l'application
+alors que le banc annonçait 90 % de bonnes cartes.
+
+## Test navigateur hors ligne
+
+`harness/ui-e2e.mjs` charge l'application bâtie et attend un verrouillage sur
+la caméra simulée. Dans un environnement où Chromium ne joint pas le CDN, il
+faut servir Tesseract depuis `public/tess/` (ignoré par git) :
+
+```bash
+mkdir -p public/tess/core public/tess/lang
+cp node_modules/tesseract.js/dist/worker.min.js public/tess/
+cp node_modules/tesseract.js-core/tesseract-core*.{js,wasm} public/tess/core/
+cp $SP/eng.traineddata public/tess/lang/ && gzip -k public/tess/lang/eng.traineddata
+curl -o $SP/beb.jpg https://images.ygoprodeck.com/images/cards/89631139.jpg
+SP=$SP DEGRADE=aucun node scripts/harness/sniper-shot.mjs
+for i in $(seq 1 90); do cat $SP/sniper-aucun.jpg; done > $SP/sniper.mjpeg
+VITE_TESSERACT_WORKER_PATH=/tess/worker.min.js VITE_TESSERACT_CORE_PATH=/tess/core \
+  VITE_TESSERACT_LANG_PATH=/tess/lang npx vite build
+npx vite preview --port 4173 &
+SP=$SP node scripts/harness/ui-e2e.mjs
+```
+
+Le résultat attendu tient en une ligne : `résultat : code=… nom="Destiny HERO -
+Malicious"` et `aucune erreur console`. « AUCUNE lecture aboutie » sans erreur
+console est une régression de la boucle de lecture ou du prétraitement — c'est
+ainsi que deux ont été prises.

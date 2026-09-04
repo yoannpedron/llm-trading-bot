@@ -62,7 +62,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **89 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **91 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 
@@ -155,6 +155,63 @@ Lecture du tableau :
    donc soumis au vote ; l'autre image du même code donne une lecture
    différente, ambiguë. En usage réel, le vote la bloque.
 
+### Ce que deux captures de téléphone ont appris de plus
+
+Deux captures d'écran de l'application sur un vrai téléphone (STOR-FR040,
+MAMA-FR113) ont montré des échecs que le banc synthétique ne produit pas. Les
+recadrages du viseur en ont été extraits (`scripts/fixtures/viseur-*.png`) et
+rejoués par `scripts/harness/real-crops.mjs`. Trois causes, toutes absentes du
+banc :
+
+1. **La trame d'impression.** À la distance du mode sniper, le capteur résout
+   les points de demi-teinte de la carte. Otsu les binarise en poussière que
+   Tesseract lit comme des lettres — « REREEEEEEAEREEELARE » sur un code
+   parfaitement lisible à l'œil. **Parade : un lissage** d'un centième de la
+   hauteur du recadrage avant seuillage (`smooth()` dans `preprocess.js`),
+   **pour Sauvola seulement** : appliqué aussi à Otsu, il faisait perdre le
+   verrouillage sur la caméra simulée (« RA03 » lu « RAO03 »).
+2. **La bordure de la carte dans le viseur.** Sur ce téléphone, la moitié
+   basse du viseur est le cadre orange de la carte : un bloc noir après
+   seuillage, que PSM 6 s'obstine à lire. **Parade : rogner à la ligne de
+   texte** par profil de projection (`textBand()`), sur les variantes Sauvola,
+   la bande étant cherchée sur la polarité encre-sombre — calculée sur une
+   variante inversée, elle ne gardait qu'une ligne de transition.
+3. **Le garde-fou de netteté mesurait le contraste.** MAMA-FR113 est un code
+   gris sur fond sombre : ses contours ne dépassaient pas `EDGE_THRESHOLD`, et
+   l'application disait « image trop floue » devant une vignette binarisée
+   lisible. **Parade : mesurer après étirement de contraste.** Le seuil
+   `MIN_SHARPNESS` n'a pas bougé.
+
+Effet mesuré sur les fixtures réelles (Sauvola, seule binarisation qui lit) :
+STOR passe de bruit pur à « STOK-FRO40 » — un R lu K, refusé à 88 car « STOK »
+a plusieurs voisins à une édition près ; MAMA passe de rien à « CMAMA-FRLLZ »,
+que la transposition change en « MAMA-FR112 » : **une autre carte, valide,
+acceptée par l'approché.** Sur le banc synthétique, les trois parades font
+passer le réglage retenu de 99 / 1 / 20 à **105 bonnes / 1 fausse / 14
+abandons** (le bruit du banc n'est pas ensemencé : ± 2 d'une exécution à
+l'autre), et la ligne « 100 » (exact + régional seuls) de 89 à 93. Otsu ne lit
+aucune des deux fixtures ; c'est Sauvola qui porte le mode sniper. Le test
+navigateur (`ui-e2e.mjs`) verrouille toujours — il a pris deux régressions
+au passage, invisibles au banc, ce qui confirme qu'il faut le lancer.
+
+Deux réserves. Les fixtures sont des captures d'écran recadrées, à la
+résolution de l'affichage, pas les recadrages natifs que reçoit l'OCR : la
+trame peut y différer. **Un appui sur la vignette en haut à gauche du viseur
+enregistre désormais le recadrage réel** — c'est ainsi qu'il faut nourrir
+`scripts/fixtures/` avant toute nouvelle décision. Et la carte fausse de MAMA
+ne se règle ni par le seuil ni par la marge : « 3 » lu « Z » devient « 2 »
+par une table de transposition aveugle, là où le moteur, contraint à un
+chiffre à cette position, choisirait « 3 » d'après la forme. C'est l'argument
+le plus fort pour `user_patterns` ci-dessous.
+
+Une règle de rapprochement **structurée** a aussi été mesurée hors ligne :
+numéro identique exigé, préfixe à une édition près, unique. Sur les 120
+lectures du banc : 94 bonnes, 0 fausse, 26 abandons, contre 99 / 1 / 20 pour
+seuil + marge. Elle n'a pas été adoptée — cinq bonnes cartes perdues pour une
+fausse que le vote arrête déjà — mais elle est le premier réglage à
+reconsidérer si de vrais recadrages montrent des fausses cartes par erreur de
+numéro.
+
 ### Le travail suivant
 
 Le mode de défaillance dominant est maintenant identifié et il est **en amont
@@ -172,9 +229,11 @@ Aucun code de l'index n'a de numéro à quatre chiffres, et les 38 clés en
 2. **Vote caractère par caractère** entre les binarisations, plutôt que de
    retenir la première qui rend quelque chose.
 3. **Redressement** — inclinaison par variance du profil de projection.
-4. **Étendre le banc** aux substitutions réelles (S/G, J/D, 5/S) : la
-   dégradation synthétique actuelle ne les produit presque plus. Une poignée
-   de vraies photos de téléphone vaudrait mieux que davantage de synthèse.
+4. **Nourrir `scripts/fixtures/` de recadrages natifs** (appui sur la
+   vignette du viseur), en particulier des cartes sombres et des polices à
+   empattements : c'est là que R devient K et 3 devient Z, et le banc
+   synthétique ne le produit pas. Cinq à dix recadrages réels valent plus que
+   n'importe quelle dégradation de synthèse.
 
 Ce qui a été fait ici est réversible et rejouable : `margin: 0` rend
 l'ancien comportement, et le balayage complet tient dans
@@ -226,6 +285,16 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
   l'interpolation adoucit les contours qu'on mesure, et la note dépendrait alors
   de la résolution du capteur.
 
+### Prétraitement
+
+- **Otsu ne lit pas une vraie carte de près.** Sur les deux fixtures réelles,
+  seul Sauvola rend quelque chose : la bordure et la trame ruinent un seuil
+  global. Ne pas retirer les variantes Sauvola de la rotation.
+- **Lisser avant de seuiller n'est pas une perte de netteté.** Le rayon vaut
+  un centième de la hauteur du recadrage : la trame disparaît, les traits
+  restent dix fois plus larges. Mesuré : sans lissage, bruit pur ; avec,
+  « STOK-FRO40 ».
+
 ### Caméra
 
 - **Ne pas forcer le zoom.** Sur la plupart des téléphones il est numérique : le
@@ -276,7 +345,7 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
 src/lib/
   useSniper.js     caméra, boucle de lecture, torche, zoom, mise au point
   viewport.js      viseur -> pixels vidéo   (pur, testé)
-  preprocess.js    binarisations et netteté (pur, testé)
+  preprocess.js    lissage, binarisations, bande de texte, netteté (pur, testé)
   ocr.js           profils Tesseract, un worker par profil
   parse.js         extraction et transposition des codes (pur, testé)
   match.js         résolution exact / régional / approché (pur, testé)
@@ -302,9 +371,13 @@ couvrent volontairement les mêmes cas.
 - **Mesurer avant de régler.** Chaque constante non évidente du pipeline vient
   d'un chiffre, et le commentaire à côté dit lequel. Ne pas en changer une sans
   refaire la mesure — `scripts/README.md` explique comment.
-- **Le test navigateur trouve ce que la relecture ne voit pas.** Deux pannes
-  parfaitement silencieuses ont été prises ainsi. Le lancer après toute
-  modification de la boucle de lecture.
+- **Le test navigateur trouve ce que la relecture ne voit pas.** Quatre
+  pannes silencieuses ont été prises ainsi, dont deux régressions du
+  prétraitement que le banc synthétique et les fixtures réelles donnaient
+  pour des améliorations. Le lancer après toute modification de la boucle de
+  lecture ou du prétraitement. Hors ligne — Chromium de Playwright ne passe
+  pas par le proxy — il faut servir Tesseract en local ; `scripts/README.md`
+  donne la procédure.
 - **Préférer l'échec au faux positif.** C'est le fil directeur de tout ce qui
   reste à faire. La marge d'ambiguïté en est l'application : 7 bonnes cartes
   sacrifiées pour 10 fausses évitées, et c'est un bon échange.

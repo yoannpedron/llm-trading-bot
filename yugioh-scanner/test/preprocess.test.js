@@ -11,7 +11,9 @@ import {
   preprocessGray,
   preprocessVariants,
   sauvolaThreshold,
+  smooth,
   stretchContrast,
+  textBand,
   toGrayscale,
 } from '../src/lib/preprocess.js';
 
@@ -194,4 +196,46 @@ test('la netteté distingue le net du flou, et résiste au bruit', () => {
   // Un aplat n'a aucun contour ; une image minuscule ne fait pas planter.
   assert.equal(mesure(new Uint8ClampedArray(WIDTH * HEIGHT).fill(128)), 0);
   assert.equal(sharpness(new Uint8ClampedArray(4), 2, 2), 0);
+});
+
+test('le lissage efface une trame de points sans déplacer un trait', () => {
+  // Trame : un point sombre isolé toutes les trois colonnes, comme la
+  // demi-teinte d'une carte vue de près. Trait : une colonne pleine.
+  const gray = new Uint8ClampedArray(WIDTH * HEIGHT).fill(220);
+  for (let y = 0; y < HEIGHT; y += 1) {
+    for (let x = 0; x < WIDTH; x += 3) gray[y * WIDTH + x] = 60;
+    for (let x = 30; x < 34; x += 1) gray[y * WIDTH + x] = 20;
+  }
+
+  const out = smooth(gray, WIDTH, HEIGHT, 2);
+
+  // Après lissage, la trame ne laisse qu'une ondulation faible…
+  const ecart = Math.abs(out[10 * WIDTH + 12] - out[10 * WIDTH + 13]);
+  assert.ok(ecart < 20, `trame résiduelle ${ecart}`);
+  // …tandis que le trait reste bien plus sombre que son voisinage.
+  assert.ok(out[10 * WIDTH + 31] < out[10 * WIDTH + 12] - 60);
+
+  // Rayon nul : copie fidèle, et jamais le même tableau.
+  const same = smooth(gray, WIDTH, HEIGHT, 0);
+  assert.deepEqual([...same], [...gray]);
+  assert.notEqual(same, gray);
+});
+
+test('la bande de texte écarte le bloc de bordure et le fond vide', () => {
+  // Image binaire : 6 lignes de fond, 6 lignes de « texte » (un tiers
+  // d'encre), 8 lignes de bloc noir — la bordure du cadre de la carte.
+  const binary = new Uint8ClampedArray(WIDTH * HEIGHT).fill(255);
+  for (let y = 6; y < 12; y += 1) for (let x = 0; x < WIDTH; x += 3) binary[y * WIDTH + x] = 0;
+  for (let y = 12; y < HEIGHT; y += 1) binary.fill(0, y * WIDTH, (y + 1) * WIDTH);
+
+  const band = textBand(binary, WIDTH, HEIGHT, { pad: 0 });
+  assert.deepEqual(band, { top: 6, bottom: 11 });
+
+  // La marge s'ajoute de part et d'autre, sans sortir de l'image.
+  const padded = textBand(binary, WIDTH, HEIGHT, { pad: 0.5 });
+  assert.deepEqual(padded, { top: 3, bottom: 14 });
+
+  // Rien qui ressemble à du texte : on garde tout plutôt que de couper au hasard.
+  const blank = new Uint8ClampedArray(WIDTH * HEIGHT).fill(255);
+  assert.deepEqual(textBand(blank, WIDTH, HEIGHT), { top: 0, bottom: HEIGHT - 1 });
 });

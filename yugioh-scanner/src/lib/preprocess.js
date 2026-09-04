@@ -258,16 +258,135 @@ export function sauvolaThreshold(gray, width, height, { window, k = 0.2, range =
  * qu'elle fait d'autant plus facilement que la zone est petite. On les essaie
  * dans l'ordre et on s'arrête dès qu'une lecture tombe sur une carte réelle.
  */
-export function preprocessVariants(gray, width, height, { autoInvert = true } = {}) {
-  const otsu = preprocessGray(gray, { autoInvert });
-  const local = sauvolaThreshold(gray, width, height);
+/**
+ * Lissage par boîte séparable, en deux passes (≈ gaussien).
+ *
+ * Pourquoi lisser une image qu'on veut nette : à la distance du mode sniper,
+ * le capteur résout la **trame d'impression** de la carte. Les points de
+ * demi-teinte deviennent, après seuillage, une poussière noire que Tesseract
+ * lit comme des lettres — « REREEEEEEAEREEELARE » sur un code parfaitement
+ * lisible à l'œil. Un rayon d'un centième de la hauteur du recadrage efface
+ * la trame sans toucher aux traits, dix fois plus larges.
+ *
+ * Mesuré sur un vrai viseur (`scripts/harness/real-crops.mjs`) : sans lissage
+ * aucune binarisation ne lit « STOR-FR040 » ; avec, Sauvola le rend.
+ *
+ * @param {Uint8ClampedArray} gray
+ * @param {number} radius 0 pour ne rien faire
+ * @returns {Uint8ClampedArray} nouveau tableau
+ */
+export function smooth(gray, width, height, radius) {
+  if (radius <= 0) return Uint8ClampedArray.from(gray);
+
+  let source = Float32Array.from(gray);
+  for (let pass = 0; pass < 2; pass += 1) {
+    const rows = new Float32Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let k = -radius; k <= radius; k += 1) {
+          const xx = x + k;
+          if (xx < 0 || xx >= width) continue;
+          sum += source[y * width + xx];
+          count += 1;
+        }
+        rows[y * width + x] = sum / count;
+      }
+    }
+    const columns = new Float32Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let k = -radius; k <= radius; k += 1) {
+          const yy = y + k;
+          if (yy < 0 || yy >= height) continue;
+          sum += rows[yy * width + x];
+          count += 1;
+        }
+        columns[y * width + x] = sum / count;
+      }
+    }
+    source = columns;
+  }
+
+  const out = new Uint8ClampedArray(gray.length);
+  for (let i = 0; i < out.length; i += 1) out[i] = Math.round(source[i]);
+  return out;
+}
+
+/** Taux d'encre en deçà et au-delà desquels une ligne n'est pas du texte. */
+const TEXT_ROW_MIN = 0.02;
+const TEXT_ROW_MAX = 0.6;
+
+/**
+ * Bande de lignes qui porte le texte, dans une image binarisée.
+ *
+ * Le viseur est plus haut que le code : sur un téléphone au conteneur court,
+ * il embarque la bordure du cadre de la carte, qui devient après seuillage un
+ * bloc noir de la moitié de l'image. PSM 6 s'obstine alors à y lire des
+ * lettres et rend du bruit. On ne garde que la plus longue suite de lignes
+ * dont le taux d'encre est celui d'un texte : ni vide, ni aplat.
+ *
+ * C'est aussi un premier pas vers le redressement par profil de projection.
+ *
+ * @param {Uint8ClampedArray} binary 0 pour l'encre, 255 pour le fond
+ * @param {{pad?: number}} options marge ajoutée de part et d'autre, en
+ *   fraction de la hauteur de la bande
+ * @returns {{top: number, bottom: number}} lignes incluses ; l'image entière
+ *   si rien ne ressemble à du texte
+ */
+export function textBand(binary, width, height, { pad = 0.2 } = {}) {
+  const ratios = new Float32Array(height);
+  for (let y = 0; y < height; y += 1) {
+    let ink = 0;
+    for (let x = 0; x < width; x += 1) if (binary[y * width + x] === 0) ink += 1;
+    ratios[y] = ink / width;
+  }
+
+  let best = null;
+  let start = null;
+  for (let y = 0; y <= height; y += 1) {
+    const textual = y < height && ratios[y] > TEXT_ROW_MIN && ratios[y] < TEXT_ROW_MAX;
+    if (textual && start === null) start = y;
+    if (!textual && start !== null) {
+      if (best === null || y - start > best.bottom - best.top + 1) best = { top: start, bottom: y - 1 };
+      start = null;
+    }
+  }
+  if (best === null) return { top: 0, bottom: height - 1 };
+
+  const margin = Math.round((best.bottom - best.top + 1) * pad);
+  return { top: Math.max(0, best.top - margin), bottom: Math.min(height - 1, best.bottom + margin) };
+}
+
+export function preprocessVariants(
+  gray,
+  width,
+  height,
+  { autoInvert = true, smoothRadius = Math.round(height / 120), smoothOtsu = false } = {},
+) {
+  // Le lissage ne sert qu'à Sauvola. Otsu ne lit de toute façon pas une vraie
+  // carte de près (bordure et trame ruinent un seuil global), mais il lit une
+  // image propre mieux que quiconque — et le lissage lui coûte alors un
+  // caractère (« RA03 » devient « RAO03 » sur la caméra simulée). Chaque
+  // binarisation garde donc le terrain où elle gagne.
+  const smoothed = smooth(gray, width, height, smoothRadius);
+  const otsu = preprocessGray(smoothOtsu ? smoothed : gray, { autoInvert });
+  const local = sauvolaThreshold(smoothed, width, height);
   const localDark = darkRatio(local) > 0.5 ? invert(local) : local;
 
+  // `trim` : la variante accepte d'être rognée à sa ligne de texte. Réservé à
+  // Sauvola, pour la même raison que le lissage : Otsu reste la lecture de
+  // référence d'une image propre, et le rognage lui a fait perdre le
+  // verrouillage sur la caméra simulée alors qu'il sauve Sauvola sur une
+  // vraie carte dont la bordure entre dans le viseur.
   return [
-    { label: 'otsu', pixels: otsu.pixels },
-    { label: 'sauvola', pixels: localDark },
-    { label: 'otsu-inverse', pixels: invert(otsu.pixels) },
-    { label: 'sauvola-inverse', pixels: invert(localDark) },
+    { label: 'otsu', pixels: otsu.pixels, trim: false },
+    { label: 'sauvola', pixels: localDark, trim: true },
+    { label: 'otsu-inverse', pixels: invert(otsu.pixels), trim: false },
+    { label: 'sauvola-inverse', pixels: invert(localDark), trim: true },
   ];
 }
 
@@ -394,7 +513,11 @@ export function cropAndPreprocess(source, rect, { scale = UPSCALE, autoInvert = 
  * @returns {Array<{label: string, canvas: HTMLCanvasElement}>} porte aussi une
  *   propriété `sharpness`, mesurée avant binarisation.
  */
-export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true } = {}) {
+export function cropVariants(
+  source,
+  rect,
+  { scale = UPSCALE, autoInvert = true, smoothRadius, smoothOtsu, trimToLine = true } = {},
+) {
   const width = Math.max(1, Math.round(rect.width * scale));
   const height = Math.max(1, Math.round(rect.height * scale));
 
@@ -415,15 +538,29 @@ export function cropVariants(source, rect, { scale = UPSCALE, autoInvert = true 
 
   const gray = toGrayscale(context.getImageData(0, 0, width, height));
 
-  const variants = preprocessVariants(gray, width, height, { autoInvert }).map(({ label, pixels }) => {
+  const options = { autoInvert };
+  if (smoothRadius !== undefined) options.smoothRadius = smoothRadius;
+  if (smoothOtsu !== undefined) options.smoothOtsu = smoothOtsu;
+
+  const variants = preprocessVariants(gray, width, height, options).map(({ label, pixels, trim }) => {
+    // La bande se cherche sur la polarité « encre sombre » : sur une variante
+    // inversée, le fond est majoritaire et compterait comme de l'encre, et la
+    // bande retenue serait une ligne de transition d'un pixel de haut. Vu sur
+    // la caméra simulée, où ce sont ces variantes-là qui verrouillaient.
+    const band =
+      trimToLine && trim
+        ? textBand(darkRatio(pixels) > 0.5 ? invert(pixels) : pixels, width, height)
+        : { top: 0, bottom: height - 1 };
+    const bandHeight = band.bottom - band.top + 1;
+
     const canvas = document.createElement('canvas');
     canvas.width = width;
-    canvas.height = height;
+    canvas.height = bandHeight;
     const target = canvas.getContext('2d');
-    const imageData = target.createImageData(width, height);
-    grayToImageData(pixels, width, height, imageData);
+    const imageData = target.createImageData(width, bandHeight);
+    grayToImageData(pixels.subarray(band.top * width, (band.bottom + 1) * width), width, bandHeight, imageData);
     target.putImageData(imageData, 0, 0);
-    return { label, canvas };
+    return { label, canvas, band };
   });
 
   // La netteté est mesurée sur le gris d'origine, avant binarisation : après,
@@ -443,7 +580,13 @@ function measureSharpness(source, rect) {
   const context = canvas.getContext('2d', { willReadFrequently: true });
   context.drawImage(source, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
 
-  return sharpness(toGrayscale(context.getImageData(0, 0, width, height)), width, height);
+  // Après étirement du contraste : le garde-fou doit mesurer la mise au point,
+  // pas le contraste. Sur une carte sombre au code gris sur fond noir, les
+  // contours nets ne dépassent pas `EDGE_THRESHOLD` en valeur brute, et
+  // l'image était déclarée « trop floue » alors que sa binarisation se lisait
+  // à l'œil (vu sur un vrai téléphone, MAMA-FR113).
+  const gray = stretchContrast(toGrayscale(context.getImageData(0, 0, width, height)));
+  return sharpness(gray, width, height);
 }
 
 /**
