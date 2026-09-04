@@ -1,0 +1,85 @@
+# Déploie le scanner Yu-Gi-Oh! sur Netlify.
+#
+# Pourquoi Netlify en plus de GitHub Pages : Pages ne sert que des fichiers,
+# donc `/api/price` n'y existe pas et l'application retombe sur les cotes
+# moyennes de YGOPRODeck, toutes raretés confondues. Netlify exécute la
+# fonction, qui interroge Cardmarket — c'est le seul chemin vers une cote par
+# rareté et par état.
+#
+# CE QU'IL FAUT AVANT QUE CE FICHIER SERVE À QUELQUE CHOSE. Deux secrets de
+# dépôt, à créer dans Settings → Secrets and variables → Actions :
+#
+#   NETLIFY_AUTH_TOKEN   jeton personnel, créé sur
+#                        https://app.netlify.com/user/applications#personal-access-tokens
+#   NETLIFY_SITE_ID      identifiant du site, dans Site configuration → General
+#                        → Site information → Site ID
+#
+# Sans eux, le job s'arrête proprement avec un message plutôt que d'échouer :
+# un rouge permanent dans l'onglet Actions finit par n'être plus lu.
+name: Netlify — scanner Yu-Gi-Oh!
+
+on:
+  push:
+    branches: [claude/yugioh-card-price-ocr-ix9l67, main]
+    paths:
+      - 'yugioh-scanner/**'
+      - '.github/workflows/netlify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: netlify
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yugioh-scanner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secrets présents ?
+        id: secrets
+        env:
+          JETON: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          SITE: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ -n "$JETON" ] && [ -n "$SITE" ]; then
+            echo "prets=oui" >> "$GITHUB_OUTPUT"
+          else
+            echo "prets=non" >> "$GITHUB_OUTPUT"
+            echo "::notice::NETLIFY_AUTH_TOKEN ou NETLIFY_SITE_ID manque — déploiement ignoré. Voir l'en-tête de .github/workflows/netlify.yml."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.prets == 'oui'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: yugioh-scanner/package-lock.json
+
+      - if: steps.secrets.outputs.prets == 'oui'
+        run: npm ci
+
+      - name: Tests
+        if: steps.secrets.outputs.prets == 'oui'
+        run: npm test
+
+      # Racine du domaine, contrairement à GitHub Pages qui sert sous /<dépôt>/.
+      # `prebuild` télécharge l'index des cartes depuis YGOPRODeck.
+      - name: Build
+        if: steps.secrets.outputs.prets == 'oui'
+        run: npm run build
+
+      - name: Déploiement
+        if: steps.secrets.outputs.prets == 'oui'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          npx --yes netlify-cli@17 deploy \
+            --prod \
+            --dir=dist \
+            --functions=netlify/functions \
+            --message="${GITHUB_SHA::7} — ${GITHUB_REF_NAME}"

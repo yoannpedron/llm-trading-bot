@@ -118,8 +118,26 @@ async function fromCardmarket({ name, setName, rarity, conditionId }) {
  * `cardmarket_price` est une moyenne toutes raretés confondues ; `set_price`
  * est propre au tirage. On renvoie les deux et on le dit.
  */
-async function fromYgoprodeck({ name, setName, rarity, code }) {
-  const response = await fetch(`${YGOPRODECK}?name=${encodeURIComponent(name)}`, {
+async function fromYgoprodeck({ name, setName, rarity, code, cardId, language }) {
+  // On cherche par PASSCODE, jamais par nom.
+  //
+  // Le paramètre `name` de YGOPRODeck n'indexe que l'anglais, alors que le
+  // client stocke — et envoie — le nom français, celui qu'il affiche. La
+  // requête partait donc en 400 et cette fonction ne rendait jamais de prix de
+  // repli. Vérifié contre l'API : `?name=Dragon Blanc aux Yeux Bleus` → 400 ;
+  // `?id=89631139` → 200 avec les prix. Le passcode est la clé primaire de la
+  // base, identique dans toutes les langues.
+  //
+  // Le nom ne sert plus que de repêchage, avec sa langue déclarée, pour une
+  // requête ancienne dépourvue d'identifiant.
+  const parametres = new URLSearchParams();
+  if (cardId) parametres.set('id', cardId);
+  else {
+    parametres.set('name', name);
+    if (language && language !== 'en') parametres.set('language', language);
+  }
+
+  const response = await fetch(`${YGOPRODECK}?${parametres}`, {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) return null;
@@ -165,11 +183,20 @@ export default async (request) => {
   // Une valeur inconnue est ignorée plutôt que transmise telle quelle.
   const conditionId = CONDITION_IDS[condition] ?? null;
 
+  // Le passcode, quand le client le connaît : c'est la clé primaire de la base
+  // YGOPRODeck, et la seule qui soit indépendante de la langue. On le valide
+  // comme un entier positif plutôt que de le recoller tel quel dans une URL.
+  const brut = url.searchParams.get('id')?.trim() ?? '';
+  const cardId = /^\d{1,10}$/.test(brut) && Number(brut) > 0 ? brut : null;
+  const language = url.searchParams.get('language')?.trim().toLowerCase() || 'fr';
+
+  // Le nom reste exigé : c'est lui qui sert à interroger Cardmarket, qui
+  // n'expose pas de recherche par passcode.
   if (!name) {
     return json({ error: 'Paramètre « name » requis.' }, 400);
   }
 
-  const cacheKey = `${name}|${setName}|${rarity}|${code}|${condition}`;
+  const cacheKey = `${cardId ?? name}|${setName}|${rarity}|${code}|${condition}`;
   const cached = readCache(cacheKey);
   if (cached) return json({ ...cached, cached: true });
 
@@ -184,7 +211,7 @@ export default async (request) => {
 
   if (!result) {
     try {
-      result = await fromYgoprodeck({ name, setName, rarity, code });
+      result = await fromYgoprodeck({ name, setName, rarity, code, cardId, language });
     } catch {
       result = null;
     }

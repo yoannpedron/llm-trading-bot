@@ -20,7 +20,60 @@ qu'il ne faut surtout pas croire sur parole.
 **Aucun secret, aucune clé d'API n'est nécessaire.** YGOPRODeck est public et
 sans authentification. Rien n'est stocké côté serveur.
 
+### Journal des lectures
+
+Un troisième onglet, distinct de l'inventaire et pour une raison de fond :
+l'inventaire répond à « qu'est-ce que je possède » — il dédoublonne, compte les
+exemplaires, ne retient que ce qui a été validé. Le journal répond à
+« qu'est-ce que j'ai passé sous le viseur, et qu'est-ce que ça a donné ». Il
+est chronologique, ne dédoublonne rien, et conserve **les échecs de saisie
+manuelle avec ce qui avait été tapé** — souvent la seule trace exploitable
+quand on cherche pourquoi une carte ne passe pas.
+
+Les échecs de la caméra n'y figurent pas : elle en produit plusieurs par
+seconde et le journal deviendrait illisible. Il est borné à 300 entrées, sans
+quoi il finirait par saturer le stockage et emporterait l'inventaire avec lui.
+
+### Torche
+
+Deux défauts corrigés, tous deux invisibles en test :
+
+- **Le bouton disparaissait sur des appareils dont la lampe fonctionne.**
+  `available` venait du seul `getCapabilities().torch`, que plusieurs
+  navigateurs mobiles ne renseignent pas tant qu'aucune contrainte n'a été
+  appliquée. La commande est désormais proposée dès qu'une piste vidéo existe,
+  et retirée seulement après un essai réel infructueux.
+- **Le bouton s'allumait sans que la lampe s'allume.** `applyConstraints`
+  résout sans erreur même quand la contrainte est ignorée — une contrainte
+  placée dans `advanced` est explicitement « au mieux » selon la spécification.
+  On essaie donc la forme obligatoire `{ torch }` puis la forme `advanced`, et
+  surtout **on relit `getSettings().torch`** pour savoir ce qui s'est vraiment
+  produit. Si le réglage ne suit pas, on le dit au lieu de mentir sur l'état.
+
+Rappel utile : Safari ne donne la lampe à aucun site, sur iOS comme sur macOS.
+Sur Android, Chrome et Edge la donnent, Firefox non. Un utilisateur d'iPhone ne
+verra donc jamais ce bouton, et ce n'est pas un défaut de l'application.
+
 ### Ce qui n'existe pas encore
+
+- **Netlify.** La configuration est complète (`netlify.toml`, fonction
+  `netlify/functions/price.js`) et un workflow `.github/workflows/netlify.yml`
+  déploie à chaque poussée — mais il lui faut deux secrets de dépôt, qui ne
+  peuvent être créés que par le propriétaire :
+
+  | Secret | Où le trouver |
+  |---|---|
+  | `NETLIFY_AUTH_TOKEN` | https://app.netlify.com/user/applications#personal-access-tokens |
+  | `NETLIFY_SITE_ID` | Site configuration → General → Site information → Site ID |
+
+  Sans eux, le job s'arrête proprement avec un message plutôt que d'échouer.
+  Ce que Netlify apporte et que GitHub Pages ne peut pas : la fonction
+  `/api/price` interroge Cardmarket, donc une cote **par rareté et par état**,
+  au lieu de la moyenne YGOPRODeck toutes raretés confondues.
+
+  Attention : la fonction souffrait du **même défaut que le client** — elle
+  cherchait par nom, et le client envoie le nom français. Corrigé, elle prend
+  désormais le passcode.
 
 - **Hébergement du backend Python.** FastAPI ne tourne ni sur GitHub Pages ni
   sur Netlify Functions. Cible : Render, Railway, Fly.io, ou un conteneur. Une
@@ -62,7 +115,7 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **109 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **115 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
 

@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import FicheCarte from './components/FicheCarte.jsx';
 import HoloCard from './components/HoloCard.jsx';
 import Inventaire from './components/Inventaire.jsx';
+import Journal from './components/Journal.jsx';
 import SniperView from './components/SniperView.jsx';
 import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
+import { useJournal } from './lib/useJournal.js';
 import { useSniper } from './lib/useSniper.js';
 
 /**
@@ -28,11 +30,13 @@ import { useSniper } from './lib/useSniper.js';
 const ONGLETS = [
   { id: 'scan', libelle: 'Scanner' },
   { id: 'inventaire', libelle: 'Inventaire' },
+  { id: 'journal', libelle: 'Journal' },
 ];
 
 export default function App() {
   const sniper = useSniper();
   const collection = useCollection();
+  const journal = useJournal();
 
   const [onglet, setOnglet] = useState('scan');
   const [rarete, setRarete] = useState(null);
@@ -53,6 +57,18 @@ export default function App() {
       return;
     }
     setRarete(scan.rarities?.length === 1 ? scan.rarities[0] : null);
+  }, [scan]);
+
+  /* Toute identification s'inscrit au journal, enregistrée ou non. On consigne
+     dès la résolution et non à la validation : une carte écartée est
+     précisément ce qu'on cherche à retrouver plus tard. La fiche complète
+     n'est pas attendue — le nom français arrivera, la trace compte d'abord. */
+  useEffect(() => {
+    if (!scan?.card) return;
+    journal.consignerIdentification(ficheDepuisScan(scan, null));
+    // Volontairement lié au seul scan : un rafraîchissement de la fiche
+    // détaillée ne doit pas produire une seconde ligne.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan]);
 
   /* La fiche complète — nom, texte et caractéristiques en français — arrive
@@ -79,8 +95,9 @@ export default function App() {
     const entree = entreeDepuisScan(scan, detail, rarete);
     if (!entree) return;
     collection.track(entree.carte, entree.tirage);
+    journal.consignerEnregistrement(entree.carte.id);
     setEnregistree(true);
-  }, [scan, detail, rarete, collection]);
+  }, [scan, detail, rarete, collection, journal]);
 
   const reprendre = useCallback(() => {
     setEnregistree(false);
@@ -100,7 +117,9 @@ export default function App() {
             {/* Sur téléphone, l'espace revient aux onglets : le nom complet
                 se tronquait en « SCANNER YU-GI-… », ce qui ne dit rien. */}
             <h1 className="text-donnee font-semibold tracking-[0.14em] text-encre uppercase">
-              <span className="sm:hidden">Scanner</span>
+              {/* Trois onglets tiennent mal à côté du nom complet sur un
+                  téléphone : les onglets sont la navigation, ils priment. */}
+              <span className="sm:hidden">YGO</span>
               <span className="hidden sm:inline">Scanner Yu-Gi-Oh</span>
             </h1>
             {/* D'où vient la résolution. C'est une donnée d'exploitation, pas
@@ -124,7 +143,8 @@ export default function App() {
           <nav aria-label="Sections" className="flex h-full shrink-0 items-stretch">
             {ONGLETS.map(({ id, libelle }) => {
               const actif = onglet === id;
-              const compte = id === 'inventaire' ? collection.entries.length : 0;
+              const compte =
+                id === 'inventaire' ? collection.entries.length : id === 'journal' ? journal.compte.total : 0;
               return (
                 <button
                   key={id}
@@ -150,10 +170,14 @@ export default function App() {
         </div>
       </header>
 
-      {onglet === 'inventaire' ? (
+      {onglet === 'inventaire' || onglet === 'journal' ? (
         <main className="rail min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl px-4 py-4">
-            <Inventaire collection={collection} onScanner={revenirAuScanner} />
+            {onglet === 'inventaire' ? (
+              <Inventaire collection={collection} onScanner={revenirAuScanner} />
+            ) : (
+              <Journal journal={journal} onScanner={revenirAuScanner} />
+            )}
           </div>
         </main>
       ) : scan ? (
@@ -189,7 +213,7 @@ export default function App() {
         </main>
       ) : (
         <main className="min-h-0 flex-1">
-          <SniperView sniper={sniper} />
+          <SniperView sniper={sniper} onRefus={journal.consignerRefus} />
         </main>
       )}
     </div>

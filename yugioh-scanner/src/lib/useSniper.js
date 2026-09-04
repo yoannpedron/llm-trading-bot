@@ -182,6 +182,47 @@ export function useSniper() {
   /* --- caméra ------------------------------------------------------------- */
 
   /**
+   * Allume ou éteint la torche, et **vérifie que ça a marché**.
+   *
+   * Le piège : `applyConstraints` résout sans erreur sur la plupart des
+   * navigateurs même quand la contrainte est ignorée. Une contrainte placée
+   * dans `advanced` est explicitement « au mieux » selon la spécification —
+   * le navigateur a le droit de la passer sous silence. Résultat observé :
+   * le bouton passait en « Torche allumée », et la lampe restait éteinte.
+   *
+   * On essaie donc les deux formes, et surtout on relit `getSettings().torch`
+   * pour savoir ce qui s'est réellement produit. Si le réglage ne suit pas, on
+   * le dit au lieu de mentir sur l'état.
+   *
+   * @returns {Promise<boolean>} l'état réellement obtenu
+   */
+  const appliquerTorche = useCallback(async (track, voulu) => {
+    const essais = [
+      // Forme obligatoire : le navigateur doit refuser explicitement s'il ne
+      // sait pas faire, ce qui nous renseigne.
+      { torch: voulu },
+      // Forme « au mieux », la plus largement acceptée.
+      { advanced: [{ torch: voulu }] },
+    ];
+
+    for (const contrainte of essais) {
+      try {
+        await track.applyConstraints(contrainte);
+      } catch {
+        continue;
+      }
+      // La seule preuve qui vaille : ce que la piste déclare après coup.
+      const obtenu = track.getSettings?.().torch;
+      if (obtenu === voulu) return true;
+      // `undefined` : la plateforme n'expose pas le réglage. On accorde le
+      // bénéfice du doute à la forme obligatoire, qui n'a pas levé.
+      if (obtenu === undefined && contrainte.torch !== undefined) return true;
+    }
+    return false;
+  }, []);
+
+
+  /**
    * Rattache le flux à l'élément <video>, à chaque fois qu'il apparaît.
    *
    * C'est une **référence de rappel**, et non une `useRef` passée telle quelle,
@@ -247,10 +288,8 @@ export function useSniper() {
 
         // La torche voulue avant un rescan est rallumée sur la nouvelle piste.
         if (torcheVoulueRef.current) {
-          await track
-            .applyConstraints({ advanced: [{ torch: true }] })
-            .then(() => setTorch((etat) => ({ ...etat, on: true })))
-            .catch(() => {});
+          const rallumee = await appliquerTorche(track, true);
+          if (rallumee) setTorch((etat) => ({ ...etat, on: true }));
         }
 
         // Mise au point continue. À dix centimètres d'une inscription de deux
@@ -292,24 +331,31 @@ export function useSniper() {
       streamRef.current = null;
       trackRef.current = null;
     };
-  }, [attachVideo]);
+  }, [attachVideo, appliquerTorche]);
 
   const toggleTorch = useCallback(async () => {
     const track = trackRef.current;
     if (!track) return;
+
     const next = !torch.on;
-    try {
-      await track.applyConstraints({ advanced: [{ torch: next }] });
+    const obtenu = await appliquerTorche(track, next);
+
+    if (obtenu) {
       torcheVoulueRef.current = next;
       setTorch((current) => ({ ...current, on: next, available: true }));
-    } catch {
-      // L'appareil n'en a pas, ou la refuse : on retire la commande plutôt que
-      // de laisser un bouton qui ne fait rien. C'est le seul chemin qui
-      // conclut à l'absence de torche — un essai, pas une déclaration.
-      torcheVoulueRef.current = false;
-      setTorch({ available: false, on: false, declaree: false });
+      return;
     }
-  }, [torch.on]);
+
+    // L'appareil n'en a pas, ou la refuse. On retire la commande plutôt que de
+    // laisser un bouton qui prétend agir. C'est le seul chemin qui conclut à
+    // l'absence de torche — un essai vérifié, pas une déclaration.
+    torcheVoulueRef.current = false;
+    setTorch({ available: false, on: false, declaree: false });
+    setFailure(
+      'Votre navigateur n’expose pas la lampe. Sur iPhone, Safari ne la donne à aucun site ; ' +
+        'sur Android, Chrome et Edge la donnent, Firefox non.',
+    );
+  }, [torch.on, appliquerTorche]);
 
   /**
    * Mise au point sur un point de l'image, en fractions [0, 1].

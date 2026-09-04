@@ -109,7 +109,10 @@ async function directLookup(query, signal) {
 export async function fetchPrice(query, signal) {
   if (functionsAvailable) {
     const params = new URLSearchParams({ name: query.name ?? '' });
+    // Le passcode d'abord : la fonction s'en sert pour son repli YGOPRODeck,
+    // qui ne saurait rien faire du nom français.
     if (query.cardId) params.set('id', String(query.cardId));
+    if (query.language) params.set('language', query.language);
     if (query.setName) params.set('set', query.setName);
     if (query.rarity) params.set('rarity', query.rarity);
     if (query.code) params.set('code', query.code);

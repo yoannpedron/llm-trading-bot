@@ -65,7 +65,7 @@ export function consigne({ reading, sharpness, minSharpness, modelReady, frozenF
  * la faute — on ne tape jamais le code en entier — et montre immédiatement
  * qu'un code n'existe pas.
  */
-function SaisieManuelle({ onSubmit, autoFocus }) {
+function SaisieManuelle({ onSubmit, onRefus, autoFocus }) {
   const [valeur, setValeur] = useState('');
   const [propositions, setPropositions] = useState([]);
   const [erreur, setErreur] = useState(null);
@@ -106,6 +106,12 @@ function SaisieManuelle({ onSubmit, autoFocus }) {
     setErreur(null);
     try {
       const resolu = await onSubmit(texte);
+      // Un échec de saisie manuelle est un geste délibéré qui n'a rien donné :
+      // il mérite une trace au journal, contrairement aux échecs de la caméra,
+      // qui se comptent par dizaines à la minute.
+      if (resolu.status === 'no_code' || resolu.status === 'no_match') {
+        onRefus?.(texte, resolu.status);
+      }
       if (resolu.status === 'no_code') {
         setErreur('Ce n’est pas un code d’extension. Exemple : RA03-FR001.');
       } else if (resolu.status === 'no_match') {
@@ -248,7 +254,7 @@ function Nettete({ valeur, seuil }) {
 /* Poste de lecture                                                     */
 /* ------------------------------------------------------------------ */
 
-export default function SniperView({ sniper }) {
+export default function SniperView({ sniper, onRefus }) {
   const {
     attachVideo,
     ready,
@@ -418,7 +424,9 @@ export default function SniperView({ sniper }) {
           </div>
         )}
 
-        {saisieVisible && <SaisieManuelle onSubmit={submitCode} autoFocus={manualEntry} />}
+        {saisieVisible && (
+          <SaisieManuelle onSubmit={submitCode} onRefus={onRefus} autoFocus={manualEntry} />
+        )}
 
         {zoom.available && !saisieVisible && (
           <div className="panneau flex w-full max-w-md items-center gap-3 px-3 py-2">
