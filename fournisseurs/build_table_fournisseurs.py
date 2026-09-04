@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Consolide l'annuaire fournisseurs Audika en une table simple a 4 colonnes.
+Consolide l'annuaire fournisseurs Audika en une table a plat, un seul onglet.
+
+Colonnes :
+    Pole | Fournisseur | Code fournisseur | Code fournisseur 2 | Domaine d'activite |
+    Region | Centre(s) | Coordonnees telephoniques | Personne a contacter | Fonction |
+    Numero | Courriel | Commentaire
+
+Une ligne par contact ; les informations fournisseur sont repetees sur chaque ligne
+du groupe pour que le tableau reste filtrable et triable tel quel.
 
 Sources :
   - Annuaire_FRN.xlsx  (onglets "annuaire FRN contrats" et "annuaire FRN espaces verts")
-  - Audika_Table_correspondance_centres.xlsx (contexte : document Eurofeu, pas d'annuaire FRN)
-
-Sortie : Table_fournisseurs_consolidee.xlsx
-  Onglet 1 "Fournisseurs"              -> Fournisseur | Domaine d'activite | Coordonnees telephoniques | Personne a contacter (telephone)
-  Onglet 2 "Detail contacts"           -> une ligne par contact, toutes les colonnes sources conservees
-  Onglet 3 "Sources & a verifier"      -> provenance + anomalies relevees pendant la consolidation
+  - Audika_Table_correspondance_centres.xlsx (contexte Eurofeu : aucune coordonnee fournisseur)
 """
 import re
 import sys
@@ -18,24 +21,24 @@ from collections import OrderedDict
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
 SRC_FRN = sys.argv[1]
-SRC_CENTRES = sys.argv[2]
-OUT = sys.argv[3]
+OUT = sys.argv[2]
+
+# Tout ce qui provient de l'annuaire FRN releve du reseau : a defaut de pole renseigne
+# dans la source, on applique cette valeur par defaut.
+POLE_DEFAUT = "SGX Réseau"
 
 # --------------------------------------------------------------------------- outils
 
 def clean(v):
-    """Normalise une cellule en texte propre (espaces/retours ligne/tabulations)."""
+    """Normalise une cellule en texte propre (espaces / retours ligne / tabulations)."""
     if v is None:
         return ""
     if isinstance(v, float) and v.is_integer():
         v = int(v)
-    s = str(v)
-    s = s.replace("\r", " ").replace("\n", " ").replace("\t", " ")
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    s = str(v).replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def fmt_phone(v):
@@ -46,25 +49,45 @@ def fmt_phone(v):
     digits = re.sub(r"\D", "", s)
     if len(digits) == 9 and not digits.startswith("0"):
         digits = "0" + digits
+    if len(digits) in (11, 12) and digits.startswith("33"):
+        digits = "0" + digits[2:]
     if len(digits) == 10 and digits.startswith("0"):
         num = " ".join(digits[i:i + 2] for i in range(0, 10, 2))
         reste = re.sub(r"[\d\s./-]+", " ", s).strip(" ,;()")
         return num, reste
-    if len(digits) in (11, 12) and digits.startswith("33"):
-        digits = "0" + digits[2:]
-        return " ".join(digits[i:i + 2] for i in range(0, 10, 2)), ""
-    return "", s  # pas un numero exploitable : on conserve le texte tel quel
+    return "", s          # pas un numero exploitable : on conserve le texte tel quel
 
 
 def norm_key(name):
     s = unicodedata.normalize("NFKD", clean(name))
     s = "".join(c for c in s if not unicodedata.combining(c))
-    s = re.sub(r"[^A-Za-z0-9]+", " ", s).upper().strip()
-    return s
+    return re.sub(r"[^A-Za-z0-9]+", " ", s).upper().strip()
+
+
+# Le champ "N° COMPTE FRN AUDIKA" melange la reference et la raison sociale, avec des
+# separateurs variables : "FSAB0095, ABH", "FSCL0047,CLIMTEC", "FSNI0015 NISSE FRERES",
+# "F/FSDC0004, DC PAYSAGE", "V000112, ASSAINISSEMENTS RATAUD".
+RE_CODE = re.compile(r"(?:[A-Z]/)?[A-Z]+\d{4,}")
+
+
+def split_compte(valeur):
+    """Separe la reference fournisseur (code), la raison sociale (code 2) et un prefixe eventuel."""
+    s = clean(valeur)
+    if not s:
+        return "", "", ""
+    m = RE_CODE.search(s)
+    if not m:
+        return "", s, ""
+    code = m.group(0)
+    prefixe = ""
+    if "/" in code:                       # "F/FSDC0004" -> code uniforme + prefixe en note
+        prefixe, code = code.split("/", 1)
+    reste = (s[:m.start()] + " " + s[m.end():]).strip(" ,;/-")
+    return code, re.sub(r"\s+", " ", reste).strip(" ,;/-"), prefixe
 
 
 # Libelles generiques (services, agences, standards) : ils alimentent la colonne
-# "Coordonnees telephoniques" et non "Personne a contacter".
+# "Coordonnees telephoniques" du fournisseur et non une personne physique.
 GENERIC_STARTS = (
     "standard", "sav", "service", "agence", "plateforme", "pole", "info",
     "demande", "comptabilite", "generique", "maintenance", "planning",
@@ -72,23 +95,22 @@ GENERIC_STARTS = (
     "generaliste", "assistante d", "travaux", "siege", "vpi", "adv",
     "accueil", "secretariat",
 )
-
-
-# Libelles generiques que le prefixe ne permet pas de detecter (agence nommee par sa ville).
-MANUAL_GENERIC = {"saint denis"}
+MANUAL_GENERIC = {"saint denis"}     # agence designee par sa seule ville
 
 
 def is_generic(label):
     key = norm_key(label).lower()
-    if not key:
-        return True
-    if key in MANUAL_GENERIC:
+    if not key or key in MANUAL_GENERIC:
         return True
     return any(key.startswith(g) for g in GENERIC_STARTS)
 
 
+# --------------------------------------------------------------------------- lecture
+suppliers = OrderedDict()
+
+
 def add_domain(s, dom):
-    """Ajoute un domaine en evitant les doublons et les libelles inclus l'un dans l'autre."""
+    """Ajoute un domaine sans doublon ni libelle inclus dans un autre."""
     dom = clean(dom)
     if not dom:
         return
@@ -103,30 +125,15 @@ def add_domain(s, dom):
     s["domaines"].append(dom)
 
 
-# --------------------------------------------------------------------------- lecture
-
-anomalies = []          # (fournisseur, constat, incidence)
-suppliers = OrderedDict()   # cle normalisee -> dict
-
-
-def get_supplier(name, domain="", compte="", region="", centre=""):
-    key = norm_key(name)
+def get_supplier(nom, domaine="", compte="", region="", centre=""):
+    key = norm_key(nom)
     s = suppliers.get(key)
     if s is None:
-        s = {
-            "nom": clean(name),
-            "domaines": [],
-            "comptes": [],
-            "regions": [],
-            "centres": [],
-            "notes": [],
-            "generiques": [],   # (libelle, [numeros], note)
-            "personnes": [],    # (nom, fonction, [numeros])
-            "contacts": [],     # lignes detail
-            "occurrences": [],  # (onglet, domaine) de chaque entree source
-        }
+        s = {"nom": clean(nom), "domaines": [], "comptes": [], "regions": [],
+             "centres": [], "notes": [], "occurrences": [], "lignes": [],
+             "tel_general": []}   # (priorite, ordre, numero)
         suppliers[key] = s
-    add_domain(s, domain)
+    add_domain(s, domaine)
     for champ, val in (("comptes", compte), ("regions", region), ("centres", centre)):
         val = clean(val)
         if val and val not in s[champ]:
@@ -134,47 +141,47 @@ def get_supplier(name, domain="", compte="", region="", centre=""):
     return s
 
 
-def add_contact(s, contact, fonction, tel, portable, courriel, commentaire, source,
-                region="", centre="", header_row=False):
-    contact, fonction = clean(contact), clean(fonction)
+def add_contact(s, contact, fonction, tel, portable, courriel, commentaire,
+                region, centre, header_row):
     nums, notes = [], []
     for raw in (tel, portable):
         num, note = fmt_phone(raw)
         if num and num not in nums:
             nums.append(num)
-        if note:
+        if note and note not in notes:
             notes.append(note)
 
-    s["contacts"].append([
-        s["nom"], " ; ".join(s["domaines"]), " / ".join(s["comptes"]),
-        clean(region), clean(centre), contact, fonction,
-        " / ".join(nums) if nums else "", clean(courriel),
-        " ; ".join([clean(commentaire)] + notes).strip(" ;"), source,
-    ])
+    contact, fonction = clean(contact), clean(fonction)
+    libelle = contact or fonction
+    generique = is_generic(libelle)
+    if not libelle and nums:
+        libelle = "Standard" if header_row else "N° sans libellé (à vérifier)"
+        generique = True
 
-    if not nums and not notes:
-        return
-    label = contact or fonction
-    if is_generic(label):
-        if not label:
-            # numero porte par la ligne d'en-tete du fournisseur -> numero principal ;
-            # sinon ligne isolee sans libelle -> a verifier.
-            label = "Standard" if header_row else "N° sans libellé (à vérifier)"
-            if not header_row:
-                anomalies.append((s["nom"],
-                                  "Numéro présent dans la source sans libellé ni nom associé : "
-                                  + ", ".join(nums) + ".",
-                                  "Rattachement du numéro à confirmer."))
-        s["generiques"].append((label, nums, "; ".join(notes)))
-    else:
-        s["personnes"].append((contact, fonction, nums + notes))
+    if generique and nums:
+        # priorite aux lignes d'accueil pour designer le numero principal du fournisseur
+        prioritaire = norm_key(libelle).lower().startswith(
+            ("standard", "accueil", "info", "plateforme", "siege"))
+        s["tel_general"].append((0 if prioritaire else 1, len(s["tel_general"]), nums[0]))
 
+    s["lignes"].append({
+        "contact": libelle,
+        "fonction": fonction if fonction != libelle else "",
+        "numero": " / ".join(nums),
+        "courriel": clean(courriel),
+        "commentaire": clean(commentaire),
+        "notes": notes,
+        "region": clean(region),
+        "centre": clean(centre),
+        "orpheline": (not contact and not fonction and bool(nums) and not header_row),
+    })
+
+
+wb = openpyxl.load_workbook(SRC_FRN, data_only=True)
 
 # --- onglet "annuaire FRN contrats" ------------------------------------------------
-wb = openpyxl.load_workbook(SRC_FRN, data_only=True)
-ws = wb["annuaire FRN contrats"]
 courant = None
-for row in ws.iter_rows(min_row=2, values_only=True):
+for row in wb["annuaire FRN contrats"].iter_rows(min_row=2, values_only=True):
     ent, compte, region, centre, domaine, contact, fonction, tel, port, mail, comm = \
         (list(row) + [None] * 11)[:11]
     if not any(clean(c) for c in row):
@@ -184,27 +191,24 @@ for row in ws.iter_rows(min_row=2, values_only=True):
     if entete:
         courant = get_supplier(ent, domaine, compte, region, centre)
         courant["occurrences"].append(("annuaire FRN contrats", clean(domaine) or "(domaine vide)"))
-    elif clean(ent):
-        # ligne de continuation : suite du nom ou reference de compte client
-        if courant is not None:
-            courant["notes"].append(clean(ent))
+    elif clean(ent) and courant is not None:
+        courant["notes"].append(clean(ent))   # suite du nom ou compte client
     if courant is None:
         continue
 
+    add_domain(courant, domaine)
     for champ, val in (("regions", region), ("centres", centre)):
         val = clean(val)
         if val and val not in courant[champ]:
             courant[champ].append(val)
-    add_domain(courant, domaine)
 
     if any(clean(x) for x in (contact, fonction, tel, port, mail, comm)):
         add_contact(courant, contact, fonction, tel, port, mail, comm,
-                    "annuaire FRN contrats", region, centre, header_row=entete)
+                    region, centre, entete)
 
 # --- onglet "annuaire FRN espaces verts" -------------------------------------------
-ws = wb["annuaire FRN espaces verts"]
 courant = None
-for row in ws.iter_rows(min_row=2, values_only=True):
+for row in wb["annuaire FRN espaces verts"].iter_rows(min_row=2, values_only=True):
     ent, compte, centre, contact, fonction, tel, port, mail, comm = \
         (list(row) + [None] * 9)[:9]
     if not any(clean(c) for c in row):
@@ -216,48 +220,31 @@ for row in ws.iter_rows(min_row=2, values_only=True):
     if courant is None:
         continue
     if any(clean(x) for x in (contact, fonction, tel, port, mail, comm)):
-        add_contact(courant, contact, fonction, tel, port, mail, comm,
-                    "annuaire FRN espaces verts", "", centre, header_row=entete)
+        add_contact(courant, contact, fonction, tel, port, mail, comm, "", centre, entete)
 
-# ------------------------------------------------------- doublons fusionnes detectes
-for s_ in suppliers.values():
-    if len(s_["occurrences"]) > 1:
-        det = " + ".join(f"« {o} » ({d})" for o, d in s_["occurrences"])
-        anomalies.append((s_["nom"],
-                          f"Saisi {len(s_['occurrences'])} fois dans les sources : {det}.",
-                          "Lignes fusionnées en une seule ; domaines cumulés."))
+# ------------------------------------------------- corrections et notes de conso
+s = suppliers.get(norm_key("TECH 9 ENERGIE"))
+if s and not s["domaines"]:
+    add_domain(s, "CLIMATICIEN")
+    s["notes"].append("Domaine absent de la source (« Climaticien » saisi en colonne Centre) : "
+                      "rétabli lors de la consolidation")
 
-# --------------------------------------------------------------- corrections ciblees
-DOMAINE_MANQUANT = {"TECH 9 ENERGIE": "CLIMATICIEN"}
-for nom, dom in DOMAINE_MANQUANT.items():
-    s = suppliers.get(norm_key(nom))
-    if s and not s["domaines"]:
-        add_domain(s, dom)
-        anomalies.append((s["nom"],
-                          "Colonne DOMAINE D'ACTIVITÉ vide dans la source ; « Climaticien » "
-                          "avait été saisi dans la colonne Centre.",
-                          "Domaine rétabli à CLIMATICIEN dans la table consolidée."))
+for s in suppliers.values():
+    if len(s["occurrences"]) > 1:
+        det = " + ".join(f"« {o} » ({d})" for o, d in s["occurrences"])
+        s["notes"].append(f"Saisi {len(s['occurrences'])} fois dans les sources ({det}) : "
+                          "lignes fusionnées, domaines cumulés")
+    if not s["comptes"]:
+        s["notes"].append("Aucun n° de compte fournisseur Audika dans la source")
+    if not any(l["numero"] for l in s["lignes"]):
+        s["notes"].append("Aucun numéro de téléphone dans la source")
 
-ANOMALIES_MANUELLES = [
-    ("GRAF SERVICES PLUS",
-     "Les trois contacts « @gestivert.fr » (C. Foissin, A. Mauclair, C. Dos Santos) suivent "
-     "GRAF SERVICES PLUS alors que le premier contact est « @stihle.fr » : nom de société "
-     "probablement manquant dans la source.",
-     "Rattachés à GRAF SERVICES PLUS par défaut ; à confirmer, GESTIVERT est peut-être un "
-     "fournisseur distinct."),
-    ("CLIMSERV (et CLIM' TECH travaux install)",
-     "« Groupe GES’ TECH » figure en colonne ENTREPRISE sur la ligne suivante : suite du nom, "
-     "pas un nouveau fournisseur.",
-     "Conservé comme information de groupe, aucun fournisseur créé."),
-    ("EUROFEU",
-     "Comptes clients saisis en colonne ENTREPRISE : C660995 (SOGECA) et C660964 (AUDIKA ALPES).",
-     "Repris en information ; un seul fournisseur EUROFEU dans la table."),
-    ("Toutes lignes",
-     "De nombreux numéros sont stockés au format nombre dans la source : le 0 initial est perdu "
-     "(ex. 299602704).",
-     "Zéro rétabli et numéros remis au format 02 99 60 27 04."),
-]
-anomalies.extend(ANOMALIES_MANUELLES)
+s = suppliers.get(norm_key("GRAF SERVICES PLUS"))
+if s:
+    for ligne in s["lignes"]:
+        if ligne["courriel"].endswith("@gestivert.fr"):
+            ligne["notes"].append("Contact « @gestivert.fr » sous un fournisseur « @stihle.fr » : "
+                                  "raison sociale probablement manquante dans la source, à confirmer")
 
 # --------------------------------------------------------------------------- ecriture
 ARIAL = "Arial"
@@ -267,210 +254,108 @@ F_HEAD = Font(name=ARIAL, size=10, bold=True, color="FFFFFF")
 F_CELL = Font(name=ARIAL, size=10)
 F_NOM = Font(name=ARIAL, size=10, bold=True)
 FILL_HEAD = PatternFill("solid", fgColor="1F3864")
-FILL_ALT = PatternFill("solid", fgColor="F2F5FA")
-FILL_WARN = PatternFill("solid", fgColor="FFF2CC")
+FILL_ALT = PatternFill("solid", fgColor="EEF2F8")
 THIN = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-TOP = Alignment(vertical="top", wrap_text=True)
-TOPL = Alignment(vertical="top", wrap_text=True, horizontal="left")
+TOP = Alignment(vertical="top", wrap_text=True, horizontal="left")
+
+COLONNES = [
+    ("Pôle", 13), ("Fournisseur", 28), ("Code fournisseur", 16),
+    ("Code fournisseur 2", 26), ("Domaine d’activité", 22), ("Région", 13),
+    ("Centre(s)", 26), ("Coordonnées téléphoniques", 20), ("Personne à contacter", 28),
+    ("Fonction", 32), ("Numéro", 20), ("Courriel", 30), ("Commentaire", 46),
+]
+LARGEURS = [w for _, w in COLONNES]
 
 out = openpyxl.Workbook()
+ws = out.active
+ws.title = "Fournisseurs"
 
-# ---- Onglet 1 : la table demandee -------------------------------------------------
-s1 = out.active
-s1.title = "Fournisseurs"
-s1["A1"] = "Table fournisseurs consolidee"
-s1["A1"].font = F_TITRE
-s1["A2"] = ("Sources : Annuaire_FRN.xlsx (onglets « annuaire FRN contrats » et « annuaire FRN "
-            "espaces verts »). Une ligne par fournisseur ; doublons fusionnés. "
-            "Détail complet des contacts en onglet « Détail contacts ».")
-s1["A2"].font = F_SOUS
-s1.merge_cells("A1:D1")
-s1.merge_cells("A2:D2")
-s1.row_dimensions[2].height = 26
-s1["A2"].alignment = Alignment(vertical="center", wrap_text=True)
+ws["A1"] = "Annuaire fournisseurs consolidé"
+ws["A1"].font = F_TITRE
+ws["A2"] = ("Source : Annuaire_FRN.xlsx (onglets « annuaire FRN contrats » et « annuaire FRN "
+            "espaces verts »). Une ligne par contact ; les informations fournisseur sont "
+            f"répétées sur chaque ligne du groupe. Pôle non renseigné dans la source → « {POLE_DEFAUT} ».")
+ws["A2"].font = F_SOUS
+ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(COLONNES))
+ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(COLONNES))
+ws["A2"].alignment = Alignment(vertical="center", wrap_text=True)
+ws.row_dimensions[2].height = 26
 
-HEAD1 = ["Fournisseur", "Domaine d’activité", "Coordonnées téléphoniques",
-         "Personne à contacter (téléphone)"]
-for c, h in enumerate(HEAD1, 1):
-    cell = s1.cell(row=4, column=c, value=h)
+for c, (titre, _) in enumerate(COLONNES, 1):
+    cell = ws.cell(row=3, column=c, value=titre)
     cell.font, cell.fill, cell.border = F_HEAD, FILL_HEAD, BORDER
     cell.alignment = Alignment(vertical="center", horizontal="left", wrap_text=True)
-s1.row_dimensions[4].height = 22
-
-sans_tel = []
-r = 5
-for s in sorted(suppliers.values(), key=lambda x: norm_key(x["nom"])):
-    gen_txt = []
-    for label, nums, note in s["generiques"]:
-        if nums:
-            txt = f"{label} : " + " / ".join(nums)
-        elif note:
-            txt = f"{label} : {note}"
-        else:
-            continue
-        if note and nums:
-            txt += f" ({note})"
-        if txt not in gen_txt:
-            gen_txt.append(txt)
-
-    fusion = OrderedDict()
-    for nom, fonction, nums in s["personnes"]:
-        if not nums:
-            continue
-        cle = (norm_key(nom), tuple(nums))
-        if cle in fusion:
-            if fonction and fonction not in fusion[cle][1]:
-                fusion[cle][1].append(fonction)
-        else:
-            fusion[cle] = (nom, [fonction] if fonction else [], nums)
-    pers_txt = []
-    for nom, fonctions, nums in fusion.values():
-        txt = nom
-        if fonctions:
-            txt += " (" + " / ".join(fonctions) + ")"
-        txt += " : " + " / ".join(nums)
-        if txt not in pers_txt:
-            pers_txt.append(txt)
-
-    if not gen_txt and not pers_txt:
-        sans_tel.append(s["nom"])
-
-    vals = [
-        s["nom"],
-        " ; ".join(s["domaines"]) or "—",
-        "\n".join(gen_txt) or "—",
-        "\n".join(pers_txt) or "—",
-    ]
-    for c, v in enumerate(vals, 1):
-        cell = s1.cell(row=r, column=c, value=v)
-        cell.font = F_NOM if c == 1 else F_CELL
-        cell.alignment = TOPL
-        cell.border = BORDER
-        if r % 2 == 1:
-            cell.fill = FILL_ALT
-    r += 1
-
-last1 = r - 1
-WIDTHS1 = (30, 26, 34, 62)
+ws.row_dimensions[3].height = 30
 
 
 def hauteur(valeurs, largeurs, mini=15, maxi=409):
     """Hauteur de ligne approchee pour du texte renvoye a la ligne."""
     lignes = 1
     for v, w in zip(valeurs, largeurs):
-        n = 0
-        for morceau in str(v).split("\n"):
-            n += max(1, -(-len(morceau) // max(8, int(w) - 2)))
+        n = sum(max(1, -(-len(m) // max(8, int(w) - 2))) for m in str(v).split("\n"))
         lignes = max(lignes, n)
     return min(maxi, max(mini, lignes * 12.9 + 3))
 
 
-for rr in range(5, last1 + 1):
-    s1.row_dimensions[rr].height = hauteur(
-        [s1.cell(row=rr, column=c).value or "" for c in range(1, 5)], WIDTHS1)
-
-for col, w in zip("ABCD", WIDTHS1):
-    s1.column_dimensions[col].width = w
-s1.freeze_panes = "A5"
-s1.auto_filter.ref = f"A4:D{last1}"
-
-# ---- Onglet 2 : detail ------------------------------------------------------------
-s2 = out.create_sheet("Détail contacts")
-HEAD2 = ["Fournisseur", "Domaine d’activité", "N° compte FRN Audika", "Région",
-         "Centre(s)", "Contact", "Fonction", "Téléphone(s)", "Courriel",
-         "Commentaire", "Source (onglet)"]
-for c, h in enumerate(HEAD2, 1):
-    cell = s2.cell(row=1, column=c, value=h)
-    cell.font, cell.fill, cell.border = F_HEAD, FILL_HEAD, BORDER
-    cell.alignment = Alignment(vertical="center", horizontal="left", wrap_text=True)
-s2.row_dimensions[1].height = 24
-
-r = 2
+r = 4
+bande = False
 for s in sorted(suppliers.values(), key=lambda x: norm_key(x["nom"])):
-    for ligne in s["contacts"]:
-        ligne = list(ligne)
-        ligne[1] = " ; ".join(s["domaines"])
-        for c, v in enumerate(ligne, 1):
-            cell = s2.cell(row=r, column=c, value=v)
-            cell.font = F_CELL
-            cell.alignment = TOPL
+    code, code2, prefixe = split_compte(s["comptes"][0] if s["comptes"] else "")
+    if prefixe:
+        s["notes"].append(f"Compte saisi « {prefixe}/{code} » dans la source")
+    if len(s["comptes"]) > 1:
+        s["notes"].append("Autres comptes dans la source : " + " ; ".join(s["comptes"][1:]))
+    domaine = " ; ".join(s["domaines"])
+    tel_gen = min(s["tel_general"])[2] if s["tel_general"] else ""
+    region_frn = " ; ".join(s["regions"])
+    centre_frn = " ; ".join(s["centres"])
+    notes_frn = " ; ".join(s["notes"])
+
+    vues, uniques = set(), []
+    for l in s["lignes"]:
+        cle = (norm_key(l["contact"]), norm_key(l["fonction"]), l["numero"],
+               l["courriel"].lower(), l["commentaire"])
+        if cle in vues:
+            continue
+        vues.add(cle)
+        uniques.append(l)
+    s["lignes"] = uniques
+
+    lignes = s["lignes"] or [{"contact": "", "fonction": "", "numero": "", "courriel": "",
+                              "commentaire": "", "notes": [], "region": "", "centre": "",
+                              "orpheline": False}]
+    for i, l in enumerate(lignes):
+        notes = list(l["notes"])
+        if l["orpheline"]:
+            notes.append("Numéro sans nom ni libellé dans la source : rattachement à confirmer")
+        if i == 0 and notes_frn:
+            notes.append(notes_frn)
+        commentaire = " ; ".join(x for x in [l["commentaire"]] + notes if x)
+
+        valeurs = [
+            POLE_DEFAUT, s["nom"], code, code2, domaine,
+            l["region"] or region_frn, l["centre"] or centre_frn, tel_gen,
+            l["contact"], l["fonction"], l["numero"], l["courriel"], commentaire,
+        ]
+        for c, v in enumerate(valeurs, 1):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.font = F_NOM if c == 2 else F_CELL
+            cell.alignment = TOP
             cell.border = BORDER
-            if r % 2 == 0:
+            if bande:
                 cell.fill = FILL_ALT
+        ws.row_dimensions[r].height = hauteur(valeurs, LARGEURS)
         r += 1
-last2 = r - 1
-WIDTHS2 = (28, 24, 26, 12, 26, 28, 30, 24, 32, 40, 22)
-for rr in range(2, last2 + 1):
-    s2.row_dimensions[rr].height = hauteur(
-        [s2.cell(row=rr, column=c).value or "" for c in range(1, 12)], WIDTHS2)
-for col, w in zip("ABCDEFGHIJK", WIDTHS2):
-    s2.column_dimensions[col].width = w
-s2.freeze_panes = "A2"
-s2.auto_filter.ref = f"A1:K{last2}"
+    bande = not bande                      # une bande de couleur par fournisseur
 
-# ---- Onglet 3 : sources & points a verifier ---------------------------------------
-s3 = out.create_sheet("Sources & à vérifier")
-s3["A1"] = "Provenance des données"
-s3["A1"].font = F_TITRE
-lignes_src = [
-    ("Annuaire_FRN.xlsx — « annuaire FRN contrats »",
-     "Source principale : fournisseurs sous contrat, domaine d’activité, contacts, téléphones."),
-    ("Annuaire_FRN.xlsx — « annuaire FRN espaces verts »",
-     "Fusionné dans la même table, domaine « ESPACES VERTS / PAYSAGISTE »."),
-    ("Audika_Table_correspondance_centres.xlsx",
-     "Table de correspondance des centres transmise à Eurofeu (632 centres, anomalies CP, "
-     "intégrations 2026). Ne contient aucune coordonnée fournisseur : rien à reprendre ici. "
-     "Eurofeu figure déjà dans la table (SÉCURITÉ INCENDIE)."),
-    ("Fichier de Lucile (Teams)",
-     "Non fourni avec cette demande : à intégrer dès réception, la structure est prête."),
-]
-r = 3
-for a, b in lignes_src:
-    s3.cell(row=r, column=1, value=a).font = F_NOM
-    s3.cell(row=r, column=2, value=b).font = F_CELL
-    s3.cell(row=r, column=1).alignment = TOPL
-    s3.cell(row=r, column=2).alignment = TOPL
-    r += 1
-
-r += 1
-s3.cell(row=r, column=1, value="Points à vérifier").font = F_TITRE
-r += 2
-for c, h in enumerate(["Fournisseur", "Constat", "Incidence / action"], 1):
-    cell = s3.cell(row=r, column=c, value=h)
-    cell.font, cell.fill, cell.border = F_HEAD, FILL_HEAD, BORDER
-    cell.alignment = Alignment(vertical="center", horizontal="left", wrap_text=True)
-r += 1
-
-sans_compte = sorted(x["nom"] for x in suppliers.values() if not x["comptes"])
-if sans_compte:
-    anomalies.append((", ".join(sans_compte),
-                      "Aucun n° de compte fournisseur Audika renseigné dans la source.",
-                      "À créer / à rapprocher de la base fournisseurs."))
-
-if sans_tel:
-    anomalies.append((", ".join(sorted(sans_tel)),
-                      "Aucun numéro de téléphone dans la source.",
-                      "Coordonnées à compléter (« — » dans la table)."))
-
-for a, b, c in anomalies:
-    for col, v in enumerate((a, b, c), 1):
-        cell = s3.cell(row=r, column=col, value=v)
-        cell.font = F_CELL
-        cell.alignment = TOPL
-        cell.border = BORDER
-        cell.fill = FILL_WARN
-    r += 1
-
-WIDTHS3 = (44, 68, 46)
-for rr in range(3, r):
-    s3.row_dimensions[rr].height = hauteur(
-        [s3.cell(row=rr, column=c).value or "" for c in range(1, 4)], WIDTHS3)
-for col, w in zip("ABC", WIDTHS3):
-    s3.column_dimensions[col].width = w
+last = r - 1
+for c, (_, w) in enumerate(COLONNES, 1):
+    ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = w
+ws.freeze_panes = "C4"
+ws.auto_filter.ref = f"A3:{openpyxl.utils.get_column_letter(len(COLONNES))}{last}"
 
 out.save(OUT)
 print(f"OK -> {OUT}")
 print(f"   fournisseurs : {len(suppliers)}")
-print(f"   contacts     : {last2 - 1}")
-print(f"   anomalies    : {len(anomalies)}")
+print(f"   lignes       : {last - 3}")
