@@ -280,10 +280,10 @@ export default function Inventaire({ collection, onScanner }) {
           mention="sur les cartes cotées"
         />
         <Indicateur
-          intitule="Cotes remontant à"
+          intitule="Cote la plus ancienne"
           valeur={indicateurs.derniere ? dateCourte(indicateurs.derniere) : ABSENT}
           mention={
-            refreshing ? `relevé en cours ${progress.done}/${progress.total}` : 'la plus ancienne'
+            refreshing ? `relevé ${progress.done}/${progress.total}` : 'relevez pour rafraîchir'
           }
         />
       </div>

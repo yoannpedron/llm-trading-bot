@@ -97,8 +97,11 @@ export default function App() {
       <header className="safe-top shrink-0 border-b border-trait bg-panneau">
         <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-between gap-4 px-4">
           <div className="flex min-w-0 items-baseline gap-3">
-            <h1 className="truncate text-donnee font-semibold tracking-[0.14em] text-encre uppercase">
-              Scanner Yu-Gi-Oh
+            {/* Sur téléphone, l'espace revient aux onglets : le nom complet
+                se tronquait en « SCANNER YU-GI-… », ce qui ne dit rien. */}
+            <h1 className="text-donnee font-semibold tracking-[0.14em] text-encre uppercase">
+              <span className="sm:hidden">Scanner</span>
+              <span className="hidden sm:inline">Scanner Yu-Gi-Oh</span>
             </h1>
             {/* D'où vient la résolution. C'est une donnée d'exploitation, pas
                 une décoration : elle explique pourquoi une lecture aboutit ou
