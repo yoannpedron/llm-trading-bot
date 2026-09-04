@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { loadCardIndex } from '../lib/cardIndex.js';
 import { suggestSetCodes } from '../lib/match.js';
+import { TOTAL_OCTETS } from '../lib/ocr.js';
 import { RETICLE_RATIO } from '../lib/viewport.js';
 
 /**
@@ -40,10 +41,26 @@ const SEGMENTS = 12;
  * L'ordre des cas est celui de l'urgence : ce qui empêche toute lecture passe
  * avant ce qui la dégrade.
  */
-export function consigne({ reading, sharpness, minSharpness, modelReady, frozenFrame, manuel }) {
+export function consigne({
+  reading,
+  sharpness,
+  minSharpness,
+  modelReady,
+  modelProgress = 0,
+  frozenFrame,
+  manuel,
+}) {
   if (manuel) return 'Saisie du code';
   if (frozenFrame) return 'Code identifié';
-  if (!modelReady) return 'Chargement du moteur de lecture';
+  if (!modelReady) {
+    // Trente et un mégaoctets, une seule fois : on le dit, avec le compte,
+    // sinon l'attente ressemble à une panne.
+    const recus = Math.round((modelProgress * TOTAL_OCTETS) / 1_000_000);
+    const total = Math.round(TOTAL_OCTETS / 1_000_000);
+    return modelProgress >= 1
+      ? 'Démarrage du moteur de lecture'
+      : `Téléchargement du moteur de lecture — ${recus} sur ${total} Mo, une seule fois`;
+  }
   if (!reading) return 'Cadrez le code dans la fenêtre';
   if (reading === 'image trop floue' || sharpness < minSharpness) {
     return 'Trop flou — touchez le code pour la mise au point';
@@ -266,6 +283,7 @@ export default function SniperView({ sniper, onRefus }) {
     focusAt,
     modelReady,
     modelProgress,
+    modelProvider,
     reading,
     attempts,
     failure,
@@ -287,6 +305,7 @@ export default function SniperView({ sniper, onRefus }) {
     sharpness,
     minSharpness,
     modelReady,
+    modelProgress,
     frozenFrame,
     manuel: saisieVisible,
   });
@@ -395,10 +414,10 @@ export default function SniperView({ sniper, onRefus }) {
 
         {/*
           Aide au diagnostic, montrée seulement quand la lecture piétine. Elle
-          réunit le conseil et ce que le moteur reçoit vraiment : voir la bande
-          binarisée dit en un coup d'œil si le problème vient du cadrage, de la
-          lumière ou de la mise au point. Un appui l'enregistre, ce qui alimente
-          les bancs de mesure en vrais recadrages (scripts/harness/real-crops.mjs).
+          réunit le conseil et ce que le moteur reçoit vraiment : voir la zone
+          dit en un coup d'œil si le problème vient du cadrage, de la lumière ou
+          de la mise au point. Un appui l'enregistre, ce qui alimente le banc de
+          mesure en vrais recadrages (scripts/ocr-bench.mjs).
         */}
         {enPeine && (
           <div className="panneau w-full max-w-md p-3">
@@ -416,10 +435,15 @@ export default function SniperView({ sniper, onRefus }) {
                 <span className="intitule">Zone transmise au moteur</span>
                 <img
                   src={crop}
-                  alt="Zone lue, après binarisation"
+                  alt="Zone lue, telle que transmise au moteur"
                   className="mt-1 w-full rounded-controle border border-trait bg-white"
                 />
               </a>
+            )}
+            {modelProvider && (
+              <p className="mt-2 text-micro text-tertiaire">
+                Moteur : PP-OCRv6 sur {modelProvider === 'webgpu' ? 'WebGPU' : 'WebAssembly'}
+              </p>
             )}
           </div>
         )}

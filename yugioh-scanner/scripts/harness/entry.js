@@ -8,9 +8,8 @@
  * l'application exécute.
  */
 import * as match from '../../src/lib/match.js';
-import * as ocr from '../../src/lib/ocr.js';
 import * as parse from '../../src/lib/parse.js';
 import * as preprocess from '../../src/lib/preprocess.js';
 import * as viewport from '../../src/lib/viewport.js';
 
-window.YGO = { match, ocr, parse, preprocess, viewport };
+window.YGO = { match, parse, preprocess, viewport };

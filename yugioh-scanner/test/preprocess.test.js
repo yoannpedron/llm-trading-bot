@@ -1,51 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  binarize,
-  darkRatio,
-  sharpness,
-  integralImages,
-  invert,
-  otsuThreshold,
-  preprocessGray,
-  preprocessVariants,
-  echelleDeLecture,
-  sauvolaThreshold,
-  smooth,
-  stretchContrast,
-  textBand,
-  toGrayscale,
-} from '../src/lib/preprocess.js';
+import { sharpness, stretchContrast, toGrayscale } from '../src/lib/preprocess.js';
 
 const WIDTH = 60;
 const HEIGHT = 20;
 
 /**
  * Fabrique une image en niveaux de gris : fond `background`, barres verticales
- * de largeur 2 en `ink` tous les 6 pixels. `gradient` ajoute un dégradé de
- * gauche à droite pour simuler un éclairage inégal.
+ * de largeur 2 en `ink` tous les 6 pixels.
  */
-function texte({ background = 220, ink = 40, gradient = 0 } = {}) {
+function texte({ background = 220, ink = 40 } = {}) {
   const pixels = new Uint8ClampedArray(WIDTH * HEIGHT);
   for (let y = 0; y < HEIGHT; y += 1) {
     for (let x = 0; x < WIDTH; x += 1) {
       const isInk = y > 3 && y < HEIGHT - 4 && x % 6 < 2;
-      const lift = (gradient * x) / WIDTH;
-      pixels[y * WIDTH + x] = Math.min(255, (isInk ? ink : background) + lift);
+      pixels[y * WIDTH + x] = isInk ? ink : background;
     }
   }
   return pixels;
 }
-
-/** Proportion de pixels correctement classés par rapport à la vérité terrain. */
-function accuracy(result, truth) {
-  let good = 0;
-  for (let i = 0; i < result.length; i += 1) if (result[i] === truth[i]) good += 1;
-  return good / result.length;
-}
-
-const truth = binarize(texte(), 128);
 
 test('la luma pondère selon la perception', () => {
   const luma = (r, g, b) =>
@@ -82,112 +56,6 @@ test('une image plate ne provoque pas de division par zéro', () => {
   const flat = new Uint8ClampedArray(100).fill(77);
   const stretched = stretchContrast(flat);
   assert.ok(stretched.every((value) => value === 77));
-});
-
-test('le seuil d’Otsu sépare exactement l’encre du fond', () => {
-  const gray = texte();
-  const threshold = otsuThreshold(gray);
-
-  // Sur un histogramme franchement bimodal, tout seuil de l'intervalle vaut :
-  // ce qui compte est que la binarisation retrouve l'image d'origine.
-  assert.ok(threshold >= 40 && threshold < 220, `seuil ${threshold}`);
-  assert.deepEqual(binarize(gray, threshold), truth);
-});
-
-test('l’auto-inversion remet le texte en noir sur blanc', () => {
-  // Texte clair sur fond sombre : majorité de pixels noirs après binarisation.
-  const inverse = texte({ background: 30, ink: 230 });
-  const { pixels, inverted } = preprocessGray(inverse);
-  assert.equal(inverted, true);
-  assert.ok(darkRatio(pixels) < 0.5);
-});
-
-test('les images intégrales donnent la bonne somme de fenêtre', () => {
-  const gray = Uint8ClampedArray.from({ length: 9 }, (_, i) => i + 1); // 1..9, 3x3
-  const { sum, squares, stride } = integralImages(gray, 3, 3);
-  // Somme du carré complet : 1+2+...+9 = 45
-  assert.equal(sum[3 * stride + 3], 45);
-  assert.equal(squares[3 * stride + 3], 285); // 1+4+9+...+81
-  // Sous-rectangle en haut à gauche (1,2,4,5) = 12
-  assert.equal(sum[2 * stride + 2], 12);
-});
-
-test('Sauvola sépare le texte aussi bien qu’Otsu en éclairage uniforme', () => {
-  const local = sauvolaThreshold(texte(), WIDTH, HEIGHT);
-  assert.ok(accuracy(local, truth) > 0.9);
-});
-
-test('sous éclairage inégal, Sauvola tient là où Otsu lâche', () => {
-  // Dégradé de 160 niveaux : la droite de l'image est bien plus claire.
-  const uneven = texte({ gradient: 160 });
-
-  const global = preprocessGray(uneven, { autoInvert: false }).pixels;
-  const local = sauvolaThreshold(uneven, WIDTH, HEIGHT);
-
-  assert.ok(accuracy(local, truth) > 0.9, `Sauvola ${accuracy(local, truth)}`);
-  assert.ok(
-    accuracy(local, truth) > accuracy(global, truth),
-    `Sauvola ${accuracy(local, truth)} doit dépasser Otsu ${accuracy(global, truth)}`,
-  );
-});
-
-test('les variantes sont ordonnées par efficacité mesurée, sans doublon', () => {
-  const variants = preprocessVariants(texte(), WIDTH, HEIGHT);
-
-  // L'ordre n'est pas arbitraire : sur les recadrages réels, Sauvola retrouve
-  // la carte deux fois sur trois pour 50 ms, Otsu aucune pour 230 à 361 ms.
-  // La boucle de lecture essaie dans cet ordre et s'arrête au premier succès ;
-  // changer l'ordre ici, c'est ralentir l'application.
-  assert.deepEqual(
-    variants.map((entry) => entry.label),
-    ['sauvola', 'sauvola-inverse', 'otsu', 'otsu-inverse'],
-  );
-
-  // Une variante et son inverse ne peuvent pas être identiques.
-  const parLabel = Object.fromEntries(variants.map((v) => [v.label, v.pixels]));
-  assert.notDeepEqual(parLabel.otsu, parLabel['otsu-inverse']);
-  assert.deepEqual(invert(parLabel.otsu), parLabel['otsu-inverse']);
-  assert.deepEqual(invert(parLabel.sauvola), parLabel['sauvola-inverse']);
-});
-
-test('on ne calcule que les variantes demandées', () => {
-  // Otsu coûte peu, mais sa reconnaissance coûte cinq à sept fois celle de
-  // Sauvola : la boucle ne la demande qu'en dernier recours, et il ne faut pas
-  // la calculer pour rien.
-  const sauvolaSeul = preprocessVariants(texte(), WIDTH, HEIGHT, {
-    only: ['sauvola', 'sauvola-inverse'],
-  });
-  assert.deepEqual(
-    sauvolaSeul.map((entry) => entry.label),
-    ['sauvola', 'sauvola-inverse'],
-  );
-
-  const otsuSeul = preprocessVariants(texte(), WIDTH, HEIGHT, { only: ['otsu'] });
-  assert.deepEqual(
-    otsuSeul.map((entry) => entry.label),
-    ['otsu'],
-  );
-
-  // Le résultat ne dépend pas de ce qui a été demandé à côté.
-  const tout = preprocessVariants(texte(), WIDTH, HEIGHT);
-  assert.deepEqual(sauvolaSeul[0].pixels, tout.find((v) => v.label === 'sauvola').pixels);
-});
-
-test('l’agrandissement vise une bande lisible, sans jamais réduire', () => {
-  // Tesseract lit le mieux des capitales de trente à cinquante pixels. Viser
-  // 240 px de bande — le réglage précédent — était mesuré comme la
-  // configuration la plus lente ET la moins fiable des quatre essayées.
-  assert.equal(echelleDeLecture(110), 1);
-  assert.ok(Math.abs(echelleDeLecture(68) - 110 / 68) < 1e-9);
-
-  // Jamais de réduction : les pixels que le capteur a produits ne se
-  // rattrapent pas.
-  assert.equal(echelleDeLecture(240), 1);
-  assert.equal(echelleDeLecture(1000), 1);
-
-  // Et jamais d'agrandissement démesuré sur un recadrage minuscule.
-  assert.equal(echelleDeLecture(1), 4);
-  assert.equal(echelleDeLecture(0), 4);
 });
 
 test('la netteté distingue le net du flou, et résiste au bruit', () => {
@@ -247,44 +115,3 @@ test('la netteté distingue le net du flou, et résiste au bruit', () => {
   assert.equal(sharpness(new Uint8ClampedArray(4), 2, 2), 0);
 });
 
-test('le lissage efface une trame de points sans déplacer un trait', () => {
-  // Trame : un point sombre isolé toutes les trois colonnes, comme la
-  // demi-teinte d'une carte vue de près. Trait : une colonne pleine.
-  const gray = new Uint8ClampedArray(WIDTH * HEIGHT).fill(220);
-  for (let y = 0; y < HEIGHT; y += 1) {
-    for (let x = 0; x < WIDTH; x += 3) gray[y * WIDTH + x] = 60;
-    for (let x = 30; x < 34; x += 1) gray[y * WIDTH + x] = 20;
-  }
-
-  const out = smooth(gray, WIDTH, HEIGHT, 2);
-
-  // Après lissage, la trame ne laisse qu'une ondulation faible…
-  const ecart = Math.abs(out[10 * WIDTH + 12] - out[10 * WIDTH + 13]);
-  assert.ok(ecart < 20, `trame résiduelle ${ecart}`);
-  // …tandis que le trait reste bien plus sombre que son voisinage.
-  assert.ok(out[10 * WIDTH + 31] < out[10 * WIDTH + 12] - 60);
-
-  // Rayon nul : copie fidèle, et jamais le même tableau.
-  const same = smooth(gray, WIDTH, HEIGHT, 0);
-  assert.deepEqual([...same], [...gray]);
-  assert.notEqual(same, gray);
-});
-
-test('la bande de texte écarte le bloc de bordure et le fond vide', () => {
-  // Image binaire : 6 lignes de fond, 6 lignes de « texte » (un tiers
-  // d'encre), 8 lignes de bloc noir — la bordure du cadre de la carte.
-  const binary = new Uint8ClampedArray(WIDTH * HEIGHT).fill(255);
-  for (let y = 6; y < 12; y += 1) for (let x = 0; x < WIDTH; x += 3) binary[y * WIDTH + x] = 0;
-  for (let y = 12; y < HEIGHT; y += 1) binary.fill(0, y * WIDTH, (y + 1) * WIDTH);
-
-  const band = textBand(binary, WIDTH, HEIGHT, { pad: 0 });
-  assert.deepEqual(band, { top: 6, bottom: 11 });
-
-  // La marge s'ajoute de part et d'autre, sans sortir de l'image.
-  const padded = textBand(binary, WIDTH, HEIGHT, { pad: 0.5 });
-  assert.deepEqual(padded, { top: 3, bottom: 14 });
-
-  // Rien qui ressemble à du texte : on garde tout plutôt que de couper au hasard.
-  const blank = new Uint8ClampedArray(WIDTH * HEIGHT).fill(255);
-  assert.deepEqual(textBand(blank, WIDTH, HEIGHT), { top: 0, bottom: HEIGHT - 1 });
-});

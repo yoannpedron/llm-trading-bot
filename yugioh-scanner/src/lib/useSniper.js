@@ -1,75 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { loadCardIndex } from './cardIndex.js';
 import { chime, vibrate } from './feedback.js';
-import { recognize, recognizeNumber, shutdown, spliceNumber, warmUp } from './ocr.js';
-import { cropVariants, echelleDeLecture, grabFrame } from './preprocess.js';
-import { scanCode } from './scanApi.js';
+import { moteur, recognize, shutdown, warmUp } from './ocr.js';
+import { cropZone, grabFrame } from './preprocess.js';
+import { scanCode, usingBackend } from './scanApi.js';
 import { reticleRect, toVideoRect } from './viewport.js';
 import { ReadingVote } from './vote.js';
 
-/** Intervalle entre deux lectures. Une douchette de supermarché ne fait pas mieux. */
-const SCAN_INTERVAL_MS = 280;
-
 /**
- * Nombre de binarisations essayées par tour.
+ * Pause entre deux lectures.
  *
- * Il y en a quatre — Otsu, Sauvola, et leurs polarités inverses — mais les
- * essayer toutes sur la *même* image coûte quatre passes d'OCR pour une image
- * qui, si elle est mauvaise, le restera pour les quatre. On en essaie donc deux
- * par tour en faisant tourner le point de départ : les quatre sont couvertes en
- * deux tours, sur deux images différentes, avec un reflet qui a bougé entre les
- * deux.
+ * Les lectures sont séquentielles (une passe dure 200 à 400 ms en WebAssembly,
+ * moins en WebGPU) ; cette pause ne sert qu'à laisser respirer l'interface
+ * entre deux passes. Une douchette de supermarché ne fait pas mieux.
  */
-/**
- * Temps que l'on s'autorise, par tour, à essayer des binarisations.
- *
- * La boucle essaie les variantes dans l'ordre de leur efficacité mesurée et
- * s'arrête au premier succès. Ce budget borne ce qu'on dépense quand aucune ne
- * réussit : au-delà, mieux vaut reprendre une image fraîche, où le reflet et
- * la mise au point auront bougé, que continuer à travailler une image qui ne
- * donne rien.
- *
- * Réglé sur la mesure (`scripts/ocr-bench.mjs`) : une reconnaissance Sauvola
- * coûte 50 ms, une reconnaissance Otsu 230 à 361 ms. 450 ms laissent donc
- * passer les deux Sauvola et une Otsu — l'ordre exact dans lequel elles
- * paient.
- */
-const TICK_BUDGET_MS = 450;
-
-/**
- * Ordre d'essai des binarisations, et ce que chacune coûte.
- *
- * Établi par `scripts/ocr-bench.mjs` sur les trois recadrages réels de
- * `scripts/fixtures/`, et non par intuition :
- *
- *     binarisation   reconnaissance   cartes retrouvées
- *     sauvola             50 ms             2/3
- *     otsu               230-361 ms         0/3
- *
- * Otsu ne lit AUCUNE carte réelle et coûte cinq à sept fois plus cher, parce
- * que Tesseract passe son temps à tenter de segmenter du bruit. Il reste
- * excellent sur une image très propre — la caméra simulée du banc — donc on
- * le garde, en dernier et seulement s'il reste du budget.
- *
- * L'ancienne boucle prenait deux variantes par tour en faisant tourner le
- * point de départ : un tour sur deux commençait donc par Otsu, et dépensait
- * l'essentiel de son temps sur la binarisation qui ne rend rien.
- */
-const ORDRE_VARIANTES = ['sauvola', 'sauvola-inverse', 'otsu', 'otsu-inverse'];
-
-/** Ce qu'on calcule d'emblée ; le reste n'est produit qu'en cas d'échec. */
-const VARIANTES_RAPIDES = ['sauvola', 'sauvola-inverse'];
-
-/**
- * Qualité d'une résolution, du plus sûr au plus douteux.
- *
- * Sert à décider si une seconde lecture mérite de remplacer la première : on ne
- * remplace jamais une correspondance sûre par une approchée.
- */
-const RANG_METHODE = { exact: 3, region: 3, fuzzy: 1 };
-const qualite = (resolu) =>
-  resolu?.status === 'matched' ? (RANG_METHODE[resolu.method] ?? 1) : 0;
-
+const SCAN_INTERVAL_MS = 120;
 
 /**
  * Netteté minimale sous laquelle on ne lance même pas l'OCR.
@@ -130,6 +76,8 @@ export function useSniper() {
 
   const [modelReady, setModelReady] = useState(false);
   const [modelProgress, setModelProgress] = useState(0);
+  /** `webgpu` ou `wasm`, une fois le moteur prêt : dit ce que vaut la machine. */
+  const [modelProvider, setModelProvider] = useState(null);
 
   const [reading, setReading] = useState('');
   const [attempts, setAttempts] = useState(0);
@@ -169,9 +117,23 @@ export function useSniper() {
 
   useEffect(() => {
     let alive = true;
+    // L'index des cartes se charge en même temps que le moteur : mesuré, le
+    // payer à la première résolution coûtait 600 ms entre la première lecture
+    // et l'affichage de la carte. Un échec ici n'est pas une erreur — la
+    // résolution réessaiera et dira, elle, ce qui manque.
+    if (!usingBackend()) loadCardIndex().catch(() => {});
     warmUp((progress) => alive && setModelProgress(progress))
-      .then(() => alive && setModelReady(true))
-      .catch(() => alive && setModelReady(true));
+      .then(() => {
+        if (!alive) return;
+        setModelProvider(moteur().provider);
+        setModelReady(true);
+      })
+      .catch((cause) => {
+        if (!alive) return;
+        // Sans moteur, le viseur ne lira jamais : on le dit, au lieu de
+        // laisser une barre de chargement figée.
+        setFailure(`Moteur de lecture indisponible : ${cause?.message ?? cause}`);
+      });
     return () => {
       alive = false;
     };
@@ -401,117 +363,73 @@ export function useSniper() {
       );
 
       const still = grabFrame(video);
-      // Agrandissement visant une bande d'environ 110 px, où Tesseract lit le
-      // mieux. Le réglage précédent visait 240 px : mesuré, c'était à la fois
-      // le plus lent et le moins fiable. Voir `echelleDeLecture`.
-      const scale = echelleDeLecture(rect.height);
-      const variants = cropVariants(still, rect, { scale, only: VARIANTES_RAPIDES });
+      // L'image brute, à la résolution native : le moteur est entraîné sur
+      // du texte photographié et lit mieux sans binarisation (mesuré, voir
+      // `preprocess.js`).
+      const zone = cropZone(still, rect);
 
-      setSharpness(variants.sharpness);
+      setSharpness(zone.sharpness);
 
-      // Image sans contenu exploitable : l'OCR n'y trouverait rien et coûterait
-      // une seconde. On rend la main tout de suite, l'indicateur de netteté
-      // disant à l'utilisateur ce qu'il y a à corriger.
-      if (variants.sharpness < MIN_SHARPNESS) {
+      // Image sans contenu exploitable : le moteur n'y trouverait rien et
+      // coûterait une passe. On rend la main tout de suite, l'indicateur de
+      // netteté disant à l'utilisateur ce qu'il y a à corriger.
+      if (zone.sharpness < MIN_SHARPNESS) {
         setReading('image trop floue');
         setAttempts((count) => count + 1);
         return;
       }
 
-      // Les binarisations dans l'ordre de leur efficacité mesurée, tant qu'il
-      // reste du budget. On s'arrête au premier succès : dans le cas courant,
-      // c'est la première, et le tour aura coûté une seule reconnaissance.
-      const debut = Date.now();
-      let disponibles = variants;
+      // La vignette de ce qui part au moteur : sans elle, un échec de lecture
+      // ne dit pas si le problème vient du cadrage ou de la lumière.
+      setCrop(zone.canvas.toDataURL('image/png'));
 
-      for (const label of ORDRE_VARIANTES) {
-        if (Date.now() - debut > TICK_BUDGET_MS) break;
-
-        let variant = disponibles.find((entry) => entry.label === label);
-        if (!variant) {
-          // Les variantes lentes ne sont produites que si les rapides ont
-          // échoué : les calculer d'avance serait payer pour rien neuf tours
-          // sur dix.
-          disponibles = cropVariants(still, rect, { scale, only: ORDRE_VARIANTES });
-          variant = disponibles.find((entry) => entry.label === label);
-        }
-        if (!variant) continue;
-
-        // La vignette de ce qui part au moteur : sans elle, un échec de lecture
-        // ne dit pas si le problème vient du cadrage, de la lumière ou du seuil.
-        setCrop(variant.canvas.toDataURL('image/png'));
-
-        const { text, confidence } = await recognize('setCode', variant.canvas);
-        const trimmed = text.trim();
-        // On affiche aussi les lectures vides : « rien » et « quelque chose
-        // d'illisible » n'appellent pas le même geste de la part de l'utilisateur.
-        setReading(trimmed || `rien lu (${variant.label}, conf. ${Math.round(confidence)})`);
-        if (!trimmed) continue;
-
-        abortRef.current?.abort();
-        const controller = new AbortController();
-        abortRef.current = controller;
-
-        // Une panne de résolution — index absent, API injoignable — doit se voir.
-        // Avalée, elle se manifeste seulement par un viseur qui ne verrouille
-        // jamais, ce qui n'oriente vers rien.
-        const resoudre = (texte) =>
-          scanCode(texte, controller.signal).catch((cause) => {
-            if (cause.name !== 'AbortError') setFailure(cause.message);
-            return null;
-          });
-
-        let resolved = await resoudre(trimmed);
-        if (resolved) setFailure(null);
-
-        // Seconde passe : on relit le numéro en chiffres seuls et l'on
-        // réessaie. Elle se déclenche non seulement sur un échec, mais aussi
-        // sur une correspondance APPROCHÉE — c'est justement le cas où la
-        // lecture est douteuse. Une première version ne la lançait que sur
-        // « aucune correspondance », et un rapprochement approché vers la
-        // MAUVAISE carte court-circuitait la correction qui aurait donné la
-        // bonne : « CMAMA-FRIIZ » se rapprochait de MAMA-112 et l'affaire
-        // était close, alors que relire « 113 » donnait la carte exacte.
-        //
-        // Dans le cas courant — lecture exacte du premier coup — elle ne se
-        // déclenche pas et ne coûte donc rien.
-        if (qualite(resolved) < 3) {
-          const chiffres = await recognizeNumber(variant.canvas).catch(() => '');
-          const corrige = spliceNumber(trimmed, chiffres);
-          if (corrige) {
-            setReading(`${trimmed} → ${corrige}`);
-            const secondEssai = await resoudre(corrige);
-            // À qualité égale, la lecture corrigée l'emporte, et ce n'est pas
-            // un pari : elle a le MÊME préfixe et des chiffres lus avec un
-            // alphabet où une lettre est impossible. Elle est donc meilleure
-            // par construction. On ne descend jamais en dessous, en revanche —
-            // le test compare les rangs, il ne fait pas confiance à l'ordre.
-            if (qualite(secondEssai) >= qualite(resolved)) resolved = secondEssai;
-          }
-        }
-
-        if (!resolved) continue;
-        if (resolved.status === 'no_code' || resolved.status === 'no_match') continue;
-
-        // Exact ou régional : le code lu existe tel quel, rien à confirmer.
-        // Approché : il faut une deuxième lecture, sur une autre image.
-        const certain = resolved.method === 'exact' || resolved.method === 'region';
-        const { accepted } = voteRef.current.cast(resolved.matchedCode, { certain });
-        if (!accepted) return;
-        // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
-        // maintenant démonterait le formulaire sous les doigts.
-        if (manualRef.current) return;
-
-        setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
-        setResult(resolved);
-        // Le bip de la douchette : on sait que c'est lu sans quitter la carte
-        // des yeux. Les deux échouent en silence là où ils ne sont pas offerts.
-        chime();
-        vibrate();
+      const { text } = await recognize(zone.canvas);
+      // Le moteur rend une ligne par zone de texte trouvée. On garde tout :
+      // la résolution cherche un code dans le texte entier, mot par mot, et un
+      // libellé voisin (« POINT », la bordure) ne la gêne pas.
+      const trimmed = text.replace(/\s+/g, ' ').trim();
+      // On affiche aussi les lectures vides : « rien » et « quelque chose
+      // d'illisible » n'appellent pas le même geste de la part de l'utilisateur.
+      setReading(trimmed || 'rien lu');
+      if (!trimmed) {
+        setAttempts((count) => count + 1);
         return;
       }
 
-      setAttempts((count) => count + 1);
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      // Une panne de résolution — index absent, API injoignable — doit se voir.
+      // Avalée, elle se manifeste seulement par un viseur qui ne verrouille
+      // jamais, ce qui n'oriente vers rien.
+      const resolved = await scanCode(trimmed, controller.signal).catch((cause) => {
+        if (cause.name !== 'AbortError') setFailure(cause.message);
+        return null;
+      });
+      if (!resolved) return;
+      setFailure(null);
+
+      if (resolved.status === 'no_code' || resolved.status === 'no_match') {
+        setAttempts((count) => count + 1);
+        return;
+      }
+
+      // Exact ou régional : le code lu existe tel quel, rien à confirmer.
+      // Approché : il faut une deuxième lecture, sur une autre image.
+      const certain = resolved.method === 'exact' || resolved.method === 'region';
+      const { accepted } = voteRef.current.cast(resolved.matchedCode, { certain });
+      if (!accepted) return;
+      // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
+      // maintenant démonterait le formulaire sous les doigts.
+      if (manualRef.current) return;
+
+      setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
+      setResult(resolved);
+      // Le bip de la douchette : on sait que c'est lu sans quitter la carte
+      // des yeux. Les deux échouent en silence là où ils ne sont pas offerts.
+      chime();
+      vibrate();
     } catch (cause) {
       // Sans ce filet, une exception ici remonte dans la boucle et l'arrête
       // définitivement — le viseur reste affiché mais ne lit plus rien, sans
@@ -585,6 +503,7 @@ export function useSniper() {
     focusAt,
     modelReady,
     modelProgress,
+    modelProvider,
     reading,
     attempts,
     failure,

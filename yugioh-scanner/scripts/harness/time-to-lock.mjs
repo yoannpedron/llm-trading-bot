@@ -41,7 +41,7 @@ for (let prise = 0; prise < PRISES; prise += 1) {
   });
   // On attend que le moteur soit chargé : sinon on mesure un téléchargement.
   await page
-    .waitForFunction(() => !document.body.innerText.includes('Chargement du moteur'), {
+    .waitForFunction(() => !/moteur de lecture/.test(document.body.innerText), {
       timeout: 60000,
     })
     .catch(() => {});

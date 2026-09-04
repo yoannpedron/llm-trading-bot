@@ -115,9 +115,94 @@ Le scanner fonctionne de bout en bout. Une carte présentée au viseur est
 identifiée, sa fiche s'affiche en français, ses raretés sont proposées quand le
 code est ambigu, et elle s'ajoute à une collection exportable en CSV.
 
-- **115 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
+- **107 tests JS** (`npm test`) et **44 tests Python** (`python3 -m pytest backend`)
 - Chaîne complète validée en navigateur avec caméra simulée
 - Déployé et servi sur GitHub Pages
+- **Moteur de lecture remplacé** : PP-OCRv6 à la place de Tesseract (voir la
+  section « Le changement de moteur » ci-dessous, à lire en premier — elle
+  rend caduque une bonne part de la section 3, conservée comme historique)
+
+---
+
+## Le changement de moteur : Tesseract → PP-OCRv6
+
+Reproche de l'utilisateur, après tout le réglage de Tesseract : « ça prend
+encore trop de temps », « même super net et sous la lampe ça marche pas
+bien », puis une application Android native (`pt.tscg.yugiohmanager`) qui
+« fonctionne beaucoup mieux ». La raison est structurelle : une application
+native lit avec ML Kit, un réseau de neurones entraîné sur du texte
+photographié ; Tesseract est conçu pour des scans à plat, et tout le
+prétraitement du projet servait à lui fabriquer un scan à partir d'une photo.
+
+Le seul équivalent utilisable dans un navigateur sans drapeau expérimental
+(`TextDetector` de la Shape Detection API en exige un) est **PP-OCR**, via
+`ppu-paddle-ocr` (MIT, ONNX Runtime Web). Mesuré avant de décider, sur les
+trois recadrages réels de `scripts/fixtures/`, six images bruitées chacun,
+image brute sans aucun prétraitement :
+
+| Moteur | Poids | Cartes lues | Images bonnes | Fausses | Par passe |
+|---|---|---|---|---|---|
+| Tesseract, réglé | 5 Mo | 2/3 (STOR jamais) | — | 0 | 490 ms |
+| PP-OCRv6 tiny | 6 Mo | 2/3 (MAMA jamais) | 10/18 | 0 | 190 ms |
+| PP-OCRv5 en mobile | 13 Mo | 2/3 | 12/18 | 0 | 320 ms |
+| tiny det + small rec | 23 Mo | 3/3 | 13/18 | 0 | 320 ms |
+| **PP-OCRv6 small** | **31 Mo** | **3/3** | **15/18** | **0** | **380 ms** |
+
+Décision : **small**. Trente et un mégaoctets, une fois, contre une carte sur
+trois qui ne se lit jamais. Le petit modèle bute sur la carte floue
+(MAMA-FR113) ; le moyen la lit à la première image, et lit STOR-FR040 — dont
+le R devenait K sur toutes les images avec Tesseract — six fois sur six.
+
+Ce qui a été essayé et écarté, pour ne pas le refaire :
+
+- **Une marge grise autour du recadrage** (16, 24, 40 px) : aide le tiny,
+  fait perdre une carte au small (le détecteur accroche la bordure). Aucune
+  marge.
+- **Agrandissement ×1,5 et ×2** : n'apporte rien, coûte 50 à 100 % de temps.
+- **`paddingHorizontal`/`paddingVertical` du détecteur** : effet nul sur le
+  small.
+- **Les modèles v5 anglais / latin** (dictionnaire réduit, donc pas de
+  caractère chinois hallucinné) : moins bons que le v6 small malgré tout.
+
+Ce qui a changé dans le code :
+
+- `src/lib/ocr.js` : façade ; `src/lib/ocr.worker.js` : le moteur, dans un
+  worker ; `src/lib/modeles.js` : manifeste des fichiers, téléchargement avec
+  progression, Cache API.
+- `src/lib/preprocess.js` : réduit au recadrage brut et à la netteté. Otsu,
+  Sauvola, polarités, `stripEdgeInk`, `textBand`, `echelleDeLecture`,
+  `user_patterns`, la passe chiffres : **supprimés**, avec leurs tests.
+- `src/lib/useSniper.js` : une passe par tour, le texte entier va à la
+  résolution (`normalizeOcrText` sépare les mots ; un libellé voisin ne gêne
+  pas).
+- `public/modeles/` : les trois fichiers du modèle et le WebAssembly d'ONNX
+  Runtime, **versionnés** — l'application ne dépend d'aucun CDN.
+  Le `.gitignore` racine avale `*.txt` : une exception couvre le dictionnaire.
+- Bancs Tesseract supprimés (`ocr-confusions`, `ocr-multiframe`,
+  `ocr-strategies`, `font-confusions`, `real-crops`, `live-crop`).
+  `scripts/ocr-bench.mjs` réécrit : il sert le vrai code par Vite (le worker
+  interdit l'empaquetage en bibliothèque) et rejoue le tableau ci-dessus.
+
+Délai de verrouillage sur la caméra simulée (`scripts/harness/time-to-lock.mjs`,
+mesuré à partir du moment où le moteur est prêt) : **0,86 s** (étendue
+0,85–0,87), contre 0,49 s avec Tesseract réglé ; la chronologie fine donne
+0,5 s entre « moteur prêt » et la carte affichée, le reste est le temps de
+rendu et de sondage du banc. Une première mesure donnait 1,8 s : l'index des
+cartes n'était chargé qu'à la première résolution. Il est désormais préchargé
+pendant le téléchargement du moteur, et le worker fait une inférence à vide à
+l'initialisation. Le banc attend le libellé « moteur de lecture » — pas
+« Chargement du moteur », qui n'existe plus — sinon il mesure le
+téléchargement.
+
+Ce qui n'est pas encore mesuré : **la vitesse sur un téléphone**. Sur
+ordinateur, une passe coûte 380 à 430 ms. Sur Chrome Android, WebGPU est
+disponible et prend le relais de lui-même (les fichiers `.jsep.*` d'ONNX
+Runtime sont ceux de WebGPU, les autres ceux de WebAssembly seul — les quatre
+sont servis, le navigateur ne charge que sa paire). Sur un appareil sans
+WebGPU, il faudra mesurer sur place. Si c'est trop lent : le
+`coi-serviceworker.js` livré avec `ppu-paddle-ocr` active les threads
+WebAssembly sans en-têtes serveur (GitHub Pages ne les pose pas) ; c'est la
+première chose à essayer.
 
 ---
 
@@ -515,7 +600,7 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
   recadrage ni la binarisation : c'est le moteur, et cela se corrige par la
   grammaire de sortie, pas par le seuil de correspondance.
 
-### Tesseract
+### Tesseract (historique — moteur remplacé)
 
 - **PSM 6, jamais PSM 7.** « Ligne unique » suppose que l'image ne contient que
   la ligne à lire. La taille du viseur *en pixels vidéo* dépend de la hauteur de
@@ -539,7 +624,7 @@ un test ; les remettre en cause demande de refaire la mesure, pas de raisonner.
   l'interpolation adoucit les contours qu'on mesure, et la note dépendrait alors
   de la résolution du capteur.
 
-### Prétraitement
+### Prétraitement (historique — chaîne supprimée)
 
 - **Otsu ne lit pas une vraie carte de près.** Sur les deux fixtures réelles,
   seul Sauvola rend quelque chose : la bordure et la trame ruinent un seuil

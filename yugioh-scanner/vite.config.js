@@ -20,8 +20,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    // tesseract.js embarque son worker : on le laisse dans un chunk séparé pour
-    // ne pas retarder le premier rendu de l'interface.
+    // Le moteur de lecture (ONNX Runtime + ppu-paddle-ocr) part dans le chunk
+    // du worker, hors du chemin critique du premier rendu.
     chunkSizeWarningLimit: 1200,
   },
 });

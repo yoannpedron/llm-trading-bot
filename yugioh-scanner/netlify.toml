@@ -39,3 +39,11 @@
   # Vite empreinte les noms de fichiers : immuable sans risque.
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/modeles/*"
+  # Le moteur de lecture (31 Mo) : versionné par nom de fichier, jamais
+  # modifié sous le même nom (voir src/lib/modeles.js, CACHE). Un an de cache
+  # évite de le retélécharger à chaque visite sur les navigateurs sans Cache API.
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

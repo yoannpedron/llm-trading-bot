@@ -17,9 +17,10 @@
     "netlify:dev": "netlify dev"
   },
   "dependencies": {
+    "onnxruntime-web": "^1.29.0",
+    "ppu-paddle-ocr": "^6.4.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tesseract.js": "^7.0.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",

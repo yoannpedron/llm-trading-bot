@@ -37,3 +37,6 @@ $RECYCLE.BIN/
 *.zip
 *.tar.gz
 *.bak
+
+# Dictionnaire du moteur OCR (le motif *.txt ci-dessus l'avalerait)
+!yugioh-scanner/public/modeles/*.txt

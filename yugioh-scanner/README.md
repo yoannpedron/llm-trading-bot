@@ -9,7 +9,7 @@ Une fois le code reconnu, la caméra se fige et l'écran se divise en deux : le
 visuel officiel en haut, avec ses effets holographiques ; les données en
 français en bas.
 
-- **Capture et OCR** — Tesseract.js dans le navigateur, aucune image n'en sort
+- **Capture et OCR** — PP-OCRv6 (ONNX Runtime) dans le navigateur, aucune image n'en sort
 - **Résolution** — backend Python (SQLite + rapidfuzz), ou en local sur un index
   embarqué quand aucun backend n'est configuré
 - **Interface** — React 19, Vite, Tailwind v4
@@ -19,7 +19,7 @@ français en bas.
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # 74 tests, sans navigateur
+npm test         # 107 tests, sans navigateur
 ```
 
 Le backend est facultatif :
@@ -44,7 +44,7 @@ rogné, et jamais aux proportions de la fenêtre. Se fier à l'intuition ici rev
 seulement par « ça ne lit rien ». Les fonctions sont pures et testées.
 
 Le cadre fait un rapport 6:1 : un code tient sur une ligne d'une dizaine de
-caractères, et un cadre serré évite à Tesseract d'avoir à trier le texte utile du
+caractères, et un cadre serré évite au moteur d'avoir à trier le texte utile du
 décor de la carte.
 
 **Zoom** et **torche** sont pilotés par `applyConstraints` sur la piste vidéo. Le
@@ -52,33 +52,32 @@ zoom vise ×2,5 au démarrage, avec un curseur pour ajuster : les unités varien
 d'un appareil à l'autre — certains rendent un multiplicateur, d'autres une
 échelle arbitraire — d'où le calcul par rapport aux bornes annoncées.
 
-### Segmentation : bloc, pas ligne
+## Le moteur de lecture
 
-Tesseract est réglé en **PSM 6 (bloc unique)** et non PSM 7 (ligne unique). La
-raison tient à une mesure : la taille du viseur *en pixels vidéo* dépend de la
-hauteur de l'écran. Sur un conteneur court, le même cadre à l'écran couvre une
-bande 1,5 fois plus haute de l'image et embarque la bordure du cadre de la carte.
+**PP-OCRv6 « small »** (Baidu, licence Apache 2.0), exécuté par ONNX Runtime
+dans un Web Worker via [`ppu-paddle-ocr`](https://www.npmjs.com/package/ppu-paddle-ocr)
+(MIT). WebGPU quand le navigateur l'offre, WebAssembly sinon. Les modèles
+(31 Mo) sont servis depuis `public/modeles/` — jamais depuis un CDN tiers — et
+mis en cache par le navigateur (Cache API) : la deuxième visite ne télécharge
+rien.
 
-| Cadrage | PSM 7 | PSM 6 | PSM 3 | PSM 11 |
-|---|---|---|---|---|
-| serré (818×136) | ✅ | ✅ | ✅ | ✅ |
-| large (1189×198) | **vide** | ✅ | vide | bruit |
+Pourquoi ce moteur, et plus Tesseract. Tesseract est conçu pour des scans à
+plat ; PP-OCR est entraîné sur du texte photographié. Mesuré sur trois
+recadrages réels de viseur (`scripts/fixtures/`), six images bruitées chacun,
+image brute sans prétraitement :
 
-PSM 7 rend alors une chaîne vide, avec une confiance de zéro et sans lever la
-moindre erreur. Un test verrouille ce réglage.
+| Moteur | Poids | Cartes lues | Images bonnes | Fausses | Par passe |
+|---|---|---|---|---|---|
+| Tesseract, réglé (4 binarisations, grammaire, passe chiffres) | 5 Mo | 2/3 | — | 0 | 490 ms |
+| PP-OCRv6 tiny | 6 Mo | 2/3 | 10/18 | 0 | 190 ms |
+| PP-OCRv5 en mobile | 13 Mo | 2/3 | 12/18 | 0 | 320 ms |
+| **PP-OCRv6 small** | **31 Mo** | **3/3** | **15/18** | **0** | **380 ms** |
 
-## Prétraitement
-
-Deux binarisations sont essayées, dans l'ordre :
-
-1. **Otsu** — seuil global par maximisation de la variance inter-classe ;
-2. **Sauvola** — seuil local calculé par fenêtre à partir de la moyenne et de
-   l'écart-type.
-
-Otsu suffit sur une carte bien éclairée. Sauvola rattrape les reflets du vernis :
-un seuil global bascule toute une moitié d'image en blanc dès qu'un reflet la
-traverse, là où un seuil local relève simplement son propre seuil. Un test
-compare les deux sous éclairage inégal et vérifie que Sauvola l'emporte.
+Le moteur lit l'image **brute** : l'ancienne chaîne de prétraitement (Otsu,
+Sauvola, polarités inverses, rognage de la bande, effacement du liseré) a été
+mesurée inutile et retirée. Il ne reste que le recadrage à la résolution native
+et une mesure de netteté (Tenengrad seuillé) qui évite une passe sur une image
+vide. `scripts/ocr-bench.mjs` rejoue la mesure ci-dessus avec le vrai code.
 
 ## Transposition et résolution
 
@@ -153,7 +152,6 @@ peut trancher.
 |---|---|---|
 | `VITE_API_BASE` | — | URL du backend Python. Vide : résolution locale |
 | `VITE_BASE` | `/` | chemin de base (`/<dépôt>/` sur GitHub Pages) |
-| `VITE_TESSERACT_*` | — | servir le moteur OCR depuis son propre domaine |
 
 ## Déploiement
 
@@ -169,15 +167,15 @@ L'accès à la caméra exige HTTPS ; `localhost` fait exception.
 ## Tests
 
 ```bash
-npm test                      # 74 tests JS
+npm test                      # 107 tests JS
 python3 -m pytest backend     # 40 tests Python
 ```
 
 Couvrent l'extraction et la transposition des codes (des deux côtés, avec les
-mêmes cas), la géométrie du viseur, le prétraitement, l'appariement local et
-serveur, la régionalisation, les conflits de rareté, l'historique et l'export CSV.
+mêmes cas), la géométrie du viseur, la netteté, le chargement et la mise en
+cache des modèles, l'appariement local et serveur, la régionalisation, les
+conflits de rareté, l'historique et l'export CSV.
 
-Deux défauts trouvés par ces tests, qu'aucune relecture n'aurait attrapés :
-`logger: undefined` passé à Tesseract écrasait son journal par défaut et tuait
-les workers à la première image ; et PSM 7 rendait une chaîne vide, sans erreur
-ni indice, dès que le viseur couvrait une bande un peu plus haute.
+En navigateur, avec une caméra simulée : `scripts/harness/ui-e2e.mjs` (chaîne
+complète), `scripts/harness/time-to-lock.mjs` (délai de verrouillage),
+`scripts/ocr-bench.mjs` (le moteur sur les recadrages réels).
