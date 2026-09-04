@@ -1,0 +1,41 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+
+# Le front appelle /api/price ; Netlify route vers la fonction du même nom.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Application à page unique : toute route inconnue retombe sur l'index.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # La webcam est le coeur de l'application : `camera=(self)` doit rester ouvert.
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/assets/*"
+  # Vite empreinte les noms de fichiers : immuable sans risque.
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

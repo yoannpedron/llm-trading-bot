@@ -1,0 +1,65 @@
+# Publie le scanner Yu-Gi-Oh! sur GitHub Pages.
+#
+# Le déploiement Netlify reste la cible finale (c'est lui qui apporte la
+# fonction de prix). Pages sert de banc d'essai : l'application y tourne
+# entièrement, l'OCR compris, et bascule d'elle-même sur les cotes YGOPRODeck
+# puisque aucune fonction n'y répond.
+name: Pages — scanner Yu-Gi-Oh!
+
+on:
+  push:
+    branches: [claude/yugioh-card-price-ocr-daf5fd, main]
+    paths:
+      - 'yugioh-scanner/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement à la fois ; on laisse finir celui qui est en cours.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yugioh-scanner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: yugioh-scanner/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - name: Build
+        env:
+          # Le site est servi sous https://<user>.github.io/<repo>/
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Repli des routes inconnues sur l'index
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: yugioh-scanner/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

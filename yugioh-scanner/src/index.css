@@ -1,0 +1,239 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ */
+/* Jetons de thème                                                      */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  --color-abyss: #04060f;
+  --color-abyss-soft: #0a1020;
+  --color-ink: #e8edff;
+  --color-muted: #8b97b8;
+  --color-cyan: #22d3ee;
+  --color-violet: #a855f7;
+  --color-amber: #fbbf24;
+
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                 */
+/* ------------------------------------------------------------------ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-abyss);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* La molette ne doit pas faire rebondir la page pendant qu'on vise. */
+@media (pointer: coarse) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-cyan) 40%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Animations                                                           */
+/* ------------------------------------------------------------------ */
+
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6vw, -4vh, 0) scale(1.15);
+  }
+  66% {
+    transform: translate3d(-5vw, 5vh, 0) scale(0.92);
+  }
+}
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateY(-6%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(106%);
+    opacity: 0;
+  }
+}
+
+@keyframes corner-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes card-arrive {
+  0% {
+    opacity: 0;
+    transform: perspective(1400px) rotateY(-62deg) translateZ(-160px) scale(0.82);
+    filter: blur(14px) saturate(0.4);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0) saturate(1.35);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1400px) rotateY(0deg) translateZ(0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-160%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+
+@keyframes foil-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes halo-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes spark-out {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--spark-x), var(--spark-y)) scale(1.1);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilitaires                                                          */
+/* ------------------------------------------------------------------ */
+
+@utility glass {
+  background: color-mix(in oklab, white 5%, transparent);
+  border: 1px solid color-mix(in oklab, white 12%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+@utility rise {
+  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Le voile holographique : un dégradé conique qui glisse sous un mode de fusion
+   « color-dodge », donc lumineux sur les zones claires et discret sur le noir. */
+@utility foil {
+  background-image: conic-gradient(
+    from 210deg,
+    #ff3d81,
+    #ffd93d,
+    #6bff8f,
+    #3ddcff,
+    #a855f7,
+    #ff3d81
+  );
+  background-size: 260% 260%;
+  mix-blend-mode: color-dodge;
+  animation: foil-shift 7s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Accessibilité                                                        */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                               */
+/* ------------------------------------------------------------------ */
+
+/* Supprime le délai de 300 ms et le zoom au double-tap : on manipule des
+   boutons, pas du texte à agrandir. */
+body {
+  touch-action: manipulation;
+}
+
+/* Barre d'onglets basse : elle doit se poser au-dessus de l'indicateur
+   d'accueil des iPhone, pas dessous. */
+@utility safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Barre de défilement discrète pour les rails horizontaux. */
+@utility rail {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, white 20%, transparent) transparent;
+  -webkit-overflow-scrolling: touch;
+}
