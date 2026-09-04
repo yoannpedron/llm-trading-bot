@@ -1,9 +1,12 @@
 # Table fournisseurs consolidée
 
 `Table_fournisseurs_consolidee.xlsx` — annuaire fournisseurs Audika consolidé en **un seul onglet
-`Fournisseurs`**, table à plat : **une ligne par contact**, 190 lignes, 52 fournisseurs.
-Les informations fournisseur sont répétées sur chaque ligne du groupe pour que le tableau reste
-filtrable et triable tel quel (filtre automatique posé, volets figés).
+`Fournisseurs`**, présenté par blocs : **une ligne dédiée par fournisseur** (identité, code,
+domaine, ligne principale), puis **ses contacts rangés juste en dessous**. Les informations
+fournisseur ne sont jamais répétées. 52 fournisseurs, 184 contacts, 236 lignes.
+
+Tout est en **majuscules**, à la seule exception de la colonne `COURRIEL`. Les lignes de contact
+sont groupées sous leur fournisseur (repliables), avec filtre automatique et volets figés.
 
 ## Colonnes
 
@@ -14,8 +17,8 @@ filtrable et triable tel quel (filtre automatique posé, volets figés).
 | Code fournisseur | Référence seule, extraite du champ « N° COMPTE FRN AUDIKA » (`FSAB0010`, `V000112`). |
 | Code fournisseur 2 | Raison sociale du même champ (`ABIOXIR`). |
 | Domaine d'activité | Domaines cumulés en cas de fusion de doublons. |
-| Région / Centre(s) | Valeur de la ligne si elle est renseignée, sinon celle du fournisseur. |
-| Coordonnées téléphoniques | Ligne principale du fournisseur (standard / accueil / info en priorité), répétée sur ses lignes. |
+| Région / Centre(s) | Périmètre du fournisseur sur sa ligne dédiée ; sur une ligne de contact, uniquement si la source donne un centre propre à ce contact (cas SOPREMA). |
+| Coordonnées téléphoniques | Ligne principale du fournisseur (standard / accueil / info en priorité). |
 | Personne à contacter | Nom du contact, ou libellé du service quand la source ne nomme personne. |
 | Fonction | Fonction du contact. |
 | Numéro | Numéro(s) directs du contact (fixe / portable, séparés par ` / `). |
@@ -46,8 +49,9 @@ filtrable et triable tel quel (filtre automatique posé, volets figés).
   comptabilité…) désignent la ligne principale du fournisseur ; ils restent par ailleurs une ligne
   du tableau, au même titre qu'une personne nommée.
 - **Aucune donnée perdue** : les 185 lignes de contact des sources sont reprises, y compris les
-  contacts sans téléphone. Les fournisseurs sans aucun contact occupent une ligne avec les seules
-  informations société.
+  contacts sans téléphone. Un fournisseur sans aucun contact n'a que sa ligne dédiée.
+- **Casse** : tout est écrit en majuscules à l'écriture des cellules, sauf la colonne `COURRIEL`
+  (les adresses restent en minuscules, telles qu'elles s'écrivent).
 
 ## Points relevés pendant la consolidation
 

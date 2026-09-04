@@ -7,8 +7,9 @@ Colonnes :
     Region | Centre(s) | Coordonnees telephoniques | Personne a contacter | Fonction |
     Numero | Courriel | Commentaire
 
-Une ligne par contact ; les informations fournisseur sont repetees sur chaque ligne
-du groupe pour que le tableau reste filtrable et triable tel quel.
+Mise en page par blocs : une ligne dediee par fournisseur (identite, code, domaine,
+ligne principale), puis ses contacts ranges juste en dessous. Les informations
+fournisseur ne sont jamais repetees.
 
 Sources :
   - Annuaire_FRN.xlsx  (onglets "annuaire FRN contrats" et "annuaire FRN espaces verts")
@@ -254,10 +255,21 @@ F_HEAD = Font(name=ARIAL, size=10, bold=True, color="FFFFFF")
 F_CELL = Font(name=ARIAL, size=10)
 F_NOM = Font(name=ARIAL, size=10, bold=True)
 FILL_HEAD = PatternFill("solid", fgColor="1F3864")
-FILL_ALT = PatternFill("solid", fgColor="EEF2F8")
+FILL_ALT = PatternFill("solid", fgColor="F7F9FC")
+FILL_FRN = PatternFill("solid", fgColor="D9E2F3")
+MED = Side(style="medium", color="1F3864")
 THIN = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+BORDER_FRN = Border(left=THIN, right=THIN, top=MED, bottom=THIN)
 TOP = Alignment(vertical="top", wrap_text=True, horizontal="left")
+
+COL_COURRIEL = 12          # seule colonne conservee en minuscules
+
+
+def maj(valeur, colonne):
+    """Passe la valeur en majuscules, sauf la colonne des courriels."""
+    return valeur if colonne == COL_COURRIEL else str(valeur).upper()
+
 
 COLONNES = [
     ("Pôle", 13), ("Fournisseur", 28), ("Code fournisseur", 16),
@@ -274,8 +286,8 @@ ws.title = "Fournisseurs"
 ws["A1"] = "Annuaire fournisseurs consolidé"
 ws["A1"].font = F_TITRE
 ws["A2"] = ("Source : Annuaire_FRN.xlsx (onglets « annuaire FRN contrats » et « annuaire FRN "
-            "espaces verts »). Une ligne par contact ; les informations fournisseur sont "
-            f"répétées sur chaque ligne du groupe. Pôle non renseigné dans la source → « {POLE_DEFAUT} ».")
+            "espaces verts »). Une ligne dédiée par fournisseur, ses contacts rangés juste en "
+            f"dessous. Pôle non renseigné dans la source → « {POLE_DEFAUT} ».")
 ws["A2"].font = F_SOUS
 ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(COLONNES))
 ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(COLONNES))
@@ -283,7 +295,7 @@ ws["A2"].alignment = Alignment(vertical="center", wrap_text=True)
 ws.row_dimensions[2].height = 26
 
 for c, (titre, _) in enumerate(COLONNES, 1):
-    cell = ws.cell(row=3, column=c, value=titre)
+    cell = ws.cell(row=3, column=c, value=titre.upper())
     cell.font, cell.fill, cell.border = F_HEAD, FILL_HEAD, BORDER
     cell.alignment = Alignment(vertical="center", horizontal="left", wrap_text=True)
 ws.row_dimensions[3].height = 30
@@ -299,18 +311,12 @@ def hauteur(valeurs, largeurs, mini=15, maxi=409):
 
 
 r = 4
-bande = False
 for s in sorted(suppliers.values(), key=lambda x: norm_key(x["nom"])):
     code, code2, prefixe = split_compte(s["comptes"][0] if s["comptes"] else "")
     if prefixe:
         s["notes"].append(f"Compte saisi « {prefixe}/{code} » dans la source")
     if len(s["comptes"]) > 1:
         s["notes"].append("Autres comptes dans la source : " + " ; ".join(s["comptes"][1:]))
-    domaine = " ; ".join(s["domaines"])
-    tel_gen = min(s["tel_general"])[2] if s["tel_general"] else ""
-    region_frn = " ; ".join(s["regions"])
-    centre_frn = " ; ".join(s["centres"])
-    notes_frn = " ; ".join(s["notes"])
 
     vues, uniques = set(), []
     for l in s["lignes"]:
@@ -322,37 +328,49 @@ for s in sorted(suppliers.values(), key=lambda x: norm_key(x["nom"])):
         uniques.append(l)
     s["lignes"] = uniques
 
-    lignes = s["lignes"] or [{"contact": "", "fonction": "", "numero": "", "courriel": "",
-                              "commentaire": "", "notes": [], "region": "", "centre": "",
-                              "orpheline": False}]
-    for i, l in enumerate(lignes):
+    # ---- ligne dediee au fournisseur (identite, code, domaine, ligne principale)
+    valeurs = [
+        POLE_DEFAUT, s["nom"], code, code2, " ; ".join(s["domaines"]),
+        " ; ".join(s["regions"]), " ; ".join(s["centres"]),
+        min(s["tel_general"])[2] if s["tel_general"] else "",
+        "", "", "", "", " ; ".join(s["notes"]),
+    ]
+    for c, v in enumerate(valeurs, 1):
+        cell = ws.cell(row=r, column=c, value=maj(v, c))
+        cell.font = F_NOM if c in (2, 3) else F_CELL
+        cell.alignment = TOP
+        cell.fill = FILL_FRN
+        cell.border = BORDER_FRN
+    ws.row_dimensions[r].height = hauteur(valeurs, LARGEURS)
+    r += 1
+
+    # ---- ses contacts, ranges juste en dessous
+    for l in s["lignes"]:
         notes = list(l["notes"])
         if l["orpheline"]:
             notes.append("Numéro sans nom ni libellé dans la source : rattachement à confirmer")
-        if i == 0 and notes_frn:
-            notes.append(notes_frn)
         commentaire = " ; ".join(x for x in [l["commentaire"]] + notes if x)
-
         valeurs = [
-            POLE_DEFAUT, s["nom"], code, code2, domaine,
-            l["region"] or region_frn, l["centre"] or centre_frn, tel_gen,
-            l["contact"], l["fonction"], l["numero"], l["courriel"], commentaire,
+            "", "", "", "", "",
+            l["region"] if l["region"] not in s["regions"][:1] else "",
+            l["centre"] if l["centre"] not in s["centres"][:1] else "",
+            "", l["contact"], l["fonction"], l["numero"], l["courriel"], commentaire,
         ]
         for c, v in enumerate(valeurs, 1):
-            cell = ws.cell(row=r, column=c, value=v)
-            cell.font = F_NOM if c == 2 else F_CELL
+            cell = ws.cell(row=r, column=c, value=maj(v, c))
+            cell.font = F_CELL
             cell.alignment = TOP
             cell.border = BORDER
-            if bande:
-                cell.fill = FILL_ALT
+            cell.fill = FILL_ALT
         ws.row_dimensions[r].height = hauteur(valeurs, LARGEURS)
+        ws.row_dimensions[r].outlineLevel = 1     # repliable sous le fournisseur
         r += 1
-    bande = not bande                      # une bande de couleur par fournisseur
 
 last = r - 1
 for c, (_, w) in enumerate(COLONNES, 1):
     ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = w
-ws.freeze_panes = "C4"
+ws.sheet_properties.outlinePr.summaryBelow = False
+ws.freeze_panes = "A4"
 ws.auto_filter.ref = f"A3:{openpyxl.utils.get_column_letter(len(COLONNES))}{last}"
 
 out.save(OUT)
