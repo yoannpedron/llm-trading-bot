@@ -54,7 +54,9 @@ const SP = process.env.SP;
 const OPTIONS = JSON.parse(process.env.OPTIONS ?? '{}');
 
 const { lireIndexArt } = await import(path.join(APP, 'src/lib/art.js'));
-const { SCORE_MINIMAL, VoteArt } = await import(path.join(APP, 'src/lib/verdictArt.js'));
+const { SCORE_PROPOSE, VoteArt } = await import(path.join(APP, 'src/lib/verdictArt.js'));
+// Le seuil sous lequel une passe ne compte pas (ancien SCORE_MINIMAL).
+const SCORE_MINIMAL = SCORE_PROPOSE;
 const octets = fs.readFileSync(INDEX);
 const index = lireIndexArt(octets.buffer.slice(octets.byteOffset, octets.byteOffset + octets.byteLength));
 const ids = Array.from(index.ids);
@@ -215,6 +217,8 @@ try {
   // Une politique rend l'id accepté, ou null. Immédiate : sur la première
   // image seule. Deux images : les deux passes rendent le même id, chacune au
   // moins au score minimal (ce que fait VoteArt entre 0,70 et 0,85). Actuelle :
+  // Les lignes d'abord : une section qui plante plus bas ne doit pas les perdre.
+  if (SP) fs.writeFileSync(path.join(SP, 'art-bench.json'), JSON.stringify(toutesLignes, null, 1));
   // VoteArt telle qu'elle est, nourrie des deux passes dans l'ordre.
   const immediate = (S, M) => (l) => (l.trouveId !== null && l.score >= S && l.marge >= M ? l.trouveId : null);
   const deuxImages = (l) => (l.trouveId !== null && l.trouveId === l.bis.trouveId && l.score >= SCORE_MINIMAL && l.bis.score >= SCORE_MINIMAL ? l.trouveId : null);
@@ -236,7 +240,7 @@ try {
   const politiques = [];
   for (const S of [0.7, 0.75, 0.8, 0.85, 0.9]) for (const M of [0.02, 0.05, 0.08, 0.12]) politiques.push(evaluer(`immédiat score ≥ ${S.toFixed(2)}, marge ≥ ${M.toFixed(2)}`, immediate(S, M)));
   politiques.push(evaluer(`deux images d'accord, score ≥ ${SCORE_MINIMAL.toFixed(2)}`, deuxImages));
-  const politiqueActuelle = evaluer('actuelle (VoteArt : immédiat 0,85/0,05, sinon deux images ≥ 0,70)', actuelle);
+  const politiqueActuelle = evaluer('actuelle (VoteArt : zone sûre 0,85/0,05 ou 0,75/0,12, une seule image)', actuelle);
 
   console.log(`\nPolitiques d'acceptation (connues ${lignes.length}, inconnues ${negatives.inconnue.length}, sans carte ${negatives.sansCarte.length}) :`);
   console.log(`  ${'politique'.padEnd(46)} rappel   faux connues   faux inconnues   faux sans carte`);
