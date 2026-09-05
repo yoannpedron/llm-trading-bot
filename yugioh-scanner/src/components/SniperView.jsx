@@ -484,15 +484,21 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
               <p className="truncate text-donnee text-encre">
                 {ajout.nom}
                 {ajout.compte > 1 && <span className="ml-1 text-tertiaire">×{ajout.compte}</span>}
+                {ajout.confiance !== null && (
+                  <span className="ml-2 font-mono text-micro text-tertiaire">
+                    {/* Les deux chiffres qui ont décidé : à lire quand la carte est fausse. */}
+                    {ajout.confiance}&nbsp;% · marge {ajout.marge?.toFixed(2)}
+                  </span>
+                )}
               </p>
               <p className="truncate font-mono text-micro text-tertiaire">
                 {ajout.precis
-                  ? `Tirage lu : ${ajout.code}`
+                  ? `${ajout.lecture === 'unique' ? 'Tirage unique' : 'Tirage lu'} : ${ajout.code}${ajout.prix ? ` — ${ajout.prix}` : ''}`
                   : ajout.lecture === 'préparation'
-                    ? `Tirage probable : ${ajout.code} — lecteur de code en préparation (31 Mo, une fois)`
+                    ? 'Lecteur de code en préparation (31 Mo, une fois)…'
                     : ajout.lecture === 'en cours'
-                      ? `Tirage probable : ${ajout.code} — lecture du code…`
-                      : `Tirage probable : ${ajout.code} — ${ajout.lecture ?? 'code non lu'}`}
+                      ? 'Lecture du code de tirage…'
+                      : `Code non lu (${ajout.lecture ?? 'non tenté'}) — rapprochez-vous, ou précisez`}
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-1">

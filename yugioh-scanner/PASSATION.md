@@ -352,6 +352,33 @@ restreint au tirage lu (`avecTirageLu`) ; la fiche dit « code lu »,
 Vérifié dans le navigateur (`scripts/harness/ui-serie.mjs`) : bandeau,
 entrée « à préciser » dans le classeur, annulation, anti-doublon.
 
+### Retour du terrain (5 septembre, soir) et ce qui en a été fait
+
+L'utilisateur, sur son téléphone : « la lecture du tirage marche
+superbement ; l'identification de la carte donne trop de fausses cartes ;
+je ne veux pas de tirage estimé ; un prix à chaque tirage lu ». D'où :
+
+- **Identification** : la zone sûre exige maintenant score ≥ 0,85 et marge
+  ≥ 0,08 (ou 0,78 / 0,15), sur DEUX images de suite pour la même carte
+  (`PASSES_SURES`). Une image sûre isolée ne verrouille plus. Le banc
+  synthétique n'avait montré aucune fausse carte à 0,85/0,05 sur une image ;
+  l'appareil réel, si — les scores réels sont plus serrés que les scores
+  simulés.
+- **Tirage** : l'appariement du code (similarité 70, avance 5) est resté tel
+  quel, il n'a pas produit de faux tirage sur l'appareil. Un essai plus
+  strict (numéro exact, 80/15, deux lectures d'accord) a été écrit puis
+  retiré le même jour : il faisait baisser le taux de lecture pour un
+  problème qui n'existait pas. Le code est maintenant EXTRAIT de la lecture
+  (`extraireCode`) : « MP17-EN171ITTOTHEGY… » donnait 22 de similarité, le
+  code exact était dedans. Lecture tentée dès que la carte fait 45 % de la
+  hauteur, sur la première image sûre puis au verrouillage, puis jusqu'à six
+  relectures en série.
+- **Plus de tirage estimé** : en série, l'entrée est créée SANS tirage (badge
+  « Tirage à préciser », liste dans l'inventaire) tant que le code n'est pas
+  lu ; une carte à tirage unique n'attend rien. Le bandeau affiche
+  « Tirage lu : CODE — prix » dès que la cote est relevée, et la confiance et
+  la marge de l'identification, à lire quand la carte est fausse.
+
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
 - Revenir à un seul cadrage par carte dans l'index (4,5 Mo au lieu de 8,8)

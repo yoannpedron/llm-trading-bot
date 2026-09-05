@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AVANCE_MINIMALE, SIMILARITE_MINIMALE, apparierTirage, assezGrande, nettoyerLecture, tiragesDuCode } from '../src/lib/tirage.js';
+import { AVANCE_MINIMALE, SIMILARITE_MINIMALE, apparierTirage, assezGrande, extraireCode, nettoyerLecture, tiragesDuCode } from '../src/lib/tirage.js';
 
 const tirages = [
   { setCode: 'LOB-EN005', rarity: 'Ultra Rare', setName: 'Legend of Blue Eyes' },
@@ -22,6 +22,8 @@ test('une lecture abîmée est rapprochée du code le plus proche, si l’avance
   assert.equal(r.tirage?.setCode, 'LDK2-ENY10');
   assert.ok(r.similarite >= SIMILARITE_MINIMALE);
   assert.ok(r.avance >= AVANCE_MINIMALE);
+  const tronquee = apparierTirage('MP17-17', [{ setCode: 'MP17-EN171' }, { setCode: 'MP17-EN132' }]);
+  assert.equal(tronquee.tirage?.setCode, 'MP17-EN171', 'numéro tronqué mais sans ambiguïté');
 });
 
 test('sans ressemblance suffisante, aucun tirage n’est retenu', () => {
@@ -43,8 +45,17 @@ test('deux codes à égalité ne tranchent pas', () => {
 test('la carte doit être assez grande dans l’image', () => {
   const coins = (h) => [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: h }, { x: 0, y: h }];
   assert.equal(assezGrande(coins(1200), 1920), true);
-  assert.equal(assezGrande(coins(800), 1920), false);
+  assert.equal(assezGrande(coins(900), 1920), true);
+  assert.equal(assezGrande(coins(700), 1920), false);
   assert.equal(assezGrande(null, 1920), false);
+});
+
+test('le code est extrait d’une lecture qui a attrapé du texte autour', () => {
+  assert.equal(extraireCode('MP17-EN171ITTOTHEGYONCEPORCHOINWHENE'), 'MP17-EN171');
+  assert.equal(extraireCode('xx LDK2-FR001 1st'), 'LDK2-FR001');
+  assert.equal(extraireCode('bouillie'), 'BOUILLIE');
+  const r = apparierTirage('MP17-EN171ITTOTHEGYONCEPORCHOINWHENE', [{ setCode: 'MP17-EN171' }, { setCode: 'MP17-EN132' }]);
+  assert.equal(r.tirage?.setCode, 'MP17-EN171');
 });
 
 test('nettoyerLecture et tiragesDuCode', () => {

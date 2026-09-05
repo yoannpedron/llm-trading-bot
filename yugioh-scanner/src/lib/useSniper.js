@@ -41,7 +41,7 @@ const COTE_MAX = 1600;
  * saisie manuelle, pour les cas où la caméra ne peut pas.
  */
 /** Tentatives de lecture du code, au plus, pour une carte laissée devant l'objectif. */
-const RELECTURES_MAX = 4;
+const RELECTURES_MAX = 6;
 
 /**
  * Lit le code de tirage sur l'image figée. Ne rejette jamais : une lecture
@@ -94,6 +94,8 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
   const antiDoublonRef = useRef(new AntiDoublon());
   /** Suivi de la lecture du code pour la carte ajoutée en dernier (relectures). */
   const relectureRef = useRef(null);
+  /** Lecture du code lancée sur la première image sûre, avant le verrouillage. */
+  const preLectureRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const trackRef = useRef(null);
@@ -460,7 +462,20 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
         propositionsRef.current = [];
         setPropositions([]);
       }
-      if (!verdict.accepted) return;
+      if (!verdict.accepted) {
+        // Première image sûre : le code est déjà lu sur cette image, pour
+        // que la deuxième lecture (au verrouillage) puisse la confirmer —
+        // deux images différentes, pas deux fois la même.
+        if (verdict.zone === 'sure' && verdict.suite === 1 && r.quad) {
+          const coinsPre = r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur }));
+          if (assezGrande(coinsPre, still.height)) {
+            const index = await loadCardIndex();
+            const resolu = resultatDepuisArt(index, r.candidats[0].id, { score: verdict.score, marge: verdict.marge, sens: r.sens, quad: r.quad });
+            if (resolu.status !== 'no_match') preLectureRef.current = { id: resolu.card.id, promesse: lireTirageSurImage(still, coinsPre, resolu) };
+          }
+        }
+        return;
+      }
       // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
       // maintenant démonterait le formulaire sous les doigts.
       if (manualRef.current) return;
@@ -476,11 +491,23 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
       // première lecture (31 Mo), la carte s'affiche avant.
       const coinsStill = r.quad ? r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur })) : null;
 
+      // Deux images ont déjà été jugées sûres : le code est lu sur les deux
+      // (la première lecture est partie avant le verrouillage), la première
+      // qui rend un tirage l'emporte.
+      const pre = preLectureRef.current;
+      preLectureRef.current = null;
+      const lecturesInitiales = async () => {
+        if (pre && pre.id === resolved.card.id) {
+          const premiere = await pre.promesse;
+          if (premiere?.tirage) return premiere;
+        }
+        return lireTirageSurImage(still, coinsStill, resolved);
+      };
+
       if (serieRef.current && onSerieRef.current) {
-        // La même carte encore devant l'objectif n'est pas un doublon. Si son
-        // code n'a pas pu être lu la première fois (moteur en chargement,
-        // image floue), on réessaie sur les images suivantes, trois fois au
-        // plus, et l'entrée est corrigée après coup.
+        // La même carte encore devant l'objectif n'est pas un doublon. Tant
+        // que le code n'est pas confirmé, on relit sur les images suivantes,
+        // et l'entrée est corrigée après coup.
         if (antiDoublonRef.current.dejaVu(resolved.card.id)) {
           const suivi = relectureRef.current;
           if (suivi && suivi.id === resolved.card.id && !suivi.enCours && !suivi.lu && suivi.essais < RELECTURES_MAX && coinsStill && assezGrande(coinsStill, still.height)) {
@@ -496,7 +523,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
           return;
         }
         antiDoublonRef.current.noter(resolved.card.id);
-        const lecture = lireTirageSurImage(still, coinsStill, resolved);
+        const lecture = lecturesInitiales();
         const corriger = onSerieRef.current(resolved, lecture);
         const suivi = { id: resolved.card.id, corriger: typeof corriger === 'function' ? corriger : null, essais: 1, enCours: true, lu: false };
         relectureRef.current = suivi;
@@ -509,7 +536,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
         return;
       }
 
-      const lecture = lireTirageSurImage(still, coinsStill, resolved);
+      const lecture = lecturesInitiales();
       setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
       setResult({ ...resolved, lectureTirage: coinsStill && assezGrande(coinsStill, still.height) ? 'en cours' : 'carte trop petite' });
       lecture.then((lu) => {
@@ -605,6 +632,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     setLecture(null);
     propositionsRef.current = [];
     setPropositions([]);
+    preLectureRef.current = null;
     setAttempts(0);
     setFailure(null);
   }, []);

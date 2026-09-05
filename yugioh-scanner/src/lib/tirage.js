@@ -11,8 +11,8 @@
  * la bande du code se lit dès que la carte occupe 60 % de la hauteur de
  * l'image ; avec une similarité d'au moins 70 et une avance d'au moins 5 sur
  * le deuxième code de la carte, 100 % des appariements étaient justes pour
- * 77 % de rappel. Ce module est pur : la lecture elle-même est dans
- * `lireTirage.js`.
+ * 77 % de rappel — et sur l'appareil réel, l'utilisateur n'a pas vu de faux
+ * tirage. Ce module est pur : la lecture elle-même est dans `lireTirage.js`.
  */
 
 import { codeSimilarity } from './match.js';
@@ -21,8 +21,12 @@ import { setCodeMatchKey } from './parse.js';
 /** Bande du code sur une carte redressée, en fractions de sa largeur et hauteur. */
 export const BANDE_CODE = { x0: 0.45, x1: 0.93, y0: 0.722, y1: 0.758 };
 
-/** Hauteur minimale de la carte, en fraction de la hauteur de l'image, pour tenter une lecture. */
-export const HAUTEUR_LISIBLE = 0.55;
+/**
+ * Hauteur minimale de la carte, en fraction de la hauteur de l'image, pour
+ * tenter une lecture. Mesuré : à 50 % le code se lit une fois sur deux,
+ * et une lecture ratée ne coûte qu'une passe — on tente dès 45 %.
+ */
+export const HAUTEUR_LISIBLE = 0.45;
 
 export const SIMILARITE_MINIMALE = 70;
 export const AVANCE_MINIMALE = 5;
@@ -47,6 +51,31 @@ export function nettoyerLecture(texte) {
 }
 
 /**
+ * Ce qui, dans la lecture, ressemble à un code de tirage : « MP17-EN171 »
+ * au milieu de « MP17-EN171ITTOTHEGY… » quand la bande a attrapé un bout de
+ * texte. Sans cela, le texte parasite noyait la similarité (22 sur une
+ * lecture qui contenait le code exact). À défaut de motif, la lecture
+ * nettoyée entière.
+ */
+export function extraireCode(lecture) {
+  const motif = /[A-Z0-9]{2,5}-[A-Z]{0,2}[A-Z]?[0-9]{2,4}/;
+  // D'abord mot par mot (les espaces de l'OCR séparent le code du reste),
+  // puis dans la lecture recollée (le texte parasite collé au code).
+  const mots = String(lecture ?? '')
+    .toUpperCase()
+    .replace(/[‐-―−_]/g, '-')
+    .split(/[^A-Z0-9-]+/)
+    .filter(Boolean);
+  for (const mot of mots) {
+    const trouve = motif.exec(mot);
+    if (trouve) return trouve[0];
+  }
+  const propre = nettoyerLecture(lecture);
+  const trouve = motif.exec(propre);
+  return trouve ? trouve[0] : propre;
+}
+
+/**
  * Le tirage de la carte dont le code ressemble le plus à la lecture.
  *
  * @param {string} lecture texte brut lu dans la bande
@@ -56,7 +85,7 @@ export function nettoyerLecture(texte) {
  *   `tirage` est nul si la lecture ne désigne pas un code assez sûrement
  */
 export function apparierTirage(lecture, printings) {
-  const lu = setCodeMatchKey(nettoyerLecture(lecture));
+  const lu = setCodeMatchKey(extraireCode(lecture));
   const vide = { tirage: null, similarite: 0, avance: 0, lecture: lu, candidats: [] };
   if (!lu || lu.length < 5 || !printings?.length) return vide;
 
@@ -88,3 +117,4 @@ export function tiragesDuCode(printings, tirage) {
   const memes = (printings ?? []).filter((p) => setCodeMatchKey(p.setCode) === cle);
   return memes.length ? memes : [tirage];
 }
+

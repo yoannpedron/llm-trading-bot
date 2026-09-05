@@ -17,7 +17,8 @@ import { BANDE_CODE, apparierTirage, assezGrande } from './tirage.js';
 
 const LARGEUR = 813;
 const HAUTEUR = 1185;
-const ZOOM = 2;
+/** Hauteur visée de la bande donnée au moteur : mesuré, il lit mieux vers 80 px de haut. */
+const HAUTEUR_BANDE = 80;
 
 /** Démarre le moteur OCR en avance (facultatif). */
 export const preparerLecture = (onProgress) => warmUp(onProgress);
@@ -44,10 +45,11 @@ export async function lireTirage(image, coins, printings) {
 
   const source = new OffscreenCanvas(LARGEUR, HAUTEUR);
   source.getContext('2d').putImageData(new ImageData(carte.data, carte.width, carte.height), 0, 0);
-  const bande = new OffscreenCanvas(w * ZOOM, h * ZOOM);
+  const zoom = Math.max(2, Math.round(HAUTEUR_BANDE / h));
+  const bande = new OffscreenCanvas(w * zoom, h * zoom);
   const bx = bande.getContext('2d');
   bx.imageSmoothingQuality = 'high';
-  bx.drawImage(source, x, y, w, h, 0, 0, w * ZOOM, h * ZOOM);
+  bx.drawImage(source, x, y, w, h, 0, 0, w * zoom, h * zoom);
 
   const { text } = await recognize(bande);
   const appariement = apparierTirage(text, printings);

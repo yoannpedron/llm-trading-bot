@@ -15,23 +15,32 @@ const index = buildSearchIndex({
   ],
 });
 
-test('un score sûr avec une marge nette est accepté à la première image', () => {
+test('une carte sûre n’est verrouillée qu’à la deuxième image de suite', () => {
   const vote = new VoteArt();
-  const v = vote.cast([{ id: 46986414, score: SCORE_SUR }, { id: 1, score: SCORE_SUR - MARGE_SURE }]);
-  assert.equal(v.accepted, true);
-  assert.equal(v.id, 46986414);
-  assert.equal(v.zone, 'sure');
+  const sure = [{ id: 46986414, score: SCORE_SUR + 0.01 }, { id: 1, score: SCORE_SUR + 0.01 - MARGE_SURE - 0.01 }];
+  const premiere = vote.cast(sure);
+  assert.equal(premiere.accepted, false);
+  assert.equal(premiere.zone, 'sure');
+  assert.equal(premiere.suite, 1);
+  const seconde = vote.cast(sure);
+  assert.equal(seconde.accepted, true);
+  assert.equal(seconde.id, 46986414);
 });
 
-test('un score moyen n’est accepté qu’avec une marge large, jamais par répétition', () => {
+test('une passe sûre sur une autre carte, ou une passe moyenne, remet le compte à zéro', () => {
   const vote = new VoteArt();
-  const serre = [{ id: 7, score: 0.78 }, { id: 8, score: 0.7 }];
-  assert.equal(vote.cast(serre).accepted, false);
-  // La même lecture une deuxième fois ne change rien : deux images d'un
-  // téléphone immobile ne sont pas deux témoins.
-  assert.equal(vote.cast(serre).accepted, false);
+  const a = [{ id: 7, score: 0.95 }, { id: 8, score: 0.5 }];
+  const b = [{ id: 9, score: 0.95 }, { id: 8, score: 0.5 }];
+  vote.cast(a);
+  assert.equal(vote.cast(b).accepted, false, 'autre carte');
+  assert.equal(vote.cast(b).accepted, true);
+  vote.reset();
+  vote.cast(a);
+  assert.equal(vote.cast([{ id: 7, score: 0.78 }, { id: 8, score: 0.7 }]).accepted, false, 'marge serrée');
+  assert.equal(vote.cast(a).accepted, false, 'il faut repartir de zéro');
+  assert.equal(vote.cast(a).accepted, true);
   const large = [{ id: 7, score: SCORE_FERME }, { id: 8, score: SCORE_FERME - MARGE_FERME }];
-  assert.equal(vote.cast(large).accepted, true);
+  assert.equal(zoneDe(large).zone, 'sure');
 });
 
 test('entre les deux, les trois meilleures cartes sont proposées ; en dessous, rien', () => {
@@ -41,6 +50,7 @@ test('entre les deux, les trois meilleures cartes sont proposées ; en dessous, 
   // Un score correct mais talonné par une autre carte : on propose, on ne tranche pas.
   assert.equal(new VoteArt().cast([{ id: 1, score: 0.8 }, { id: 2, score: 0.76 }]).accepted, false);
   assert.equal(new VoteArt().cast([{ id: 1, score: 0.8 }, { id: 2, score: 0.76 }]).zone, 'proposer');
+  assert.equal(zoneDe([{ id: 1, score: 0.86 }, { id: 2, score: 0.8 }]).zone, 'proposer', 'marge 0,06 : plus assez');
   const rien = zoneDe([{ id: 1, score: SCORE_PROPOSE - 0.01 }]);
   assert.equal(rien.zone, 'rien');
   assert.equal(rien.id, null);

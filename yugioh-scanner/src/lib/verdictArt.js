@@ -5,10 +5,11 @@
  * carte). Trois zones, mesurées sur le banc étendu (`scripts/art-bench.mjs` :
  * 200 cartes connues, 60 cartes absentes de l'index, 40 scènes sans carte) :
  *
- *   - **sûre** : score ≥ 0,85 et marge ≥ 0,05, OU score ≥ 0,75 et marge ≥ 0,12.
- *     La carte est verrouillée à cette image. Mesuré : 77,5 % des bonnes
- *     cartes, 0,5 % de mauvaises sur les scènes connues (une sur 200), 0 %
- *     sur les cartes inconnues, 0 % sur les scènes sans carte ;
+ *   - **sûre** : score ≥ 0,85 et marge ≥ 0,08, OU score ≥ 0,78 et marge ≥ 0,15,
+ *     et cela sur `PASSES_SURES` images de suite pour la même carte. Sur le
+ *     banc, une seule image sûre à 0,85/0,05 ne laissait passer aucune
+ *     fausse carte ; sur l'appareil réel, si. Les marges sont relevées et
+ *     la deuxième image exigée ;
  *   - **à proposer** : score ≥ 0,70 et marge ≥ 0,03. On ne tranche pas : les
  *     trois meilleures cartes sont proposées à l'utilisateur, qui touche la
  *     sienne. Mesuré : la bonne est dans les trois dans 8 cas sur 19 ; 13
@@ -27,12 +28,19 @@
 import { cardFromIndex } from './cardIndex.js';
 
 export const SCORE_SUR = 0.85;
-export const MARGE_SURE = 0.05;
-export const SCORE_FERME = 0.75;
-export const MARGE_FERME = 0.12;
+export const MARGE_SURE = 0.08;
+export const SCORE_FERME = 0.78;
+export const MARGE_FERME = 0.15;
 export const SCORE_PROPOSE = 0.7;
 export const MARGE_PROPOSE = 0.03;
 export const NOMBRE_PROPOSITIONS = 3;
+/**
+ * Passes consécutives dans la zone sûre, sur la même carte, avant de
+ * verrouiller. Sur l'appareil réel, une seule image sûre a produit trop de
+ * fausses cartes : la deuxième image coûte un tiers de seconde et écarte les
+ * lectures sûres d'un instant (reflet, main qui passe).
+ */
+export const PASSES_SURES = 2;
 
 /**
  * La zone d'une passe.
@@ -55,22 +63,40 @@ export function zoneDe(candidats) {
 }
 
 /**
- * Le verdict d'une suite de passes. Sans mémoire désormais : la décision
- * tient à la passe seule (voir l'en-tête). La classe reste pour que le viseur
- * garde un point d'appel unique, et pour `reset()`.
+ * Le verdict d'une suite de passes : la zone sûre, `PASSES_SURES` fois de
+ * suite sur la même carte. Une passe sûre sur une autre carte, ou une passe
+ * hors zone sûre, remet le compte à zéro.
  */
 export class VoteArt {
+  constructor({ passes = PASSES_SURES } = {}) {
+    this.passes = passes;
+    this.dernier = null;
+    this.suite = 0;
+  }
+
   /**
    * @param {Array<{id: number, score: number}>} candidats triés par score
    * @returns {{accepted: boolean, id: number|null, score: number, marge: number, zone: string,
-   *   propositions: Array<{id: number, score: number}>}}
+   *   suite: number, propositions: Array<{id: number, score: number}>}}
    */
   cast(candidats) {
     const z = zoneDe(candidats);
-    return { accepted: z.zone === 'sure', id: z.zone === 'sure' ? z.id : null, score: z.score, marge: z.marge, zone: z.zone, propositions: z.propositions };
+    if (z.zone === 'sure' && z.id === this.dernier) this.suite += 1;
+    else if (z.zone === 'sure') {
+      this.dernier = z.id;
+      this.suite = 1;
+    } else {
+      this.dernier = null;
+      this.suite = 0;
+    }
+    const accepted = z.zone === 'sure' && this.suite >= this.passes;
+    return { accepted, id: accepted ? z.id : null, score: z.score, marge: z.marge, zone: z.zone, suite: this.suite, propositions: z.propositions };
   }
 
-  reset() {}
+  reset() {
+    this.dernier = null;
+    this.suite = 0;
+  }
 }
 
 /**

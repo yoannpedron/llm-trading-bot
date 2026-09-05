@@ -6,9 +6,11 @@ import Inventaire from './components/Inventaire.jsx';
 import Journal from './components/Journal.jsx';
 import SniperView from './components/SniperView.jsx';
 import { entryKey } from './lib/collection.js';
+import { conditionPrice } from './lib/condition.js';
+import { euros } from './lib/format.js';
 import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
 import { codePourRegion } from './lib/region.js';
-import { tirageProbable } from './lib/serie.js';
+import { tiragesPourRegion } from './lib/region.js';
 import { moteur } from './lib/ocr.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
@@ -42,6 +44,9 @@ const ONGLETS = [
 /** Durée d'affichage du bandeau « ajouté » du mode série. */
 const BANDEAU_MS = 6000;
 
+/** L'entrée d'une carte dont le tirage n'est pas encore connu. */
+const SANS_TIRAGE = { setCode: '', setName: '', rarity: '', rarityCode: '' };
+
 export default function App() {
   const collection = useCollection();
   const journal = useJournal();
@@ -59,17 +64,20 @@ export default function App() {
   const aRemplacer = useRef(null);
   const ajouterEnSerie = useCallback(
     (resolved, lecture) => {
-      const probable = tirageProbable(resolved.printings, region);
-      const entree = entreeDepuisScan(resolved, null, probable, region);
+      // Pas de tirage estimé : l'entrée attend le code lu sur la carte, ou
+      // le choix de l'utilisateur. Une carte à tirage unique n'attend rien.
+      const tirages = tiragesPourRegion(resolved.printings, region);
+      const unique = tirages.length === 1 ? tirages[0] : null;
+      const entree = entreeDepuisScan(resolved, null, unique ?? SANS_TIRAGE, region);
       if (!entree) return;
-      const cle = collection.track(entree.carte, entree.tirage, undefined, { tirageAPreciser: true });
+      const cle = collection.track(entree.carte, entree.tirage, undefined, { tirageAPreciser: !unique });
       journal.consignerIdentification(ficheDepuisScan(resolved, null, region));
       journal.consignerEnregistrement(entree.carte.id);
       const compte = (collection.entryFor?.(cle)?.count ?? 0) + 1;
       // Le lecteur de code (31 Mo) se télécharge à la première carte assez
       // proche : on le dit dans le bandeau plutôt que de laisser attendre.
-      const lecteurAPreparer = !moteur().provider && Boolean(resolved.quad) && (resolved.printings?.length ?? 0) > 1;
-      setAjout({ cle, resolved, nom: entree.carte.name, image: entree.carte.images?.[0]?.small ?? entree.carte.image, code: entree.tirage.setCode, compte, precis: false, lecture: lecteurAPreparer ? 'préparation' : 'en cours', at: Date.now() });
+      const lecteurAPreparer = !moteur().provider && Boolean(resolved.quad) && tirages.length > 1;
+      setAjout({ cle, resolved, nom: entree.carte.name, image: entree.carte.images?.[0]?.small ?? entree.carte.image, code: unique?.setCode ?? null, compte, precis: Boolean(unique), lecture: unique ? 'unique' : lecteurAPreparer ? 'préparation' : 'en cours', confiance: resolved.confidence ?? null, marge: resolved.marge ?? null, at: Date.now() });
       // La correction par le code lu, maintenant ou à une relecture : la clé
       // de l'entrée suit le tirage, on la garde à jour ici.
       let cleCourante = cle;
@@ -98,6 +106,15 @@ export default function App() {
     const minuterie = setTimeout(() => setAjout((courant) => (courant?.at === ajout.at ? null : courant)), BANDEAU_MS);
     return () => clearTimeout(minuterie);
   }, [ajout]);
+
+  /* Le prix du tirage lu, dès que la cote est relevée : il vient de la ligne
+     d'inventaire, pas du bandeau, pour ne pas le calculer deux fois. */
+  const entreeAjout = ajout ? collection.entryFor(ajout.cle) : null;
+  const ajoutAffiche = useMemo(() => {
+    if (!ajout) return null;
+    const { value } = entreeAjout?.price ? conditionPrice(entreeAjout.price, entreeAjout.condition) : { value: null };
+    return { ...ajout, prix: value != null ? euros(value) : null };
+  }, [ajout, entreeAjout]);
 
   const annulerAjout = useCallback(() => {
     if (!ajout) return;
@@ -304,7 +321,7 @@ export default function App() {
             onRegion={setRegion}
             serie={serie}
             onSerie={setSerie}
-            ajout={ajout}
+            ajout={ajoutAffiche}
             onAnnuler={annulerAjout}
             onPreciser={preciserAjout}
           />

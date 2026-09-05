@@ -255,13 +255,15 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
   /** Remplace le tirage d'une entrée et relève la cote du nouveau. */
   const remplacerTirage = useCallback(
     (key, printing) => {
+      const source = entriesRef.current.find((entry) => entry.key === key);
+      if (!source || !printing) return;
       oublier(key);
-      setEntries((current) => {
-        const suivantes = withTirage(current, key, printing);
-        const nouvelle = suivantes.find((entry) => entry.cardId === current.find((e) => e.key === key)?.cardId && entry.setCode === printing?.setCode && entry.rarity === printing?.rarity);
-        if (nouvelle) loadPrice(nouvelle);
-        return suivantes;
-      });
+      const suivantes = withTirage(entriesRef.current, key, printing);
+      setEntries(suivantes);
+      // La cote du nouveau tirage, tout de suite : c'est ce qu'on attend
+      // d'un tirage lu.
+      const nouvelle = suivantes.find((entry) => entry.cardId === source.cardId && entry.setCode === printing.setCode && entry.rarity === printing.rarity);
+      if (nouvelle) loadPrice(nouvelle);
     },
     [oublier, loadPrice],
   );
