@@ -133,6 +133,16 @@ export default function FicheCarte({
           </p>
         )}
 
+        {fiche.parIllustration && (
+          <p className="mt-3 flex gap-2 rounded-controle border border-trait bg-relief px-3 py-2 text-donnee text-second">
+            <span aria-hidden>◎</span>
+            <span>
+              Reconnue par son illustration. Le tirage se lit sur la carte, sous l’illustration
+              à droite : un code comme «&nbsp;LDK2-FR001&nbsp;».
+            </span>
+          </p>
+        )}
+
         {/* --- Choix de rareté, ou cote puis caractéristiques ----------------
             Quand une rareté doit être choisie, c'est LA décision de l'écran :
             elle fixe la cote et la ligne d'inventaire. Elle passe donc avant
@@ -140,10 +150,13 @@ export default function FicheCarte({
             se retrouvait hors de l'écran sur un téléphone. */}
         {choixRequis ? (
           <fieldset className="mt-3 min-w-0">
-            <legend className="intitule">Rareté de votre exemplaire</legend>
+            <legend className="intitule">
+              {fiche.parIllustration ? 'Tirage de votre exemplaire' : 'Rareté de votre exemplaire'}
+            </legend>
             <p className="mt-1 text-donnee text-second">
-              Ce code existe en {options.length} raretés. La caméra ne voit pas l’holographie, et
-              c’est la rareté qui fixe la cote.
+              {fiche.parIllustration
+                ? `Cette carte existe en ${options.length} tirages. Le code imprimé sous l’illustration désigne le vôtre ; c’est lui qui fixe la cote.`
+                : `Ce code existe en ${options.length} raretés. La caméra ne voit pas l’holographie, et c’est la rareté qui fixe la cote.`}
             </p>
             <ul className="mt-2 divide-y divide-trait border-y border-trait">
               {options.map((option) => (
@@ -158,6 +171,15 @@ export default function FicheCarte({
                         <PastilleRarete rarete={option.rarity} />
                       </span>
                       <span className="mt-0.5 block truncate pl-4 font-mono text-micro text-tertiaire">
+                        {/* Le code d'abord quand c'est lui que l'utilisateur
+                            cherche sur sa carte (identification par
+                            l'illustration) ; le nom de la série suit. */}
+                        {fiche.parIllustration && option.setCode ? (
+                          <>
+                            <span className="text-second">{option.setCode}</span>
+                            {' · '}
+                          </>
+                        ) : null}
                         {option.setName}
                       </span>
                     </span>

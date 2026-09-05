@@ -24,20 +24,26 @@ const context = await browser.newContext({
 const page = await context.newPage();
 
 const external = /fonts\.(googleapis|gstatic)|ERR_|Failed to load resource|net::/i;
+const traces = [];
 page.on('console', (m) => {
   if (m.type() === 'error' && !external.test(m.text())) errors.push(m.text());
+  if (m.text().startsWith('[viseur]')) traces.push(m.text());
 });
 page.on('pageerror', (e) => {
   if (!external.test(e.message)) errors.push(`${e.message}\n${(e.stack ?? '').split('\n').slice(0, 4).join('\n')}`);
 });
 
+const depart = Date.now();
 await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 30000 });
 
-// Le viseur.
-await page.waitForSelector('text=/Cadrez le code|Lecture en cours|Code repéré/', { timeout: 15000 });
-await page.waitForTimeout(1200);
-await page.screenshot({ path: `${SP}/ui-viseur.png` });
+// Le viseur peut verrouiller dès la première image, en moins d'une seconde :
+// on n'attend pas un texte intermédiaire, on attend l'écran de résultat, et
+// l'on note au passage si le viseur a été vu.
+const viseurVu = await page
+  .waitForSelector('text=/Montrez une carte|Aucune carte|Carte repérée|Carte reconnue|Téléchargement de l’index|Préparation de l’index/', { timeout: 3000 })
+  .then(() => true)
+  .catch(() => false);
 const torche = await page.getByRole('button', { name: /torche/i }).count();
 
 // La lecture aboutit : l'écran bascule sur les deux zones.
@@ -45,8 +51,11 @@ const found = await page
   .waitForSelector('.ygo-card', { timeout: 90000 })
   .then(() => true)
   .catch(() => false);
+const verrou = (Date.now() - depart) / 1000;
+console.log(`viseur vu avant le verrouillage : ${viseurVu ? 'oui' : 'non (verrouillé avant l’affichage)'}`);
 
 if (found) {
+  console.log(`verrouillage ${verrou.toFixed(1)} s après l'ouverture de la page (index compris)`);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${SP}/ui-resultat.png` });
 
@@ -61,10 +70,12 @@ if (found) {
   console.log(`commandes : ${rarete} bouton(s) de rareté, ${valider} bouton Enregistrer`);
 } else {
   console.log(`viseur : bouton torche=${torche} — AUCUNE lecture aboutie`);
-  const lu = await page.locator('text=/« .* »/').count();
-  console.log(`  texte OCR affiché : ${lu ? 'oui' : 'non'}`);
+  const etat = await page.locator('p[aria-live]').first().innerText().catch(() => '?');
+  console.log(`  ligne d'état : ${etat}`);
+  await page.screenshot({ path: `${SP}/ui-echec.png` });
   await page.screenshot({ path: `${SP}/ui-echec.png` });
 }
 
+console.log(traces.slice(0, 12).map((t) => `  ${t}`).join('\n'));
 console.log(errors.length ? `PREMIERE ERREUR :\n${errors[0]}` : 'aucune erreur console');
 await browser.close();

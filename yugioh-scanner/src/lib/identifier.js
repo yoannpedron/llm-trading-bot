@@ -26,6 +26,23 @@ import { affiner, carteDepuisArt, dilater, homographie, noirceur, remettreEchell
 export const COTE_ART = 96;
 
 /**
+ * Largeur de l'image de détection dans l'application. Mesuré sur le banc :
+ * 320 px perdaient les petites cartes (56 % → 88 % à 448 px sur les
+ * moyennes) ; au-delà, le coût de Hough croît sans gain.
+ */
+export const LARGEUR_DETECTION_APP = 448;
+
+/**
+ * Réduit une image (ImageData) à `largeur` pixels de large, par moyenne de
+ * zone. C'est l'image que voit la détection ; l'identification lit ensuite
+ * l'image d'origine à travers les contours trouvés.
+ */
+export function reduireImage(image, largeur) {
+  const echelle = Math.min(1, largeur / image.width);
+  return recadrerReduire(image, { x: 0, y: 0, w: image.width, h: image.height }, echelle);
+}
+
+/**
  * Empreinte de l'illustration d'une carte dont on connaît les coins dans
  * `imageData`, sans redresser la carte entière.
  *

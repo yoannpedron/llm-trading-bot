@@ -55,6 +55,9 @@ export function ficheDepuisScan(scan, detail = null) {
     lectureBrute: approchee ? (scan.read ?? null) : null,
     confiance: typeof scan.confidence === 'number' ? scan.confidence : null,
     methode: scan.method ?? null,
+    // Identifiée par son illustration : le visuel est la preuve, et le code
+    // d'extension n'a pas été lu — c'est le tirage qui reste à désigner.
+    parIllustration: scan.method === 'art',
     saisieManuelle: typeof scan.source === 'string' && scan.source.endsWith(':manual'),
 
     /* --- caractéristiques -------------------------------------------- */
@@ -147,7 +150,9 @@ export function entreeDepuisScan(scan, detail, rarete) {
       level: fiche.niveau,
     },
     tirage: {
-      setCode: fiche.code,
+      // Le code lu s'il y en a un ; sinon celui du tirage choisi (identification
+      // par l'illustration, où le code n'est pas lu).
+      setCode: fiche.code ?? rarete.setCode ?? null,
       setName: rarete.setName,
       rarity: rarete.rarity,
       rarityCode: rarete.rarityCode,

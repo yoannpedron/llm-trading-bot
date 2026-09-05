@@ -81,3 +81,15 @@ export function reticleRect(container, { ratio = RETICLE_RATIO, fill = 0.82, max
     height,
   };
 }
+
+/**
+ * L'inverse : un point en pixels natifs de la vidéo, ramené en pixels du
+ * conteneur — pour dessiner sur l'écran ce que la détection a trouvé dans
+ * l'image. Un point peut tomber hors du conteneur : la partie rognée par
+ * `object-fit: cover` existe dans l'image, pas à l'écran.
+ */
+export function toContainerPoint(point, video, container) {
+  const scale = coverScale(video, container);
+  const offset = coverOffset(video, container);
+  return { x: point.x * scale - offset.x, y: point.y * scale - offset.y };
+}

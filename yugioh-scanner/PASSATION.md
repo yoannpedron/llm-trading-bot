@@ -206,6 +206,93 @@ première chose à essayer.
 
 ---
 
+## Le changement de méthode : l'illustration identifie la carte, plus le code
+
+**État (5 septembre 2026) : branché dans le viseur, mesuré sur un banc
+synthétique, PAS ENCORE mesuré sur un téléphone avec une vraie carte.**
+
+### Pourquoi
+
+Lire une inscription de deux millimètres reste le maillon fragile quel que soit
+le moteur : il faut viser, être net, être près. Les applications de référence
+n'identifient pas la carte par le code mais par son **illustration**, qui
+occupe la moitié de la carte et se reconnaît à trente centimètres, de travers,
+sous un reflet. Le code ne sert qu'à distinguer les tirages.
+
+### Comment (`src/lib/`)
+
+| Module | Rôle |
+|---|---|
+| `art.js` | empreinte d'une illustration : vignette 16×16 centrée-réduite (corrélation), DCT 64 bits (Hamming), couleur 4×4 ; index plat sérialisé ; recherche à deux étages (présélection Hamming, puis score complet) |
+| `quad.js` | trouver la carte : Sobel, droites de Hough pondérées, quadrilatères candidats, **pré-classement appris** (régression logistique : liseré noir, proportions, taille), affinage des coins sur le liseré noir, dilatation, homographie, redressement |
+| `identifier.js` | la chaîne : détection à 448 px, toutes les hypothèses affinées puis appariées, seconde détection rapprochée pour les petites régions, orientation par la luminance de la zone de texte, décalages autour des finalistes |
+| `identifier.worker.js`, `identifierClient.js` | la chaîne dans un worker, l'image transférée sans copie |
+| `artIndex.js` | chargement de `public/art-index.bin` (8,8 Mo, une fois) avec progression |
+| `verdictArt.js` | quand accepter (score ≥ 0,85 et marge ≥ 0,05 : à la première image ; 0,70 à 0,85 : deux images d'accord ; en dessous : rien), et la mise à la forme d'un résultat de scan (tirages français d'abord) |
+| `useSniper.js`, `SniperView.jsx` | plus de fenêtre de visée : l'image entière part au worker, le contour trouvé est dessiné à sa place à l'écran |
+
+### Ce que le banc dit (`scripts/art-bench.mjs`, 200 scènes 1080×1920, index complet)
+
+| | |
+|---|---|
+| bonne carte en tête | **83 %** |
+| carte grande dans l'image (≥ 60 % de la hauteur) | 92-93 % |
+| carte petite (25 %) | 63 % |
+| carte localisée | 99 % |
+| appariement seul, coins exacts | 99 % |
+| appariement à ±12 px d'erreur de coin | 99 % ; à ±24 px, 93 % |
+| temps par image, ordinateur, JavaScript pur | ~490 ms (détection 150, le reste en évaluation d'hypothèses) |
+
+Le point de départ de la journée était 30 %. Ce qui a fait la différence, dans
+l'ordre, avec la mesure qui l'a justifié :
+
+1. **Hough au lieu de composantes connexes** (56 → 88 % de localisation).
+2. **L'appariement choisit le contour** parmi plusieurs hypothèses, au lieu
+   d'un critère géométrique : un rectangle uni a des bords parfaits mais ne
+   ressemble à aucune carte.
+3. **Pré-classement appris** sur 25 000 candidats étiquetés du banc
+   (`_traits` dans `banc-art.js`) : le vrai contour passe du rang médian 4 au
+   rang 0. Poids dans `trouverQuads`. Le liseré noir pèse le plus, la
+   richesse intérieure ne compte pas.
+4. **Orientation par la luminance de la zone de texte** (plus claire que son
+   miroir sur 100 % des 3 000 visuels testés, 31 niveaux au 1er centile) :
+   décidée par la carte, pas par l'appariement — une carte à l'envers
+   ressemblait parfois mieux à une autre carte.
+5. **Index à deux cadrages** (bord exact, et bord intérieur du liseré à 2,7 %)
+   : tolérance à ±24 px passée de 87 à 93 %.
+6. **Seconde détection rapprochée** pour les petites cartes (56 → 63-68 %).
+
+### Ce qui a été essayé et ne marche pas (ne pas refaire)
+
+- Dilater par homothétie pour retrouver le bord depuis le liseré : ne
+  décale pas les côtés de la même largeur. `dilater` décale chaque côté le
+  long de sa normale (test).
+- Corriger l'orientation par la luminance du liseré aux deux extrémités :
+  80 % → 71 %.
+- Une recherche locale du contour guidée par le score d'appariement (sept
+  décalages) : 79 → 71 %, elle trouve des scores élevés sur de FAUSSES cartes.
+- Une marge d'illustration plus large (10 % au lieu de 6 %) : aucun effet.
+- Voter avec le carré du gradient dans Hough : 88 → 75 %.
+- Dédupliquer les hypothèses à une tolérance relative à leur taille, seule :
+  40 variantes d'une seule région, 65 %. Il faut deux niveaux (régions, puis
+  variantes).
+- Plus d'hypothèses (150 au lieu de 40) : 81 %, pour trois fois le temps.
+
+### Ce qui reste, dans l'ordre
+
+1. **Mesurer sur un téléphone avec une vraie carte.** Tout ce qui précède est
+   synthétique ; le domaine réel (carte imprimée, vernis, lampe) n'a pas été
+   vu. `ui-e2e.mjs` prouve seulement que la chaîne tourne en navigateur.
+2. **Lire le code d'extension automatiquement** quand la carte est assez
+   grande : la carte est redressée, la position du code est connue ; l'OCR
+   (`ocr.js`, PP-OCRv6, toujours là) n'a qu'à lire cette zone. Mesurer d'abord
+   à partir de quelle taille de carte le code se lit.
+3. **Vitesse** : 490 ms sur ordinateur, à mesurer sur téléphone ; les
+   leviers sont le nombre d'hypothèses évaluées et la présélection Hamming.
+4. **Petites cartes** (63 %) : la détection à 448 px n'a qu'un pixel de
+   liseré. La seconde passe rapprochée aide ; une troisième échelle ou une
+   détection guidée par le suivi entre images sont les pistes.
+
 ## 3. Ce qui bloquait — et ce que la mesure a révélé
 
 La version précédente de ce document annonçait que **le scanner identifiait

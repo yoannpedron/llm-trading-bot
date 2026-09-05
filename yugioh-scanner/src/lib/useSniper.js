@@ -2,44 +2,40 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { loadCardIndex } from './cardIndex.js';
 import { chime, vibrate } from './feedback.js';
-import { moteur, recognize, shutdown, warmUp } from './ocr.js';
-import { cropZone, grabFrame } from './preprocess.js';
-import { scanCode, usingBackend } from './scanApi.js';
-import { reticleRect, toVideoRect } from './viewport.js';
-import { ReadingVote } from './vote.js';
+import { identifier, shutdownArt, warmUpArt } from './identifierClient.js';
+import { grabFrame } from './preprocess.js';
+import { scanCode } from './scanApi.js';
+import { VoteArt, resultatDepuisArt } from './verdictArt.js';
 
 /**
- * Pause entre deux lectures.
+ * Pause entre deux passes d'identification.
  *
- * Les lectures sont séquentielles (une passe dure 200 à 400 ms en WebAssembly,
- * moins en WebGPU) ; cette pause ne sert qu'à laisser respirer l'interface
- * entre deux passes. Une douchette de supermarché ne fait pas mieux.
+ * Une passe dure de 300 ms à 2 s selon l'appareil, dans un worker. Cette
+ * pause ne sert qu'à laisser respirer l'interface entre deux images.
  */
-const SCAN_INTERVAL_MS = 120;
+const SCAN_INTERVAL_MS = 80;
 
 /**
- * Netteté minimale sous laquelle on ne lance même pas l'OCR.
+ * Plus grand côté de l'image transmise à l'identification.
  *
- * Très bas volontairement : il ne s'agit pas de juger de la qualité mais
- * d'écarter une image sans contenu — objectif obturé, cadre vide, mise au point
- * partie à l'infini. Le reste est affaire de l'utilisateur, à qui l'indicateur
- * de netteté donne le retour dont il a besoin.
- *
- * Mesuré sur trois cadrages réels : 0,172 net, 0,123 dégradé, 0,046 très
- * dégradé mais encore lisible. Le seuil passe donc sous les trois.
+ * La détection travaille à 448 px de large et l'empreinte lit l'illustration à
+ * 96×96 : au-delà de 1 600 px, l'image native ne sert qu'à l'affinage des
+ * coins, et coûte en copie. Mesuré sur le banc à 1080×1920.
  */
-const MIN_SHARPNESS = 0.015;
+const COTE_MAX = 1600;
 
 /**
  * Le viseur.
  *
- * Le téléphone est braqué sur une seule inscription — le code d'extension — et
- * ne cherche rien d'autre. Deux garde-fous évitent les fausses alertes :
+ * La carte est identifiée par son ILLUSTRATION, n'importe où dans l'image,
+ * dans n'importe quel sens : plus de fenêtre de visée sur une inscription de
+ * deux millimètres. Chaque image de la caméra part au worker d'identification
+ * (`identifier.js`), qui rend le contour de la carte, la carte la plus
+ * ressemblante et un score. La décision d'accepter revient à `VoteArt` : un
+ * score sûr suffit, un score moyen demande une deuxième image d'accord.
  *
- * - une correspondance **exacte ou régionale** est acceptée d'emblée : le code
- *   lu existe, il n'y a rien à confirmer ;
- * - une correspondance **approchée** doit sortir deux fois de suite. C'est ce
- *   qui empêche un reflet passager de figer l'écran sur une carte au hasard.
+ * Le code d'extension n'identifie plus la carte ; il reste disponible en
+ * saisie manuelle, pour les cas où la caméra ne peut pas.
  */
 export function useSniper() {
   const videoRef = useRef(null);
@@ -47,7 +43,7 @@ export function useSniper() {
   const trackRef = useRef(null);
   const busyRef = useRef(false);
   const abortRef = useRef(null);
-  const voteRef = useRef(new ReadingVote());
+  const voteRef = useRef(new VoteArt());
 
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
@@ -76,14 +72,13 @@ export function useSniper() {
 
   const [modelReady, setModelReady] = useState(false);
   const [modelProgress, setModelProgress] = useState(0);
-  /** `webgpu` ou `wasm`, une fois le moteur prêt : dit ce que vaut la machine. */
-  const [modelProvider, setModelProvider] = useState(null);
+  /** Contour de la carte dans la dernière image, en pixels vidéo, avec les dimensions de l'image. */
+  const [contour, setContour] = useState(null);
+  /** Dernière lecture : carte la plus ressemblante, score, marge, temps. */
+  const [lecture, setLecture] = useState(null);
 
-  const [reading, setReading] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [failure, setFailure] = useState(null);
-  const [crop, setCrop] = useState(null);
-  const [sharpness, setSharpness] = useState(0);
   const [result, setResult] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState(null);
   /**
@@ -115,31 +110,26 @@ export function useSniper() {
 
   /* --- modèle OCR : chauffé pendant que l'utilisateur vise ---------------- */
 
+  /**
+   * L'index d'illustrations (8,8 Mo, une fois) part au worker ; l'index des
+   * cartes se charge en même temps, pour que le résultat soit immédiat.
+   */
   useEffect(() => {
     let alive = true;
-    // L'index des cartes se charge en même temps que le moteur : mesuré, le
-    // payer à la première résolution coûtait 600 ms entre la première lecture
-    // et l'affichage de la carte. Un échec ici n'est pas une erreur — la
-    // résolution réessaiera et dira, elle, ce qui manque.
-    if (!usingBackend()) loadCardIndex().catch(() => {});
-    warmUp((progress) => alive && setModelProgress(progress))
-      .then(() => {
-        if (!alive) return;
-        setModelProvider(moteur().provider);
-        setModelReady(true);
-      })
+    loadCardIndex().catch(() => {});
+    warmUpArt((progress) => alive && setModelProgress(progress))
+      .then(() => alive && setModelReady(true))
       .catch((cause) => {
-        if (!alive) return;
-        // Sans moteur, le viseur ne lira jamais : on le dit, au lieu de
-        // laisser une barre de chargement figée.
-        setFailure(`Moteur de lecture indisponible : ${cause?.message ?? cause}`);
+        // Sans index, le viseur n'identifiera jamais : on le dit, au lieu de
+        // laisser une boucle chercher dans le vide.
+        if (alive) setFailure(`Index d’illustrations indisponible : ${cause?.message ?? cause}`);
       });
     return () => {
       alive = false;
     };
   }, []);
 
-  useEffect(() => () => void shutdown(), []);
+  useEffect(() => () => void shutdownArt(), []);
 
   /* --- caméra ------------------------------------------------------------- */
 
@@ -355,74 +345,43 @@ export function useSniper() {
 
     busyRef.current = true;
     try {
-      const container = { width: video.clientWidth, height: video.clientHeight };
-      const rect = toVideoRect(
-        reticleRect(container),
-        { width: video.videoWidth, height: video.videoHeight },
-        container,
+      const still = grabFrame(video);
+      // L'image transmise : au plus COTE_MAX sur le grand côté. Une copie
+      // par passe, transférée au worker (pas recopiée).
+      const facteur = Math.min(1, COTE_MAX / Math.max(still.width, still.height));
+      let source = still;
+      if (facteur < 1) {
+        source = document.createElement('canvas');
+        source.width = Math.round(still.width * facteur);
+        source.height = Math.round(still.height * facteur);
+        source.getContext('2d').drawImage(still, 0, 0, source.width, source.height);
+      }
+      const image = source.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height);
+
+      const t0 = performance.now();
+      const r = await identifier(image);
+      setAttempts((count) => count + 1);
+      // Trace de chaque passe : c'est ce qu'on lit dans une capture de
+      // console quand « ça ne reconnaît pas » — la seule mesure sur l'appareil réel.
+      console.debug(
+        `[viseur] passe ${image.width}×${image.height} : ${Math.round(performance.now() - t0)} ms (détection ${r.ms?.quad ?? '?'}, total ${r.ms?.total ?? '?'}), contour ${r.quad ? 'oui' : 'non'}, meilleure ${r.candidats?.[0]?.id ?? '—'} à ${(r.candidats?.[0]?.score ?? 0).toFixed(2)}`,
+      );
+      // Le contour, en pixels de la vidéo native : l'écran le dessine à sa place.
+      setContour(
+        r.quad ? { points: r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur })), largeur: still.width, hauteur: still.height } : null,
       );
 
-      const still = grabFrame(video);
-      // L'image brute, à la résolution native : le moteur est entraîné sur
-      // du texte photographié et lit mieux sans binarisation (mesuré, voir
-      // `preprocess.js`).
-      const zone = cropZone(still, rect);
-
-      setSharpness(zone.sharpness);
-
-      // Image sans contenu exploitable : le moteur n'y trouverait rien et
-      // coûterait une passe. On rend la main tout de suite, l'indicateur de
-      // netteté disant à l'utilisateur ce qu'il y a à corriger.
-      if (zone.sharpness < MIN_SHARPNESS) {
-        setReading('image trop floue');
-        setAttempts((count) => count + 1);
-        return;
-      }
-
-      // La vignette de ce qui part au moteur : sans elle, un échec de lecture
-      // ne dit pas si le problème vient du cadrage ou de la lumière.
-      setCrop(zone.canvas.toDataURL('image/png'));
-
-      const { text } = await recognize(zone.canvas);
-      // Le moteur rend une ligne par zone de texte trouvée. On garde tout :
-      // la résolution cherche un code dans le texte entier, mot par mot, et un
-      // libellé voisin (« POINT », la bordure) ne la gêne pas.
-      const trimmed = text.replace(/\s+/g, ' ').trim();
-      // On affiche aussi les lectures vides : « rien » et « quelque chose
-      // d'illisible » n'appellent pas le même geste de la part de l'utilisateur.
-      setReading(trimmed || 'rien lu');
-      if (!trimmed) {
-        setAttempts((count) => count + 1);
-        return;
-      }
-
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      // Une panne de résolution — index absent, API injoignable — doit se voir.
-      // Avalée, elle se manifeste seulement par un viseur qui ne verrouille
-      // jamais, ce qui n'oriente vers rien.
-      const resolved = await scanCode(trimmed, controller.signal).catch((cause) => {
-        if (cause.name !== 'AbortError') setFailure(cause.message);
-        return null;
-      });
-      if (!resolved) return;
-      setFailure(null);
-
-      if (resolved.status === 'no_code' || resolved.status === 'no_match') {
-        setAttempts((count) => count + 1);
-        return;
-      }
-
-      // Exact ou régional : le code lu existe tel quel, rien à confirmer.
-      // Approché : il faut une deuxième lecture, sur une autre image.
-      const certain = resolved.method === 'exact' || resolved.method === 'region';
-      const { accepted } = voteRef.current.cast(resolved.matchedCode, { certain });
-      if (!accepted) return;
+      const verdict = voteRef.current.cast(r.candidats);
+      setLecture({ id: verdict.id, score: verdict.score, marge: verdict.marge, count: verdict.count, ms: r.ms?.total ?? 0 });
+      if (!verdict.accepted) return;
       // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
       // maintenant démonterait le formulaire sous les doigts.
       if (manualRef.current) return;
+
+      const index = await loadCardIndex();
+      const resolved = resultatDepuisArt(index, verdict.id, { score: verdict.score, marge: verdict.marge, sens: r.sens, quad: r.quad });
+      if (resolved.status === 'no_match') return;
+      setFailure(null);
 
       setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
       setResult(resolved);
@@ -441,7 +400,7 @@ export function useSniper() {
   }, []);
 
   useEffect(() => {
-    if (!ready || result || manualEntry) return undefined;
+    if (!ready || !modelReady || result || manualEntry) return undefined;
 
     let stopped = false;
     let timer = 0;
@@ -457,7 +416,7 @@ export function useSniper() {
       clearTimeout(timer);
       abortRef.current?.abort();
     };
-  }, [ready, result, manualEntry, readOnce]);
+  }, [ready, modelReady, result, manualEntry, readOnce]);
 
   /**
    * Saisie manuelle : même résolution que le viseur, même écran de résultat.
@@ -487,7 +446,8 @@ export function useSniper() {
     voteRef.current.reset();
     setResult(null);
     setFrozenFrame(null);
-    setReading('');
+    setContour(null);
+    setLecture(null);
     setAttempts(0);
     setFailure(null);
   }, []);
@@ -503,13 +463,10 @@ export function useSniper() {
     focusAt,
     modelReady,
     modelProgress,
-    modelProvider,
-    reading,
+    contour,
+    lecture,
     attempts,
     failure,
-    crop,
-    sharpness,
-    minSharpness: MIN_SHARPNESS,
     result,
     frozenFrame,
     rescan,

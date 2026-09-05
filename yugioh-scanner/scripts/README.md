@@ -44,6 +44,34 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `harness/live-crop.mjs` | recadre la vidéo en direct de l'application et la lit |
 | `harness/ui-e2e.mjs` | chaîne complète en navigateur, caméra simulée par un fichier MJPEG |
 | `harness/manual-entry.mjs` | saisie manuelle du code, avec et sans caméra : frappe, complétion, validation, enchaînement |
+| `build-art-index.mjs` | génère `public/art-index.bin`, l'index des empreintes d'illustration (14 523 cartes × 2 cadrages, 8,8 Mo), depuis les visuels `cards_small` téléchargés une fois dans un dossier local |
+| `art-bench.mjs` | **le banc de l'identification par illustration** : photos de téléphone simulées (perspective, rotation, flou, grain, éclairage, reflet, parasites) contre l'index complet — taux de bonne carte, localisation, temps, par condition |
+| `harness/scene-camera.mjs` | fabrique la caméra simulée (MJPEG) d'une carte posée sur une table, pour `ui-e2e.mjs` |
+| `harness/banc-art/` | la page servie par Vite qui exécute le VRAI code de l'application (`src/lib/art.js`, `quad.js`, `identifier.js`) pour les trois scripts ci-dessus |
+
+## Identification par l'illustration
+
+```bash
+SP=/chemin/de/travail
+# 1. Les visuels officiels, une fois (14 523 × ~28 Ko, ~25 min à 10/s) :
+mkdir -p $SP/arts/small && node -e '
+  const ids = require("./public/card-index.json").cards.map((c) => c[0]);
+  // télécharger https://images.ygoprodeck.com/images/cards_small/<id>.jpg → $SP/arts/small/<id>.jpg, à 10/s au plus
+'
+# 2. L'index (2 min) :
+VARIANTES=0,0.027 ARTS=$SP/arts/small node scripts/build-art-index.mjs public/art-index.bin
+# 3. Le banc (5 min, 200 scènes) :
+SP=$SP OPTIONS='{"largeur":448}' ARTS=$SP/arts/small INDEX=public/art-index.bin SCENES=200 node scripts/art-bench.mjs
+# 4. La chaîne complète en navigateur :
+SP=$SP ARTS=$SP/arts/small node scripts/harness/scene-camera.mjs
+npx vite build && npx vite preview --port 4173 &
+SP=$SP node scripts/harness/ui-e2e.mjs
+```
+
+Le banc écrit `$SP/art-bench.json` (une ligne par scène, toutes les
+conditions et le verdict) et `$SP/art-echecs/` (les scènes ratées avec le
+contour trouvé en vert et le vrai en rouge). C'est là qu'il faut regarder
+avant de toucher à un seuil.
 
 ## Caméra simulée
 

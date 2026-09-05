@@ -1,39 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { loadCardIndex } from '../lib/cardIndex.js';
 import { suggestSetCodes } from '../lib/match.js';
-import { TOTAL_OCTETS } from '../lib/ocr.js';
-import { RETICLE_RATIO } from '../lib/viewport.js';
+import { SCORE_SUR } from '../lib/verdictArt.js';
+import { toContainerPoint } from '../lib/viewport.js';
+
+/** Taille de l'index d'illustrations, pour dire ce qu'on télécharge. */
+const INDEX_OCTETS = 8_963_000;
 
 /**
  * Poste de lecture.
  *
  * L'écran est celui d'un instrument : l'image occupe tout, le châssis se limite
- * à trois zones fixes — une ligne d'état en haut, la fenêtre de visée au
- * centre, les commandes en bas. Rien ne se déplace d'un état à l'autre, ce qui
- * permet de garder le pouce au même endroit pendant qu'on cherche le cadrage.
+ * à deux zones fixes — une ligne d'état en haut, les commandes en bas. Rien ne
+ * se déplace d'un état à l'autre, ce qui permet de garder le pouce au même
+ * endroit.
  *
- * CE QUI A CHANGÉ, ET POURQUOI
- *
- *  - **On ne savait pas quoi faire.** Le viseur affichait le texte brut de
- *    l'OCR — « rien lu (otsu, conf. 0) » — c'est-à-dire un diagnostic de
- *    développeur là où il fallait une consigne. Une ligne d'état dit maintenant
- *    le geste à faire ; la lecture brute reste, en dessous et en petit, parce
- *    qu'elle distingue « rien » de « illisible » et qu'elle est ce qu'on lit
- *    dans une capture d'écran de panne.
- *  - **Le cadre était un néon arrondi.** Il est devenu une fenêtre à angles
- *    marqués, comme une mire d'appareil de mesure : le trait est fin, ce sont
- *    les quatre équerres qui portent le repère.
- *  - **La netteté était une barre continue.** Une jauge continue invite à
- *    chercher le maximum ; ce qui compte est de franchir un seuil. Elle est
- *    donc segmentée, avec le seuil marqué.
- *  - **La torche occupait un bouton de 64 px, grisé quand elle n'existe pas.**
- *    Les commandes forment maintenant une barre de largeur fixe où chaque
- *    élément absent laisse sa place aux autres.
+ * Il n'y a plus de fenêtre de visée : la carte est identifiée par son
+ * illustration, où qu'elle soit dans l'image et dans n'importe quel sens. Ce
+ * que la détection a trouvé est dessiné par-dessus l'image — le contour de la
+ * carte — pour que l'utilisateur voie ce que l'appareil voit, et comprenne
+ * sans consigne pourquoi ça n'aboutit pas (carte coupée, trop loin).
  */
-
-/** Nombre de segments de la jauge de netteté. */
-const SEGMENTS = 12;
 
 /**
  * Consigne à afficher, d'après ce que la boucle vient de voir.
@@ -41,33 +29,57 @@ const SEGMENTS = 12;
  * L'ordre des cas est celui de l'urgence : ce qui empêche toute lecture passe
  * avant ce qui la dégrade.
  */
-export function consigne({
-  reading,
-  sharpness,
-  minSharpness,
-  modelReady,
-  modelProgress = 0,
-  frozenFrame,
-  manuel,
-}) {
+export function consigne({ contour, lecture, modelReady, modelProgress = 0, frozenFrame, manuel, attempts = 0 }) {
   if (manuel) return 'Saisie du code';
-  if (frozenFrame) return 'Code identifié';
+  if (frozenFrame) return 'Carte identifiée';
   if (!modelReady) {
-    // Trente et un mégaoctets, une seule fois : on le dit, avec le compte,
-    // sinon l'attente ressemble à une panne.
-    const recus = Math.round((modelProgress * TOTAL_OCTETS) / 1_000_000);
-    const total = Math.round(TOTAL_OCTETS / 1_000_000);
+    // Neuf mégaoctets, une seule fois : on le dit, avec le compte, sinon
+    // l'attente ressemble à une panne.
+    const recus = Math.round((modelProgress * INDEX_OCTETS) / 1_000_000);
+    const total = Math.round(INDEX_OCTETS / 1_000_000);
     return modelProgress >= 1
-      ? 'Démarrage du moteur de lecture'
-      : `Téléchargement du moteur de lecture — ${recus} sur ${total} Mo, une seule fois`;
+      ? 'Préparation de l’index…'
+      : `Téléchargement de l’index — ${recus} sur ${total} Mo`;
   }
-  if (!reading) return 'Cadrez le code dans la fenêtre';
-  if (reading === 'image trop floue' || sharpness < minSharpness) {
-    return 'Trop flou — touchez le code pour la mise au point';
-  }
-  if (reading.startsWith('rien lu')) return 'Illisible — rapprochez-vous ou allumez la torche';
-  if (/[A-Z0-9]{2,5}-[A-Z0-9]{2,6}/.test(reading)) return 'Code repéré, vérification';
-  return 'Lecture en cours';
+  if (attempts === 0) return 'Montrez une carte, entière dans l’image';
+  if (!contour) return 'Aucune carte vue — montrez-la entière, sur un fond uni';
+  if (!lecture?.id) return 'Carte repérée, identification…';
+  if (lecture.score >= SCORE_SUR) return 'Carte reconnue';
+  return 'Carte reconnue, confirmation sur l’image suivante…';
+}
+
+/**
+ * Le contour trouvé, dessiné à sa place sur l'image affichée.
+ *
+ * Les coins sont en pixels de la vidéo native ; l'image est agrandie et
+ * rognée par `object-fit: cover`, et `toContainerPoint` fait la traduction.
+ * Un contour qui déborde de l'écran est tronqué par le SVG, ce qui est
+ * exactement ce qui se passe à l'image.
+ */
+function Contour({ contour, conteneur, sur }) {
+  if (!contour || !conteneur?.width) return null;
+  const video = { width: contour.largeur, height: contour.hauteur };
+  const points = contour.points
+    .map((p) => toContainerPoint(p, video, conteneur))
+    .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(' ');
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      viewBox={`0 0 ${conteneur.width} ${conteneur.height}`}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <polygon
+        points={points}
+        fill="none"
+        stroke={sur ? 'var(--color-positif)' : 'var(--color-accent)'}
+        strokeWidth={sur ? 3 : 2}
+        strokeLinejoin="round"
+        opacity={0.9}
+      />
+    </svg>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -225,47 +237,6 @@ function SaisieManuelle({ onSubmit, onRefus, autoFocus }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Jauge de netteté                                                     */
-/* ------------------------------------------------------------------ */
-
-function Nettete({ valeur, seuil }) {
-  // L'échelle s'arrête à huit fois le seuil : au-delà, la mise au point est
-  // acquise et la graduation n'apprend plus rien.
-  const remplis = Math.round(Math.min(1, valeur / (seuil * 8)) * SEGMENTS);
-  const segmentSeuil = Math.round((1 / 8) * SEGMENTS);
-  const suffisant = valeur >= seuil;
-
-  return (
-    <div
-      className="flex items-center gap-2"
-      role="meter"
-      aria-label="Netteté de l’image"
-      aria-valuenow={remplis}
-      aria-valuemin={0}
-      aria-valuemax={SEGMENTS}
-      aria-valuetext={suffisant ? 'suffisante' : 'insuffisante'}
-    >
-      <span className="intitule">Netteté</span>
-      <span className="flex gap-px" aria-hidden>
-        {Array.from({ length: SEGMENTS }, (_, rang) => (
-          <span
-            key={rang}
-            className={`h-2.5 w-1 ${
-              rang < remplis
-                ? suffisant
-                  ? 'bg-positif'
-                  : 'bg-alerte'
-                : rang === segmentSeuil
-                  ? 'bg-trait-fort'
-                  : 'bg-trait'
-            }`}
-          />
-        ))}
-      </span>
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Poste de lecture                                                     */
@@ -283,37 +254,56 @@ export default function SniperView({ sniper, onRefus }) {
     focusAt,
     modelReady,
     modelProgress,
-    modelProvider,
-    reading,
+    contour,
+    lecture,
     attempts,
     failure,
-    crop,
-    sharpness,
-    minSharpness,
     frozenFrame,
     submitCode,
     manualEntry,
     setManualEntry,
   } = sniper;
 
+  // Dimensions affichées de la vidéo, pour placer le contour. Le <video> est
+  // détruit et recréé : on passe par la même référence de rappel que le hook.
+  const [conteneur, setConteneur] = useState(null);
+  const videoElement = useRef(null);
+  const rattacher = useCallback(
+    (element) => {
+      attachVideo(element);
+      videoElement.current = element;
+      setConteneur(element ? { width: element.clientWidth, height: element.clientHeight } : null);
+    },
+    [attachVideo],
+  );
+  useEffect(() => {
+    const element = videoElement.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+    const observateur = new ResizeObserver(() =>
+      setConteneur({ width: element.clientWidth, height: element.clientHeight }),
+    );
+    observateur.observe(element);
+    return () => observateur.disconnect();
+  }, [ready]);
+
   // Sans caméra, la saisie est le seul chemin : on l'ouvre sans attendre.
   const saisieVisible = manualEntry || Boolean(error);
-  // Six passes sans rien lire : l'utilisateur a besoin d'aide, pas d'attendre.
-  const enPeine = attempts >= 6 && !failure && !frozenFrame && !saisieVisible;
+  // Huit passes sans conclure : l'utilisateur a besoin d'aide, pas d'attendre.
+  const enPeine = attempts >= 8 && !failure && !frozenFrame && !saisieVisible;
   const etat = consigne({
-    reading,
-    sharpness,
-    minSharpness,
+    contour,
+    lecture,
     modelReady,
     modelProgress,
     frozenFrame,
     manuel: saisieVisible,
+    attempts,
   });
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-fond">
       <video
-        ref={attachVideo}
+        ref={rattacher}
         playsInline
         muted
         autoPlay
@@ -347,46 +337,22 @@ export default function SniperView({ sniper, onRefus }) {
         )}
         <p
           aria-live="polite"
+          data-passes={attempts}
+          data-ms={lecture?.ms ?? ''}
+          data-score={lecture?.score?.toFixed(2) ?? ''}
           className="border-b border-trait/60 bg-fond/85 px-4 py-2 text-center text-donnee font-medium text-encre"
         >
           {etat}
         </p>
       </div>
 
-      {/* --- Fenêtre de visée ------------------------------------------------ */}
-      {ready && !saisieVisible && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          {/*
-            La mire est seule dans le flux, et les afficheurs qui la suivent
-            sont posés SOUS elle en position absolue. C'est ce qui garantit
-            qu'elle tombe exactement au centre du conteneur — donc au même
-            endroit que le rectangle calculé par `viewport.reticleRect`, qui
-            décide de ce que reçoit l'OCR. Placés dans le flux, ils
-            repoussaient la mire vers le haut de la moitié de leur hauteur, et
-            l'utilisateur cadrait à côté de ce qui était réellement lu.
-          */}
-          <div
-            className="relative w-[82%] max-w-[420px] border border-accent/70"
-            style={{ aspectRatio: `${RETICLE_RATIO} / 1` }}
-          >
-            {/* Équerres d'angle : le repère d'une mire, pas un cadre lumineux. */}
-            {[
-              'left-0 top-0 border-l-2 border-t-2',
-              'right-0 top-0 border-r-2 border-t-2',
-              'left-0 bottom-0 border-l-2 border-b-2',
-              'right-0 bottom-0 border-r-2 border-b-2',
-            ].map((position) => (
-              <span key={position} className={`absolute h-3 w-3 border-accent ${position}`} />
-            ))}
-
-            <div className="absolute inset-x-0 top-full mt-3 flex flex-col items-center gap-2">
-              <p className="max-w-full truncate px-4 font-mono text-micro text-encre/70">
-                {reading ? `« ${reading} »` : 'en attente de lecture'}
-              </p>
-              <Nettete valeur={sharpness} seuil={minSharpness} />
-            </div>
-          </div>
-        </div>
+      {/* --- Ce que l'appareil voit -------------------------------------------- */}
+      {ready && !saisieVisible && !frozenFrame && (
+        <Contour
+          contour={contour}
+          conteneur={conteneur}
+          sur={Boolean(lecture?.id) && lecture.score >= SCORE_SUR}
+        />
       )}
 
       {/* Voile sombre pendant la saisie : le formulaire doit dominer l'image. */}
@@ -422,27 +388,14 @@ export default function SniperView({ sniper, onRefus }) {
         {enPeine && (
           <div className="panneau w-full max-w-md p-3">
             <p className="text-donnee text-second">
-              Rien de lisible depuis {attempts} essais. Rapprochez-vous, allumez la torche, et
-              évitez que le vernis renvoie la lumière droit dans l’objectif.
+              Rien de concluant depuis {attempts} images. La carte doit être entière dans l’image,
+              posée sur un fond uni, sans reflet sur l’illustration. Rapprochez-vous : plus elle
+              est grande à l’écran, mieux elle est reconnue.
             </p>
-            {crop && (
-              <a
-                href={crop}
-                download={`viseur-${attempts}.png`}
-                className="mt-2 block"
-                title="Enregistrer ce recadrage"
-              >
-                <span className="intitule">Zone transmise au moteur</span>
-                <img
-                  src={crop}
-                  alt="Zone lue, telle que transmise au moteur"
-                  className="mt-1 w-full rounded-controle border border-trait bg-white"
-                />
-              </a>
-            )}
-            {modelProvider && (
+            {lecture && (
               <p className="mt-2 text-micro text-tertiaire">
-                Moteur : PP-OCRv6 sur {modelProvider === 'webgpu' ? 'WebGPU' : 'WebAssembly'}
+                Dernière passe : score {lecture.score.toFixed(2)}, marge {lecture.marge.toFixed(2)},{' '}
+                {lecture.ms} ms
               </p>
             )}
           </div>
