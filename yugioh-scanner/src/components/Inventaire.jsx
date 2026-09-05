@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { loadCardIndex } from '../lib/cardIndex.js';
+import { tiragesPourRegion } from '../lib/region.js';
 
 import { entryValue } from '../lib/collection.js';
 import { CONDITIONS, conditionByCode, conditionPrice } from '../lib/condition.js';
@@ -180,7 +183,65 @@ function Indicateur({ intitule, valeur, mention }) {
 /* Écran                                                                */
 /* ------------------------------------------------------------------ */
 
-export default function Inventaire({ collection, onScanner }) {
+/**
+ * Une entrée ajoutée en série sans lecture du code : le badge le dit, et le
+ * bouton ouvre la liste des tirages de la carte (dans la langue choisie)
+ * pour la corriger sur place.
+ */
+function PreciserTirage({ entree, region, onChoix }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [tirages, setTirages] = useState(null);
+  useEffect(() => {
+    if (!ouvert) return undefined;
+    let vivant = true;
+    loadCardIndex()
+      .then((index) => {
+        const position = index.byPasscode.get(entree.cardId);
+        const printings = position === undefined ? [] : index.cards[position].printings;
+        if (vivant) setTirages(tiragesPourRegion(printings, region));
+      })
+      .catch(() => vivant && setTirages([]));
+    return () => {
+      vivant = false;
+    };
+  }, [ouvert, entree.cardId, region]);
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOuvert((o) => !o)}
+        aria-expanded={ouvert}
+        className="rounded-controle border border-alerte/50 bg-alerte/8 px-1.5 py-0.5 text-micro font-medium text-alerte"
+      >
+        Tirage à préciser
+      </button>
+      {ouvert && (
+        <ul className="mt-1 max-h-48 divide-y divide-trait overflow-y-auto rounded-controle border border-trait bg-panneau">
+          {tirages === null && <li className="px-2 py-1 text-micro text-tertiaire">Chargement…</li>}
+          {tirages?.length === 0 && <li className="px-2 py-1 text-micro text-tertiaire">Aucun tirage connu.</li>}
+          {tirages?.map((tirage) => (
+            <li key={`${tirage.setCode}|${tirage.rarity}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChoix(entree.key, tirage);
+                  setOuvert(false);
+                }}
+                className="flex w-full items-baseline gap-2 px-2 py-1 text-left hover:bg-relief"
+              >
+                <span className="font-mono text-micro text-accent">{tirage.setCode}</span>
+                <span className="truncate text-micro text-second">{tirage.rarity}</span>
+                <span className="truncate text-micro text-tertiaire">{tirage.setName}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default function Inventaire({ collection, onScanner, region = 'FR' }) {
   const {
     entries,
     pending,
@@ -439,6 +500,9 @@ export default function Inventaire({ collection, onScanner }) {
                     <div className="min-w-0">
                       <p className="truncate text-donnee text-encre">{entree.name}</p>
                       <p className="truncate font-mono text-micro text-accent">{entree.setCode}</p>
+                      {entree.tirageAPreciser && (
+                        <PreciserTirage entree={entree} region={region} onChoix={collection.remplacerTirage} />
+                      )}
                       {errors.get(entree.key) && (
                         <p className="truncate font-mono text-micro text-alerte">
                           {errors.get(entree.key)}
@@ -498,6 +562,9 @@ export default function Inventaire({ collection, onScanner }) {
               <p className="donnee mt-0.5 truncate text-micro text-tertiaire">
                 <Pastille rarete={entree.rarity} />
               </p>
+              {entree.tirageAPreciser && (
+                <PreciserTirage entree={entree} region={region} onChoix={collection.remplacerTirage} />
+              )}
               {errors.get(entree.key) && (
                 <p className="truncate font-mono text-micro text-alerte">{errors.get(entree.key)}</p>
               )}

@@ -34,7 +34,8 @@ page.on('pageerror', (e) => {
 });
 
 const depart = Date.now();
-await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+// `?serie=0` : ce banc attend l'écran de résultat ; le mode série (par défaut) l'escamote.
+await page.goto('http://127.0.0.1:4173/?serie=0', { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => document.querySelector('video')?.videoWidth > 0, { timeout: 30000 });
 
 // Le viseur peut verrouiller dès la première image, en moins d'une seconde :

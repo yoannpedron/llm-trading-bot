@@ -147,8 +147,13 @@ export default function FicheCarte({
             <span aria-hidden>◎</span>
             <span>
               {fiche.choisie ? 'Choisie par vous parmi les propositions. ' : 'Reconnue par son illustration. '}
-              Le tirage se lit sur la carte, sous l’illustration à droite : un code comme
-              «&nbsp;LDK2-FR001&nbsp;».
+              {fiche.lectureTirage === 'lu'
+                ? 'Le code de tirage a été lu sur la carte.'
+                : fiche.lectureTirage === 'en cours'
+                  ? 'Lecture du code de tirage…'
+                  : fiche.lectureTirage === 'tirage unique'
+                    ? 'Un seul tirage existe.'
+                    : `Code de tirage non lu (${fiche.lectureTirage ?? 'non tenté'}) : il se lit sous l’illustration à droite, comme « LDK2-FR001 ». Rapprochez-vous pour qu’il soit lu.`}
               {fiche.confiance !== null && !fiche.choisie && (
                 <span className="mt-1 block font-mono text-micro text-tertiaire">
                   {/* Les deux chiffres qui décident du verrouillage : à lire

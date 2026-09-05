@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import FicheCarte from './components/FicheCarte.jsx';
 import HoloCard from './components/HoloCard.jsx';
 import Inventaire from './components/Inventaire.jsx';
 import Journal from './components/Journal.jsx';
 import SniperView from './components/SniperView.jsx';
+import { entryKey } from './lib/collection.js';
 import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
+import { codePourRegion } from './lib/region.js';
+import { tirageProbable } from './lib/serie.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
 import { useJournal } from './lib/useJournal.js';
 import { useRegion } from './lib/useRegion.js';
+import { useSerie } from './lib/useSerie.js';
 import { useSniper } from './lib/useSniper.js';
 
 /**
@@ -34,14 +38,64 @@ const ONGLETS = [
   { id: 'journal', libelle: 'Journal' },
 ];
 
+/** Durée d'affichage du bandeau « ajouté » du mode série. */
+const BANDEAU_MS = 6000;
+
 export default function App() {
-  const sniper = useSniper();
   const collection = useCollection();
   const journal = useJournal();
   /* La langue des cartes de l'utilisateur : elle décide des codes montrés et
      enregistrés, et vit ici parce que la fiche, la liste des tirages et
      l'entrée d'inventaire en dépendent tous. */
   const [region, setRegion] = useRegion();
+  const [serie, setSerie] = useSerie();
+
+  /* Le mode série : la carte reconnue entre au classeur sans écran, avec le
+     tirage le plus probable, précisé ensuite par la lecture du code si la
+     carte était assez proche. Le bandeau dit ce qui vient d'être ajouté et
+     permet d'annuler ou de préciser. */
+  const [ajout, setAjout] = useState(null);
+  const aRemplacer = useRef(null);
+  const ajouterEnSerie = useCallback(
+    (resolved, lecture) => {
+      const probable = tirageProbable(resolved.printings, region);
+      const entree = entreeDepuisScan(resolved, null, probable, region);
+      if (!entree) return;
+      const cle = collection.track(entree.carte, entree.tirage, undefined, { tirageAPreciser: true });
+      journal.consignerIdentification(ficheDepuisScan(resolved, null, region));
+      journal.consignerEnregistrement(entree.carte.id);
+      const compte = (collection.entryFor?.(cle)?.count ?? 0) + 1;
+      setAjout({ cle, resolved, nom: entree.carte.name, image: entree.carte.images?.[0]?.small ?? entree.carte.image, code: entree.tirage.setCode, compte, precis: false, at: Date.now() });
+      lecture?.then((lu) => {
+        if (!lu?.tirage) return;
+        const tirage = { ...lu.tirage, setCode: codePourRegion(lu.tirage.setCode, region), setCodePublie: lu.tirage.setCode };
+        collection.remplacerTirage(cle, tirage);
+        const nouvelleCle = entryKey(entree.carte.id, tirage.setCode, tirage.rarity);
+        setAjout((courant) => (courant && courant.cle === cle ? { ...courant, cle: nouvelleCle, code: tirage.setCode, precis: true } : courant));
+      });
+    },
+    [region, collection, journal],
+  );
+  const sniper = useSniper({ serie, onSerie: ajouterEnSerie });
+
+  useEffect(() => {
+    if (!ajout) return undefined;
+    const minuterie = setTimeout(() => setAjout((courant) => (courant?.at === ajout.at ? null : courant)), BANDEAU_MS);
+    return () => clearTimeout(minuterie);
+  }, [ajout]);
+
+  const annulerAjout = useCallback(() => {
+    if (!ajout) return;
+    collection.retirerUnExemplaire(ajout.cle);
+    setAjout(null);
+  }, [ajout, collection]);
+
+  const preciserAjout = useCallback(() => {
+    if (!ajout) return;
+    aRemplacer.current = ajout.cle;
+    sniper.montrer({ ...ajout.resolved, lectureTirage: ajout.precis ? 'lu' : ajout.resolved.lectureTirage ?? null });
+    setAjout(null);
+  }, [ajout, sniper]);
 
   const [onglet, setOnglet] = useState('scan');
   const [rarete, setRarete] = useState(null);
@@ -99,12 +153,20 @@ export default function App() {
   const enregistrer = useCallback(() => {
     const entree = entreeDepuisScan(scan, detail, rarete, region);
     if (!entree) return;
-    collection.track(entree.carte, entree.tirage);
+    // « Préciser le tirage » d'un ajout en série : on corrige la ligne
+    // existante au lieu d'en créer une seconde.
+    if (aRemplacer.current) {
+      collection.remplacerTirage(aRemplacer.current, entree.tirage);
+      aRemplacer.current = null;
+    } else {
+      collection.track(entree.carte, entree.tirage);
+    }
     journal.consignerEnregistrement(entree.carte.id);
     setEnregistree(true);
   }, [scan, detail, rarete, region, collection, journal]);
 
   const reprendre = useCallback(() => {
+    aRemplacer.current = null;
     setEnregistree(false);
     sniper.rescan();
   }, [sniper]);
@@ -179,7 +241,7 @@ export default function App() {
         <main className="rail min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl px-4 py-4">
             {onglet === 'inventaire' ? (
-              <Inventaire collection={collection} onScanner={revenirAuScanner} />
+              <Inventaire collection={collection} onScanner={revenirAuScanner} region={region} />
             ) : (
               <Journal journal={journal} onScanner={revenirAuScanner} />
             )}
@@ -225,6 +287,11 @@ export default function App() {
             onRefus={journal.consignerRefus}
             region={region}
             onRegion={setRegion}
+            serie={serie}
+            onSerie={setSerie}
+            ajout={ajout}
+            onAnnuler={annulerAjout}
+            onPreciser={preciserAjout}
           />
         </main>
       )}

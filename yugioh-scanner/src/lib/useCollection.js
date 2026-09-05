@@ -5,11 +5,13 @@ import {
   loadCollection,
   makeEntry,
   removeEntry,
+  retirerUn,
   saveCollection,
   totalValue,
   upsertEntry,
   withCondition,
   withPrice,
+  withTirage,
 } from './collection.js';
 import { DEFAULT_CONDITION } from './condition.js';
 import { fetchPrice, hasPriceBackend } from './price.js';
@@ -191,8 +193,8 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
    * @returns {string} la clé de l'entrée, à passer à `entryFor`
    */
   const track = useCallback(
-    (card, printing, condition = DEFAULT_CONDITION) => {
-      const entry = makeEntry(card, printing, { condition });
+    (card, printing, condition = DEFAULT_CONDITION, { tirageAPreciser = false } = {}) => {
+      const entry = makeEntry(card, printing, { condition, tirageAPreciser });
       const known = entriesRef.current.find((item) => item.key === entry.key) ?? null;
 
       setEntries((current) => upsertEntry(current, entry));
@@ -250,6 +252,32 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
     });
   }, []);
 
+  /** Remplace le tirage d'une entrée et relève la cote du nouveau. */
+  const remplacerTirage = useCallback(
+    (key, printing) => {
+      oublier(key);
+      setEntries((current) => {
+        const suivantes = withTirage(current, key, printing);
+        const nouvelle = suivantes.find((entry) => entry.cardId === current.find((e) => e.key === key)?.cardId && entry.setCode === printing?.setCode && entry.rarity === printing?.rarity);
+        if (nouvelle) loadPrice(nouvelle);
+        return suivantes;
+      });
+    },
+    [oublier, loadPrice],
+  );
+
+  /** Retire un exemplaire (annulation d'un ajout en série). */
+  const retirerUnExemplaire = useCallback(
+    (key) => {
+      setEntries((current) => {
+        const suivantes = retirerUn(current, key);
+        if (!suivantes.some((entry) => entry.key === key)) oublier(key);
+        return suivantes;
+      });
+    },
+    [oublier],
+  );
+
   const remove = useCallback(
     (key) => {
       // Sans cet oubli, la clé restait dans `pending` et dans `errors` : une
@@ -288,6 +316,8 @@ export function useCollection({ persist = true, refreshOnLoad = true } = {}) {
   const total = useMemo(() => totalValue(entries), [entries]);
 
   return {
+    remplacerTirage,
+    retirerUnExemplaire,
     entries,
     entryFor,
     pending,

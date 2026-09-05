@@ -82,6 +82,9 @@ export function ficheDepuisScan(scan, detail = null, region = REGION_DEFAUT) {
     // Identifiée par son illustration : le visuel est la preuve, et le code
     // d'extension n'a pas été lu — c'est le tirage qui reste à désigner.
     parIllustration: scan.method === 'art',
+    // Lecture du code de tirage sur l'image : 'en cours', 'lu', ou la raison
+    // pour laquelle il ne l'a pas été (« carte trop petite », « code illisible »).
+    lectureTirage: scan.lectureTirage ?? null,
     saisieManuelle: typeof scan.source === 'string' && scan.source.endsWith(':manual'),
 
     /* --- caractéristiques -------------------------------------------- */

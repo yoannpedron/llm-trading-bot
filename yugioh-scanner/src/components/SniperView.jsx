@@ -245,7 +245,7 @@ function SaisieManuelle({ onSubmit, onRefus, autoFocus }) {
 /* Poste de lecture                                                     */
 /* ------------------------------------------------------------------ */
 
-export default function SniperView({ sniper, onRefus, region, onRegion }) {
+export default function SniperView({ sniper, onRefus, region, onRegion, serie = false, onSerie = null, ajout = null, onAnnuler = null, onPreciser = null }) {
   const {
     attachVideo,
     ready,
@@ -299,15 +299,17 @@ export default function SniperView({ sniper, onRefus, region, onRegion }) {
   const saisieVisible = manualEntry || Boolean(error);
   // Huit passes sans conclure : l'utilisateur a besoin d'aide, pas d'attendre.
   const enPeine = attempts >= 8 && !failure && !frozenFrame && !saisieVisible;
-  const etat = consigne({
-    contour,
-    lecture,
-    modelReady,
-    modelProgress,
-    frozenFrame,
-    manuel: saisieVisible,
-    attempts,
-  });
+  const etat = ajout
+    ? `Ajoutée au classeur : ${ajout.nom}. Carte suivante.`
+    : consigne({
+        contour,
+        lecture,
+        modelReady,
+        modelProgress,
+        frozenFrame,
+        manuel: saisieVisible,
+        attempts,
+      });
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-fond">
@@ -471,9 +473,59 @@ export default function SniperView({ sniper, onRefus, region, onRegion }) {
           </div>
         )}
 
+        {/* Ce qui vient d'entrer au classeur en mode série : on peut annuler
+            ou préciser le tirage sans quitter le viseur, qui continue. */}
+        {ajout && !saisieVisible && (
+          <div className="panneau flex w-full max-w-md items-center gap-3 p-2" data-ajout={ajout.cle} role="status">
+            {ajout.image && (
+              <img src={ajout.image} alt="" className="h-14 w-10 shrink-0 rounded-[2px] bg-fond object-cover" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-donnee text-encre">
+                {ajout.nom}
+                {ajout.compte > 1 && <span className="ml-1 text-tertiaire">×{ajout.compte}</span>}
+              </p>
+              <p className="truncate font-mono text-micro text-tertiaire">
+                {ajout.precis ? `Tirage lu : ${ajout.code}` : `Tirage probable : ${ajout.code}`}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              <button
+                type="button"
+                onClick={onPreciser}
+                className="h-8 rounded-controle border border-trait-fort bg-panneau px-2 text-micro font-medium text-second hover:text-encre"
+              >
+                Préciser le tirage
+              </button>
+              <button
+                type="button"
+                onClick={onAnnuler}
+                className="h-8 rounded-controle border border-alerte/50 bg-panneau px-2 text-micro font-medium text-alerte"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Barre de commandes : chaque élément absent laisse sa place aux
             autres, plutôt qu'un bouton grisé qui n'apprend rien. */}
         <div className="flex w-full max-w-md gap-2">
+          {/* Le mode série : la carte reconnue entre au classeur sans écran,
+              la suivante s'enchaîne. Activé par défaut. */}
+          {onSerie && !saisieVisible && (
+            <button
+              type="button"
+              onClick={() => onSerie((actif) => !actif)}
+              aria-pressed={serie}
+              title="Ajouter chaque carte reconnue au classeur, sans écran intermédiaire"
+              className={`h-12 flex-1 rounded-controle border text-donnee font-medium transition-colors ${
+                serie ? 'border-positif bg-positif/15 text-encre' : 'border-trait-fort bg-panneau text-second hover:text-encre'
+              }`}
+            >
+              {serie ? 'Série : oui' : 'Série : non'}
+            </button>
+          )}
           {/* La lumière décide de la lisibilité d'une inscription de deux
               millimètres : la commande est proposée dès qu'une piste vidéo
               existe, et ne disparaît que si un essai réel échoue. */}

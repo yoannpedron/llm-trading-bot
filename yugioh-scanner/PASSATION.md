@@ -325,6 +325,29 @@ peuvent encore entrer dans les quarante retenus (1 582 → 664 candidats
 notés). Précision inchangée (86-88 % sur la même graine, dans le bruit de
 mesure). Sur téléphone, compter deux à trois fois plus.
 
+### Mode série : zéro geste par carte
+
+Activé par défaut (`serie.js`, préférence `ygo.serie`, `?serie=0` pour une
+session). La carte reconnue est ajoutée au classeur aussitôt
+(`App.jsx : ajouterEnSerie`) avec le tirage le plus probable
+(`tirageProbable` : le premier dans la langue choisie) et l'indicateur
+`tirageAPreciser` ; le viseur continue. Le code de tirage est lu sur l'image
+si la carte occupe au moins 55 % de la hauteur (`lireTirage.js`, moteur OCR
+chargé à ce moment-là), et l'entrée est corrigée après coup
+(`collection.remplacerTirage`). Le bandeau du viseur montre l'ajout six
+secondes, avec « Annuler » (`retirerUnExemplaire`) et « Préciser le tirage »
+(écran de résultat, dont « Enregistrer » remplace la ligne au lieu d'en
+créer une). La même carte encore devant l'objectif n'est pas ré-ajoutée
+pendant huit secondes (`AntiDoublon`). Dans l'inventaire, les entrées « à
+préciser » portent un badge qui ouvre la liste des tirages de la carte.
+
+Hors série, l'écran de résultat lance la même lecture du code et se
+restreint au tirage lu (`avecTirageLu`) ; la fiche dit « code lu »,
+« lecture… », ou pourquoi il ne l'a pas été.
+
+Vérifié dans le navigateur (`scripts/harness/ui-serie.mjs`) : bandeau,
+entrée « à préciser » dans le classeur, annulation, anti-doublon.
+
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
 - Revenir à un seul cadrage par carte dans l'index (4,5 Mo au lieu de 8,8)

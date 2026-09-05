@@ -5,7 +5,10 @@ import { chime, vibrate } from './feedback.js';
 import { identifier, shutdownArt, warmUpArt } from './identifierClient.js';
 import { grabFrame } from './preprocess.js';
 import { scanCode } from './scanApi.js';
-import { VoteArt, resultatDepuisArt } from './verdictArt.js';
+import { lireTirage } from './lireTirage.js';
+import { AntiDoublon } from './serie.js';
+import { assezGrande, tiragesDuCode } from './tirage.js';
+import { VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
 
 /**
  * Pause entre deux passes d'identification.
@@ -37,7 +40,55 @@ const COTE_MAX = 1600;
  * Le code d'extension n'identifie plus la carte ; il reste disponible en
  * saisie manuelle, pour les cas où la caméra ne peut pas.
  */
-export function useSniper() {
+/**
+ * Lit le code de tirage sur l'image figée. Ne rejette jamais : une lecture
+ * qui échoue (moteur indisponible, carte trop petite) rend un tirage nul
+ * avec sa raison — le viseur ne doit pas s'arrêter pour ça.
+ */
+async function lireTirageSurImage(still, coins, resolved) {
+  try {
+    if (!coins) return { tirage: null, raison: 'contour inconnu' };
+    const distincts = new Set((resolved.printings ?? []).map((p) => p.setCode));
+    if (distincts.size < 2) return { tirage: resolved.printings?.[0] ?? null, raison: 'tirage unique' };
+    if (!assezGrande(coins, still.height)) return { tirage: null, raison: 'carte trop petite' };
+    const image = still.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, still.width, still.height);
+    const lu = await lireTirage(image, coins, resolved.printings);
+    console.debug(`[viseur] tirage : ${lu.tirage?.setCode ?? '—'} (lu « ${lu.lecture} », similarité ${Math.round(lu.similarite)}, ${lu.ms} ms${lu.raison ? `, ${lu.raison}` : ''})`);
+    return lu;
+  } catch (cause) {
+    console.debug(`[viseur] tirage non lu : ${cause?.message ?? cause}`);
+    return { tirage: null, raison: cause?.message ?? 'lecture impossible' };
+  }
+}
+
+/** Le résultat restreint au tirage lu (toutes ses raretés), ou annoté de la raison. */
+export function avecTirageLu(resolved, lu) {
+  if (!lu?.tirage) return { ...resolved, lectureTirage: lu?.raison ?? 'code illisible' };
+  const printings = tiragesDuCode(resolved.printings, lu.tirage);
+  const rarities = tiragesDistincts(printings);
+  return {
+    ...resolved,
+    matchedCode: lu.tirage.setCode,
+    lectureTirage: 'lu',
+    printings,
+    rarities,
+    status: rarities.length > 1 ? 'needs_user_selection' : 'resolved',
+  };
+}
+
+/**
+ * @param {{serie?: boolean, onSerie?: (resolved: object, lecture: Promise<object>) => void}} options
+ *   `serie` : la carte reconnue est remise à `onSerie` (qui l'ajoute au
+ *   classeur) et le viseur continue, sans écran de résultat ; `lecture` est
+ *   la promesse de la lecture du code de tirage sur l'image, tenue à
+ *   `{tirage, raison}` — le tirage est nul si le code ne s'est pas lu.
+ */
+export function useSniper({ serie = false, onSerie = null } = {}) {
+  const serieRef = useRef(serie);
+  const onSerieRef = useRef(onSerie);
+  serieRef.current = serie;
+  onSerieRef.current = onSerie;
+  const antiDoublonRef = useRef(new AntiDoublon());
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const trackRef = useRef(null);
@@ -407,8 +458,28 @@ export function useSniper() {
       if (resolved.status === 'no_match') return;
       setFailure(null);
 
+      // Le code de tirage, lu sur la carte quand elle est assez proche : la
+      // carte est déjà connue, le code n'a plus qu'à être reconnu parmi ses
+      // propres tirages. Lancé sans attendre : le moteur OCR se charge à la
+      // première lecture (31 Mo), la carte s'affiche avant.
+      const coinsStill = r.quad ? r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur })) : null;
+      const lecture = lireTirageSurImage(still, coinsStill, resolved);
+
+      if (serieRef.current && onSerieRef.current) {
+        // La même carte encore devant l'objectif n'est pas un doublon.
+        if (antiDoublonRef.current.dejaVu(resolved.card.id)) return;
+        antiDoublonRef.current.noter(resolved.card.id);
+        onSerieRef.current(resolved, lecture);
+        chime();
+        vibrate();
+        return;
+      }
+
       setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
-      setResult(resolved);
+      setResult({ ...resolved, lectureTirage: coinsStill && assezGrande(coinsStill, still.height) ? 'en cours' : 'carte trop petite' });
+      lecture.then((lu) => {
+        setResult((courant) => (courant && courant.card?.id === resolved.card.id ? avecTirageLu(courant, lu) : courant));
+      });
       // Le bip de la douchette : on sait que c'est lu sans quitter la carte
       // des yeux. Les deux échouent en silence là où ils ne sont pas offerts.
       chime();
@@ -481,6 +552,13 @@ export function useSniper() {
     vibrate();
   }, []);
 
+  /** Affiche l'écran de résultat pour une carte donnée (« Préciser le tirage » après un ajout en série). */
+  const montrer = useCallback((resolved) => {
+    abortRef.current?.abort();
+    setFrozenFrame(null);
+    setResult(resolved);
+  }, []);
+
   /** Relance la visée : l'image se dégèle et la boucle repart. */
   const rescan = useCallback(() => {
     abortRef.current?.abort();
@@ -516,6 +594,7 @@ export function useSniper() {
     result,
     frozenFrame,
     rescan,
+    montrer,
     submitCode,
     manualEntry,
     setManualEntry,

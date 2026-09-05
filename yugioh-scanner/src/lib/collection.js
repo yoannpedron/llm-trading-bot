@@ -21,8 +21,12 @@ export const entryKey = (cardId, setCode, rarity) =>
 /**
  * Construit une entrée à partir d'une carte identifiée et du tirage retenu.
  */
-export function makeEntry(card, printing, { at = Date.now(), condition = DEFAULT_CONDITION } = {}) {
+export function makeEntry(card, printing, { at = Date.now(), condition = DEFAULT_CONDITION, tirageAPreciser = false } = {}) {
   return {
+    // Ajoutée en série avec le tirage le plus probable, sans lecture du code :
+    // l'inventaire le signale et propose de le préciser. Absent (ou faux)
+    // pour une entrée dont le tirage a été choisi ou lu.
+    ...(tirageAPreciser ? { tirageAPreciser: true } : {}),
     key: entryKey(card.id, printing?.setCode, printing?.rarity),
     cardId: card.id,
     name: card.name,
@@ -84,8 +88,48 @@ export function upsertEntry(entries, entry) {
     price: entry.price ?? existing.price,
     pricedAt: entry.price ? entry.pricedAt : existing.pricedAt,
   };
+  // Un tirage reste « à préciser » seulement si aucun des deux ajouts ne
+  // l'a fixé : un ajout précis efface le doute d'un ajout en série.
+  if (!(existing.tirageAPreciser && entry.tirageAPreciser)) delete merged.tirageAPreciser;
 
   return [merged, ...entries.filter((item) => item.key !== entry.key)];
+}
+
+/**
+ * Remplace le tirage d'une entrée (code, série, rareté), en gardant ses
+ * exemplaires, son état et sa date. Si le tirage visé existe déjà dans
+ * l'inventaire, les deux lignes fusionnent (exemplaires additionnés).
+ */
+export function withTirage(entries, key, printing) {
+  const source = entries.find((entry) => entry.key === key);
+  if (!source || !printing) return entries;
+  const nouvelleCle = entryKey(source.cardId, printing.setCode, printing.rarity);
+  const remplacee = {
+    ...source,
+    key: nouvelleCle,
+    setCode: printing.setCode ?? '',
+    setName: printing.setName ?? '',
+    rarity: printing.rarity ?? '',
+    rarityCode: printing.rarityCode ?? '',
+    // Le tirage change : la cote relevée ne vaut plus.
+    price: null,
+    pricedAt: null,
+  };
+  delete remplacee.tirageAPreciser;
+  const sansSource = entries.filter((entry) => entry.key !== key);
+  const existante = sansSource.find((entry) => entry.key === nouvelleCle);
+  if (!existante) return [remplacee, ...sansSource];
+  const fusion = { ...existante, count: (existante.count ?? 1) + (source.count ?? 1) };
+  if (!existante.tirageAPreciser) delete fusion.tirageAPreciser;
+  return [fusion, ...sansSource.filter((entry) => entry.key !== nouvelleCle)];
+}
+
+/** Retire un exemplaire : décrémente, ou supprime la ligne s'il n'en reste qu'un. */
+export function retirerUn(entries, key) {
+  const source = entries.find((entry) => entry.key === key);
+  if (!source) return entries;
+  if ((source.count ?? 1) <= 1) return entries.filter((entry) => entry.key !== key);
+  return entries.map((entry) => (entry.key === key ? { ...entry, count: entry.count - 1 } : entry));
 }
 
 /** Change l'état retenu pour une entrée. */
