@@ -35,17 +35,29 @@ export function loadArtIndex(onProgress) {
       onProgress?.(1);
       return lireIndexArt(octets);
     }
+    // `content-length` est la taille sur le réseau — COMPRESSÉE quand le
+    // serveur gzippe (GitHub Pages le fait) — alors que le flux rend les
+    // octets décompressés. Elle ne sert donc qu'à la progression, bornée à 1 ;
+    // les morceaux sont accumulés puis assemblés, sans présumer de la taille.
+    // Une première version allouait la taille annoncée et refusait le reste :
+    // « index plus long qu'annoncé », sur le vrai site.
     const lecteur = response.body.getReader();
-    const tampon = new Uint8Array(total);
+    const morceaux = [];
     let recu = 0;
     for (;;) {
       const { done, value } = await lecteur.read();
       if (done) break;
-      if (recu + value.length > tampon.length) throw new Error('index plus long qu’annoncé');
-      tampon.set(value, recu);
+      morceaux.push(value);
       recu += value.length;
-      onProgress?.(recu / total);
+      onProgress?.(Math.min(1, recu / total));
     }
+    const tampon = new Uint8Array(recu);
+    let position = 0;
+    for (const morceau of morceaux) {
+      tampon.set(morceau, position);
+      position += morceau.length;
+    }
+    onProgress?.(1);
     return lireIndexArt(tampon.buffer);
   })().catch((erreur) => {
     promesse = null;
