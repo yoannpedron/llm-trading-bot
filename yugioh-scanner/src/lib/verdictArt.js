@@ -10,12 +10,9 @@
  *     banc, une seule image sûre à 0,85/0,05 ne laissait passer aucune
  *     fausse carte ; sur l'appareil réel, si. Les marges sont relevées et
  *     la deuxième image exigée ;
- *   - **à proposer** : score ≥ 0,70 et marge ≥ 0,03. On ne tranche pas : les
- *     trois meilleures cartes sont proposées à l'utilisateur, qui touche la
- *     sienne. Mesuré : la bonne est dans les trois dans 8 cas sur 19 ; 13
- *     scènes négatives sur 60 déclenchent une proposition — un dérangement,
- *     pas une erreur ;
- *   - **rien** : en dessous, la passe ne compte pas.
+ *   - **rien** : tout le reste. Une version proposait trois cartes dans la
+ *     zone intermédiaire ; l'utilisateur n'en voulait pas — soit c'est sûr,
+ *     soit on continue de chercher.
  *
  * Pourquoi la marge et non une confirmation par une deuxième image : sur un
  * téléphone posé devant une carte, deux images successives sont presque
@@ -31,9 +28,11 @@ export const SCORE_SUR = 0.85;
 export const MARGE_SURE = 0.08;
 export const SCORE_FERME = 0.78;
 export const MARGE_FERME = 0.15;
-export const SCORE_PROPOSE = 0.7;
-export const MARGE_PROPOSE = 0.03;
-export const NOMBRE_PROPOSITIONS = 3;
+/**
+ * En dessous, la passe ne « voit » même pas de carte : sert au viseur pour
+ * juger qu'une carte est toujours devant l'objectif (anti-doublon).
+ */
+export const SCORE_VU = 0.7;
 /**
  * Passes consécutives dans la zone sûre, sur la même carte, avant de
  * verrouiller. Sur l'appareil réel, une seule image sûre a produit trop de
@@ -43,23 +42,18 @@ export const NOMBRE_PROPOSITIONS = 3;
 export const PASSES_SURES = 2;
 
 /**
- * La zone d'une passe.
+ * La zone d'une passe : sûre, ou rien.
  *
  * @param {Array<{id: number, score: number}>} candidats triés par score décroissant
- * @returns {{zone: 'sure'|'proposer'|'rien', id: number|null, score: number, marge: number,
- *   propositions: Array<{id: number, score: number}>}}
+ * @returns {{zone: 'sure'|'rien', id: number|null, score: number, marge: number}}
  */
 export function zoneDe(candidats) {
   const premier = candidats?.[0];
-  if (!premier) return { zone: 'rien', id: null, score: 0, marge: 0, propositions: [] };
+  if (!premier) return { zone: 'rien', id: null, score: 0, marge: 0 };
   const marge = premier.score - (candidats[1]?.score ?? 0);
   const sure =
     (premier.score >= SCORE_SUR && marge >= MARGE_SURE) || (premier.score >= SCORE_FERME && marge >= MARGE_FERME);
-  if (sure) return { zone: 'sure', id: premier.id, score: premier.score, marge, propositions: [] };
-  if (premier.score >= SCORE_PROPOSE && marge >= MARGE_PROPOSE) {
-    return { zone: 'proposer', id: premier.id, score: premier.score, marge, propositions: candidats.slice(0, NOMBRE_PROPOSITIONS) };
-  }
-  return { zone: 'rien', id: null, score: premier.score, marge, propositions: [] };
+  return { zone: sure ? 'sure' : 'rien', id: sure ? premier.id : null, score: premier.score, marge };
 }
 
 /**
@@ -76,8 +70,7 @@ export class VoteArt {
 
   /**
    * @param {Array<{id: number, score: number}>} candidats triés par score
-   * @returns {{accepted: boolean, id: number|null, score: number, marge: number, zone: string,
-   *   suite: number, propositions: Array<{id: number, score: number}>}}
+   * @returns {{accepted: boolean, id: number|null, score: number, marge: number, zone: string, suite: number}}
    */
   cast(candidats) {
     const z = zoneDe(candidats);
@@ -90,7 +83,7 @@ export class VoteArt {
       this.suite = 0;
     }
     const accepted = z.zone === 'sure' && this.suite >= this.passes;
-    return { accepted, id: accepted ? z.id : null, score: z.score, marge: z.marge, zone: z.zone, suite: this.suite, propositions: z.propositions };
+    return { accepted, id: accepted ? z.id : null, score: z.score, marge: z.marge, zone: z.zone, suite: this.suite };
   }
 
   reset() {

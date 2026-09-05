@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { loadCardIndex } from '../lib/cardIndex.js';
 import { suggestSetCodes } from '../lib/match.js';
-import { imagePetite } from '../lib/images.js';
 import { SCORE_SUR } from '../lib/verdictArt.js';
 import { toContainerPoint } from '../lib/viewport.js';
 import ChoixRegion from './ChoixRegion.jsx';
@@ -45,7 +44,6 @@ export function consigne({ contour, lecture, modelReady, modelProgress = 0, froz
   }
   if (attempts === 0) return 'Montrez une carte, entière dans l’image';
   if (!contour) return 'Aucune carte vue — montrez-la entière, sur un fond uni';
-  if (lecture?.zone === 'proposer') return 'Pas sûr — touchez votre carte ci-dessous, ou rapprochez-vous';
   if (!lecture?.id) return 'Carte repérée, identification…';
   if (lecture.score >= SCORE_SUR) return 'Carte reconnue';
   return 'Carte reconnue';
@@ -259,8 +257,6 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
     modelProgress,
     contour,
     lecture,
-    propositions: cartesProposees = [],
-    choisir,
     attempts,
     failure,
     frozenFrame,
@@ -441,35 +437,6 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
             <span className="donnee w-10 shrink-0 text-right text-second">
               ×{(zoom.value / (zoom.min || 1)).toFixed(1)}
             </span>
-          </div>
-        )}
-
-        {/* Quand la passe n'est pas assez sûre pour trancher, les trois
-            meilleures cartes sont proposées : l'utilisateur reconnaît la
-            sienne d'un coup d'œil, là où l'appareil se tromperait une fois
-            sur cinq. Le viseur continue de chercher pendant ce temps. */}
-        {cartesProposees.length > 0 && !saisieVisible && !frozenFrame && (
-          <div className="panneau w-full max-w-md p-3" data-propositions={cartesProposees.length}>
-            <p className="intitule">Est-ce l’une de ces cartes ?</p>
-            <ul className="mt-2 grid grid-cols-3 gap-2">
-              {cartesProposees.map((carte) => (
-                <li key={carte.id}>
-                  <button
-                    type="button"
-                    onClick={() => choisir(carte.id)}
-                    className="flex w-full flex-col items-center gap-1 rounded-controle border border-trait-fort bg-relief p-1 text-center transition-colors hover:border-accent"
-                  >
-                    <img
-                      src={imagePetite(carte.id)}
-                      alt=""
-                      className="aspect-[59/86] w-full rounded-[2px] bg-fond object-cover"
-                      loading="lazy"
-                    />
-                    <span className="line-clamp-2 text-micro leading-tight text-encre">{carte.nom}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
           </div>
         )}
 

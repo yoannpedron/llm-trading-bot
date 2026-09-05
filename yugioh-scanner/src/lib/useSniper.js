@@ -8,7 +8,7 @@ import { scanCode } from './scanApi.js';
 import { lireTirage } from './lireTirage.js';
 import { AntiDoublon } from './serie.js';
 import { assezGrande, tiragesDuCode } from './tirage.js';
-import { SCORE_PROPOSE, VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
+import { SCORE_VU, VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
 
 /**
  * Pause entre deux passes d'identification.
@@ -65,7 +65,7 @@ async function lireTirageSurImage(still, coins, resolved) {
 }
 
 /** Le résultat restreint au tirage lu (toutes ses raretés), ou annoté de la raison. */
-export function avecTirageLu(resolved, lu) {
+function avecTirageLu(resolved, lu) {
   if (!lu?.tirage) return { ...resolved, lectureTirage: lu?.raison ?? 'code illisible' };
   const printings = tiragesDuCode(resolved.printings, lu.tirage);
   const rarities = tiragesDistincts(printings);
@@ -153,13 +153,6 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
    * code en saisit dix.
    */
   const [manualEntry, setManualEntry] = useState(false);
-  /**
-   * Cartes proposées quand la passe n'est pas assez sûre pour trancher : les
-   * trois meilleures, avec leur nom, à toucher. Renouvelées seulement quand
-   * la première change, pour ne pas bouger sous le doigt.
-   */
-  const [propositions, setPropositions] = useState([]);
-  const propositionsRef = useRef([]);
   /**
    * Le même état, lisible depuis la lecture en cours.
    *
@@ -443,25 +436,8 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
       // Vue = la meilleure carte de la passe, même quand la passe n'est pas
       // assez sûre pour verrouiller : une passe moyenne sur la même carte ne
       // veut pas dire qu'elle a quitté le champ.
-      const vue = (r.candidats?.[0]?.score ?? 0) >= SCORE_PROPOSE ? r.candidats[0].id : null;
+      const vue = (r.candidats?.[0]?.score ?? 0) >= SCORE_VU ? r.candidats[0].id : null;
       antiDoublonRef.current.voir(vue);
-      if (verdict.zone === 'proposer') {
-        const actuelles = propositionsRef.current;
-        if (actuelles[0]?.id !== verdict.propositions[0]?.id) {
-          const index = await loadCardIndex();
-          const nommees = verdict.propositions
-            .map((p) => {
-              const position = index.byPasscode.get(p.id);
-              return position === undefined ? null : { id: p.id, score: p.score, nom: index.cards[position].name };
-            })
-            .filter(Boolean);
-          propositionsRef.current = nommees;
-          setPropositions(nommees);
-        }
-      } else if (verdict.zone === 'sure' && propositionsRef.current.length) {
-        propositionsRef.current = [];
-        setPropositions([]);
-      }
       if (!verdict.accepted) {
         // Première image sûre : le code est déjà lu sur cette image, pour
         // que la deuxième lecture (au verrouillage) puisse la confirmer —
@@ -596,24 +572,6 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     return resolved;
   }, []);
 
-  /**
-   * L'utilisateur a touché une des cartes proposées : on verrouille dessus,
-   * même écran de résultat, avec la source qui dit que c'est son choix.
-   */
-  const choisir = useCallback(async (id) => {
-    const proposition = propositionsRef.current.find((p) => p.id === id);
-    if (!proposition) return;
-    const index = await loadCardIndex();
-    const resolved = resultatDepuisArt(index, id, { score: proposition.score, marge: 0, sens: null, quad: null });
-    if (resolved.status === 'no_match') return;
-    propositionsRef.current = [];
-    setPropositions([]);
-    setFrozenFrame(null);
-    setResult({ ...resolved, source: 'local:art:choix' });
-    chime();
-    vibrate();
-  }, []);
-
   /** Affiche l'écran de résultat pour une carte donnée (« Préciser le tirage » après un ajout en série). */
   const montrer = useCallback((resolved) => {
     abortRef.current?.abort();
@@ -630,8 +588,6 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     setFrozenFrame(null);
     setContour(null);
     setLecture(null);
-    propositionsRef.current = [];
-    setPropositions([]);
     preLectureRef.current = null;
     setAttempts(0);
     setFailure(null);
@@ -650,8 +606,6 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     modelProgress,
     contour,
     lecture,
-    propositions,
-    choisir,
     attempts,
     failure,
     result,

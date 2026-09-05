@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildSearchIndex } from '../src/lib/match.js';
-import { MARGE_FERME, MARGE_PROPOSE, MARGE_SURE, SCORE_FERME, SCORE_PROPOSE, SCORE_SUR, VoteArt, resultatDepuisArt, tiragesDistincts, zoneDe } from '../src/lib/verdictArt.js';
+import { MARGE_FERME, MARGE_SURE, SCORE_FERME, SCORE_SUR, VoteArt, resultatDepuisArt, tiragesDistincts, zoneDe } from '../src/lib/verdictArt.js';
 import { toContainerPoint, toVideoRect } from '../src/lib/viewport.js';
 
 const index = buildSearchIndex({
@@ -43,18 +43,14 @@ test('une passe sûre sur une autre carte, ou une passe moyenne, remet le compte
   assert.equal(zoneDe(large).zone, 'sure');
 });
 
-test('entre les deux, les trois meilleures cartes sont proposées ; en dessous, rien', () => {
-  const proposer = zoneDe([{ id: 1, score: SCORE_PROPOSE + 0.02 }, { id: 2, score: SCORE_PROPOSE + 0.02 - MARGE_PROPOSE }, { id: 3, score: 0.5 }, { id: 4, score: 0.4 }]);
-  assert.equal(proposer.zone, 'proposer');
-  assert.deepEqual(proposer.propositions.map((p) => p.id), [1, 2, 3]);
-  // Un score correct mais talonné par une autre carte : on propose, on ne tranche pas.
+test('hors zone sûre, rien : ni identifiant, ni verrouillage', () => {
+  // Un score correct mais talonné par une autre carte : on continue de chercher.
   assert.equal(new VoteArt().cast([{ id: 1, score: 0.8 }, { id: 2, score: 0.76 }]).accepted, false);
-  assert.equal(new VoteArt().cast([{ id: 1, score: 0.8 }, { id: 2, score: 0.76 }]).zone, 'proposer');
-  assert.equal(zoneDe([{ id: 1, score: 0.86 }, { id: 2, score: 0.8 }]).zone, 'proposer', 'marge 0,06 : plus assez');
-  const rien = zoneDe([{ id: 1, score: SCORE_PROPOSE - 0.01 }]);
+  assert.equal(zoneDe([{ id: 1, score: 0.86 }, { id: 2, score: 0.8 }]).zone, 'rien', 'marge 0,06 : pas assez');
+  const rien = zoneDe([{ id: 1, score: 0.69 }]);
   assert.equal(rien.zone, 'rien');
   assert.equal(rien.id, null);
-  assert.deepEqual(zoneDe([]).propositions, []);
+  assert.equal(zoneDe([]).zone, 'rien');
 });
 
 test('le résultat a la forme d’un scan : carte, tirages distincts, choix requis', () => {

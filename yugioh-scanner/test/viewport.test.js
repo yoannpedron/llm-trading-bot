@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { coverOffset, coverScale, reticleRect, toVideoRect } from '../src/lib/viewport.js';
+import { coverOffset, coverScale, toVideoRect } from '../src/lib/viewport.js';
+
+/** Un rectangle centré à l'écran, comme l'était la fenêtre de visée. */
+const reticleRect = (container) => {
+  const width = Math.min(container.width * 0.82, 420);
+  const height = width / 6;
+  return { x: (container.width - width) / 2, y: (container.height - height) / 2, width, height };
+};
 
 const VIDEO = { width: 1920, height: 1080 }; // 16:9
 const PHONE = { width: 390, height: 844 }; // portrait, bien plus étroit

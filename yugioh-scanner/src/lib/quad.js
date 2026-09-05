@@ -19,8 +19,12 @@ import { toGrayscale } from './preprocess.js';
 /** Largeur du liseré noir d'une carte, en fraction du petit côté (mesurée sur les rendus officiels). */
 export const LISERE = 0.027;
 
-/** Largeur de travail pour la détection : assez pour quatre bords, pas plus. */
-export const LARGEUR_DETECTION = 320;
+/**
+ * Largeur de travail pour la détection. Mesuré sur le banc : 320 px perdaient
+ * les petites cartes (56 % → 88 % à 448 px sur les moyennes) ; au-delà, le
+ * coût de Hough croît sans gain.
+ */
+export const LARGEUR_DETECTION = 448;
 
 /* ------------------------------------------------------------------ */
 /* Homographie                                                          */
@@ -676,7 +680,7 @@ export function dilater(coins, liseré = 0.025) {
  * @param {{bande?: number, points?: number, minimum?: number}} options
  *   demi-largeur de recherche en fraction du petit côté (3 px au moins)
  */
-export function affiner(image, coins, { bande = 0.03, points = 48, minimum = 10, trace = null } = {}) {
+export function affiner(image, coins, { bande = 0.03, points = 48, minimum = 10 } = {}) {
   const { width, height } = image;
   const gray = image.gray ?? toGrayscale(image);
   const lire = (x, y) => {
@@ -756,7 +760,6 @@ export function affiner(image, coins, { bande = 0.03, points = 48, minimum = 10,
       }
       if (max >= minimum && Math.abs(ou) <= portee) secours.push({ x: px + nx * ou, y: py + ny * ou, k });
     }
-    if (trace) trace.push({ bords: bords.length, secours: secours.length });
     const initiale = { theta: Math.atan2(ny, nx), rho: a.x * nx + a.y * ny };
     const droite = droiteConsensus(bords, initiale, points) ?? droiteConsensus(bords.concat(secours), initiale, points);
     if (!droite) return coins;

@@ -77,7 +77,6 @@ export function ficheDepuisScan(scan, detail = null, region = REGION_DEFAUT) {
     lectureBrute: approchee ? (scan.read ?? null) : null,
     confiance: typeof scan.confidence === 'number' ? scan.confidence : null,
     marge: typeof scan.marge === 'number' ? scan.marge : null,
-    choisie: typeof scan.source === 'string' && scan.source.endsWith(':choix'),
     methode: scan.method ?? null,
     // Identifiée par son illustration : le visuel est la preuve, et le code
     // d'extension n'a pas été lu — c'est le tirage qui reste à désigner.

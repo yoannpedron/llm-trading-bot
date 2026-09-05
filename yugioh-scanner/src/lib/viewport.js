@@ -63,26 +63,6 @@ export function toVideoRect(rect, video, container) {
 }
 
 /**
- * Le viseur : un rectangle très allongé, centré.
- *
- * Un code d'extension fait environ 10 caractères sur une seule ligne. Un cadre
- * au ratio 6:1 le contient sans laisser de place au décor de la carte, ce qui
- * évite à l'OCR d'avoir à trier le texte utile du reste.
- */
-export const RETICLE_RATIO = 6;
-
-export function reticleRect(container, { ratio = RETICLE_RATIO, fill = 0.82, max = 420 } = {}) {
-  const width = Math.min(container.width * fill, max);
-  const height = width / ratio;
-  return {
-    x: (container.width - width) / 2,
-    y: (container.height - height) / 2,
-    width,
-    height,
-  };
-}
-
-/**
  * L'inverse : un point en pixels natifs de la vidéo, ramené en pixels du
  * conteneur — pour dessiner sur l'écran ce que la détection a trouvé dans
  * l'image. Un point peut tomber hors du conteneur : la partie rognée par

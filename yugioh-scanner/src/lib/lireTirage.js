@@ -11,7 +11,7 @@
  * à tirage unique ne déclenche rien.
  */
 
-import { recognize, warmUp } from './ocr.js';
+import { recognize } from './ocr.js';
 import { redresser } from './quad.js';
 import { BANDE_CODE, apparierTirage, assezGrande } from './tirage.js';
 
@@ -19,9 +19,6 @@ const LARGEUR = 813;
 const HAUTEUR = 1185;
 /** Hauteur visée de la bande donnée au moteur : mesuré, il lit mieux vers 80 px de haut. */
 const HAUTEUR_BANDE = 80;
-
-/** Démarre le moteur OCR en avance (facultatif). */
-export const preparerLecture = (onProgress) => warmUp(onProgress);
 
 /**
  * @param {ImageData} image l'image native où la carte a été reconnue

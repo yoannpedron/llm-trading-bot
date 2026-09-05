@@ -146,7 +146,7 @@ export default function FicheCarte({
           <p className="mt-3 flex gap-2 rounded-controle border border-trait bg-relief px-3 py-2 text-donnee text-second">
             <span aria-hidden>◎</span>
             <span>
-              {fiche.choisie ? 'Choisie par vous parmi les propositions. ' : 'Reconnue par son illustration. '}
+              Reconnue par son illustration.{' '}
               {fiche.lectureTirage === 'lu'
                 ? 'Le code de tirage a été lu sur la carte.'
                 : fiche.lectureTirage === 'en cours'
@@ -154,7 +154,7 @@ export default function FicheCarte({
                   : fiche.lectureTirage === 'tirage unique'
                     ? 'Un seul tirage existe.'
                     : `Code de tirage non lu (${fiche.lectureTirage ?? 'non tenté'}) : il se lit sous l’illustration à droite, comme « LDK2-FR001 ». Rapprochez-vous pour qu’il soit lu.`}
-              {fiche.confiance !== null && !fiche.choisie && (
+              {fiche.confiance !== null && (
                 <span className="mt-1 block font-mono text-micro text-tertiaire">
                   {/* Les deux chiffres qui décident du verrouillage : à lire
                       dans une capture d'écran quand la carte est fausse. */}

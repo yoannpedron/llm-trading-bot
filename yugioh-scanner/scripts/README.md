@@ -37,10 +37,8 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `ocr-bench.mjs` | **où passe le temps** : coût de chaque étage de prétraitement, puis de la reconnaissance selon l'agrandissement, le mode de segmentation et le modèle |
 | `ocr-multiframe.mjs` | ce que plusieurs images successives apportent — conclusion : rien, les erreurs sont systématiques |
 | `ocr-strategies.mjs` | compare une passe, le modèle « best » et la double passe avec numéro en chiffres seuls |
-| `harness/time-to-lock.mjs` | le délai réel entre le cadrage et l'affichage de la carte, dans le navigateur |
 | `font-confusions.mjs` | similarité des silhouettes de glyphes — conclusion : non concluant, voir plus bas |
 | `harness/real-crops.mjs` | rejoue les vrais recadrages de `scripts/fixtures/` avec et sans lissage et rognage — **à lancer avant toute décision sur le prétraitement** |
-| `harness/sniper-shot.mjs` | fabrique une image de viseur réaliste (flou, reflet, bruit, rotation) |
 | `harness/live-crop.mjs` | recadre la vidéo en direct de l'application et la lit |
 | `harness/ui-e2e.mjs` | chaîne complète en navigateur, caméra simulée par un fichier MJPEG |
 | `harness/manual-entry.mjs` | saisie manuelle du code, avec et sans caméra : frappe, complétion, validation, enchaînement |
@@ -118,28 +116,24 @@ alors que le banc annonçait 90 % de bonnes cartes.
 
 ## Test navigateur hors ligne
 
-`harness/ui-e2e.mjs` charge l'application bâtie et attend un verrouillage sur
-la caméra simulée. Dans un environnement où Chromium ne joint pas le CDN, il
-faut servir Tesseract depuis `public/tess/` (ignoré par git) :
+`harness/ui-e2e.mjs` charge l'application bâtie (mode série coupé par
+`?serie=0`) et attend l'écran de résultat sur la caméra simulée ;
+`harness/ui-serie.mjs` fait de même en mode série et vérifie l'ajout au
+classeur, la lecture du code, l'annulation et l'anti-doublon :
 
 ```bash
-mkdir -p public/tess/core public/tess/lang
-cp node_modules/tesseract.js/dist/worker.min.js public/tess/
-cp node_modules/tesseract.js-core/tesseract-core*.{js,wasm} public/tess/core/
-cp $SP/eng.traineddata public/tess/lang/ && gzip -k public/tess/lang/eng.traineddata
-curl -o $SP/beb.jpg https://images.ygoprodeck.com/images/cards/89631139.jpg
-SP=$SP DEGRADE=aucun node scripts/harness/sniper-shot.mjs
-for i in $(seq 1 90); do cat $SP/sniper-aucun.jpg; done > $SP/sniper.mjpeg
-VITE_TESSERACT_WORKER_PATH=/tess/worker.min.js VITE_TESSERACT_CORE_PATH=/tess/core \
-  VITE_TESSERACT_LANG_PATH=/tess/lang npx vite build
-npx vite preview --port 4173 &
+SP=$SP ARTS=$SP/arts/small node scripts/harness/scene-camera.mjs          # carte à 55 %
+SP=$SP ARTS=$SP/arts/small FULL=$SP/arts/full ID=1154611 CODE=MP17-EN171 \
+  node scripts/harness/scene-camera.mjs                                    # carte à 80 % avec code
+npx vite build && npx vite preview --port 4173 &
 SP=$SP node scripts/harness/ui-e2e.mjs
+SP=$SP node scripts/harness/ui-serie.mjs
 ```
 
-Le résultat attendu tient en une ligne : `résultat : code=… nom="Destiny HERO -
-Malicious"` et `aucune erreur console`. « AUCUNE lecture aboutie » sans erreur
-console est une régression de la boucle de lecture ou du prétraitement — c'est
-ainsi que deux ont été prises.
+Le résultat attendu tient en une ligne : `résultat : nom="Dark Magician"` et
+`aucune erreur console` ; en série, `lecture du code : entrée corrigée` et
+`0 attendu : anti-doublon`. « AUCUNE lecture aboutie » sans erreur console
+est une régression de la boucle de lecture.
 
 `manual-entry.mjs` s'exécute sur la même application servie, et n'a pas besoin
 de la caméra simulée pour son second parcours. Il tape le code **caractère par

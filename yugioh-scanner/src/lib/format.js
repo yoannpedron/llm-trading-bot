@@ -59,8 +59,6 @@ export const entier = (valeur) => (nombreValide(valeur) ? ENTIER.format(valeur) 
 export const dateCourte = (horodatage) =>
   horodatage ? DATE_COURTE.format(new Date(horodatage)) : ABSENT;
 
-/** `4 septembre 2026 à 16:42` — pour une infobulle ou une fiche. */
-export const dateLongue = (horodatage) =>
   horodatage ? DATE_LONGUE.format(new Date(horodatage)) : ABSENT;
 
 /**

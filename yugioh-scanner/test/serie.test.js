@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeEntry, retirerUn, upsertEntry, withTirage } from '../src/lib/collection.js';
-import { AntiDoublon, PASSES_ABSENCE, ecrireSerie, lireSerie, tirageProbable } from '../src/lib/serie.js';
+import { AntiDoublon, PASSES_ABSENCE, ecrireSerie, lireSerie } from '../src/lib/serie.js';
 
 const carte = { id: 46986414, name: 'Dark Magician', image: null, images: [] };
 const tirages = [
@@ -21,13 +21,6 @@ test('la préférence série est activée par défaut, mémorisée, et coupée p
   ecrireSerie(true, stockage);
   assert.equal(lireSerie(stockage, '?x=1&serie=0'), false);
   assert.equal(lireSerie(null, ''), true);
-});
-
-test('le tirage probable est le premier dans la langue choisie, code converti', () => {
-  const t = tirageProbable(tirages, 'FR');
-  assert.equal(t.setCode, 'LOB-FR005');
-  assert.equal(t.setCodePublie, 'LOB-EN005');
-  assert.equal(tirageProbable([], 'FR'), null);
 });
 
 test('la même carte devant l’objectif n’est pas ré-ajoutée tant qu’elle n’a pas disparu', () => {

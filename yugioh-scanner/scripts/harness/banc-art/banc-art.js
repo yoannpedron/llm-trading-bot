@@ -545,28 +545,6 @@ window.__ecarts = async (b64, coinsVrais, { largeur = 448, bande = 0.03 } = {}) 
   return { brut, affine };
 };
 
-/**
- * Indice d'orientation sur une carte canonique : variance de luminance de la
- * bande du nom (haut) contre celle de la marge basse. Rend la différence
- * (positive = à l'endroit).
- */
-window.__orientationCanonique = async (urls) => {
-  const P = await import('/src/lib/preprocess.js');
-  const { indiceOrientation } = await import('/src/lib/identifier.js');
-  return Promise.all(urls.map(async (url) => {
-    try {
-      const carte = await carteCanonique(url);
-      const g = P.toGrayscale(carte);
-      const essais = {
-        var_art_vs_texte: [[[0.10, 0.24], [0.76, 0.90]], 'variance'],
-        lum_texte_vs_art: [[[0.76, 0.90], [0.10, 0.24]], 'moyenne'],
-        var_artbas_vs_texte: [[[0.55, 0.70], [0.76, 0.90]], 'variance'],
-        var_art_vs_texte_large: [[[0.20, 0.45], [0.55, 0.90]], 'variance'],
-      };
-      return Object.fromEntries(Object.entries(essais).map(([k, [b, m]]) => [k, indiceOrientation(g, carte.width, carte.height, b, m)]));
-    } catch { return null; }
-  }));
-};
 
 
 /**

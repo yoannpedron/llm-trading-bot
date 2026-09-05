@@ -9,7 +9,7 @@
  */
 
 import { loadArtIndex } from './artIndex.js';
-import { LARGEUR_DETECTION_APP } from './identifier.js';
+import { LARGEUR_DETECTION } from './quad.js';
 
 let worker = null;
 let pret = null;
@@ -98,7 +98,7 @@ export function identifier(image) {
         reject(e);
       },
     });
-    worker.postMessage({ type: 'identifier', id, image, largeur: LARGEUR_DETECTION_APP }, [image.data.buffer]);
+    worker.postMessage({ type: 'identifier', id, image, largeur: LARGEUR_DETECTION }, [image.data.buffer]);
   });
 }
 

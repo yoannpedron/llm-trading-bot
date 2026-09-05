@@ -20,7 +20,9 @@
 
 import { CADRE_ART, MARGE_ART, chercher, empreinte } from './art.js';
 import { toGrayscale } from './preprocess.js';
-import { affiner, carteDepuisArt, dilater, homographie, noirceur, remettreEchelle, trouverQuads } from './quad.js';
+import { LARGEUR_DETECTION, affiner, carteDepuisArt, dilater, homographie, noirceur, remettreEchelle, trouverQuads } from './quad.js';
+
+export { LARGEUR_DETECTION };
 import { MARGE_SURE, SCORE_SUR } from './verdictArt.js';
 
 /** Une recherche qui désigne une carte avec la certitude de la zone sûre de `verdictArt`. */
@@ -29,12 +31,6 @@ const estSure = (trouves) => (trouves[0]?.score ?? 0) >= SCORE_SUR && trouves[0]
 /** Côté du rééchantillonnage de l'illustration pour l'empreinte. */
 export const COTE_ART = 96;
 
-/**
- * Largeur de l'image de détection dans l'application. Mesuré sur le banc :
- * 320 px perdaient les petites cartes (56 % → 88 % à 448 px sur les
- * moyennes) ; au-delà, le coût de Hough croît sans gain.
- */
-export const LARGEUR_DETECTION_APP = 448;
 
 /**
  * Réduit une image (ImageData) à `largeur` pixels de large, par moyenne de
@@ -130,24 +126,20 @@ function echantillonner(source, h, largeur, hauteur) {
  * des variances de luminance des deux bandes est positive pour une carte à
  * l'endroit. Mesuré sur les visuels officiels (voir `scripts/art-bench.mjs`).
  */
-export function indiceOrientation(gray, width, height, bandes = BANDES_ORIENTATION, mesure = 'moyenne') {
-  const stats = (y0, y1) => {
+export function indiceOrientation(gray, width, height, bandes = BANDES_ORIENTATION) {
+  const moyenne = (y0, y1) => {
     let somme = 0;
-    let carre = 0;
     let n = 0;
     for (let y = Math.round(y0 * height); y < Math.round(y1 * height); y += 1) {
       for (let x = Math.round(0.12 * width); x < Math.round(0.88 * width); x += 1) {
-        const v = gray[y * width + x];
-        somme += v;
-        carre += v * v;
+        somme += gray[y * width + x];
         n += 1;
       }
     }
-    const moyenne = n ? somme / n : 0;
-    return { moyenne, variance: n ? carre / n - moyenne ** 2 : 0 };
+    return n ? somme / n : 0;
   };
-  const [haut, bas] = bandes;
-  return stats(haut[0], haut[1])[mesure] - stats(bas[0], bas[1])[mesure];
+  const [texte, miroir] = bandes;
+  return moyenne(texte[0], texte[1]) - moyenne(miroir[0], miroir[1]);
 }
 
 /**

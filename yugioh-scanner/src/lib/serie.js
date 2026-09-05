@@ -3,16 +3,15 @@
  *
  * Vider un classeur de trois cents cartes avec un écran de résultat par
  * carte, c'est trois appuis par carte. En série, la carte reconnue est
- * ajoutée au classeur aussitôt, avec le tirage le plus probable, et le viseur
+ * ajoutée au classeur aussitôt, et le viseur
  * passe à la suivante. Le code de tirage, lu sur la carte quand elle est assez
- * proche, précise l'entrée après coup ; sinon l'entrée porte « tirage à
- * préciser » et se règle dans l'inventaire.
+ * proche, complète l'entrée après coup ; sinon l'entrée porte « tirage à
+ * préciser » et se règle dans l'inventaire. Pas de tirage estimé : soit le
+ * code est lu, soit l'utilisateur choisit.
  *
- * Ce module est pur : la préférence (localStorage), le tirage probable, et
- * la règle qui empêche d'ajouter dix fois la carte qui reste devant l'objectif.
+ * Ce module est pur : la préférence (localStorage) et la règle qui empêche
+ * d'ajouter dix fois la carte qui reste devant l'objectif.
  */
-
-import { tiragesPourRegion } from './region.js';
 
 export const CLE_SERIE = 'ygo.serie';
 
@@ -45,17 +44,6 @@ export function ecrireSerie(actif, stockage = globalThis.localStorage) {
   } catch {
     // Stockage indisponible (navigation privée) : la préférence ne survit pas, c'est tout.
   }
-}
-
-/**
- * Le tirage le plus probable pour une carte dont on n'a pas lu le code : le
- * premier dans la langue de la région choisie, sinon le premier publié.
- *
- * @returns {object|null} tirage avec `setCode` dans la région et `setCodePublie`
- */
-export function tirageProbable(printings, region) {
-  const tries = tiragesPourRegion(printings, region);
-  return tries[0] ?? null;
 }
 
 /**
