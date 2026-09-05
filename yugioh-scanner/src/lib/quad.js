@@ -106,47 +106,72 @@ export function deformer(source, h, largeur, hauteur) {
 /* Détection du quadrilatère                                            */
 /* ------------------------------------------------------------------ */
 
-/** Magnitude et orientation de Sobel. L'orientation est celle du gradient, dans [0, π). */
+/**
+ * Magnitude et orientation de Sobel. L'orientation est celle du gradient,
+ * dans [0, π), et n'est calculée que là où la magnitude dépasse 3 % du
+ * maximum : `atan2` coûte plus que tout le reste du filtre, et seuls les
+ * pixels de contour votent (mesuré : 32 ms → 12 ms à 448×796).
+ */
 export function sobel(gray, width, height) {
   const magnitude = new Float32Array(width * height);
-  const orientation = new Float32Array(width * height);
+  const gxs = new Int16Array(width * height);
+  const gys = new Int16Array(width * height);
+  let max = 0;
   for (let y = 1; y < height - 1; y += 1) {
+    const l0 = (y - 1) * width;
+    const l1 = y * width;
+    const l2 = (y + 1) * width;
     for (let x = 1; x < width - 1; x += 1) {
-      const i = y * width + x;
-      const gx =
-        gray[i - width + 1] + 2 * gray[i + 1] + gray[i + width + 1] -
-        gray[i - width - 1] - 2 * gray[i - 1] - gray[i + width - 1];
-      const gy =
-        gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1] -
-        gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1];
-      magnitude[i] = Math.hypot(gx, gy);
-      let a = Math.atan2(gy, gx);
-      if (a < 0) a += Math.PI;
-      orientation[i] = a;
+      const a = gray[l0 + x - 1];
+      const b = gray[l0 + x];
+      const c = gray[l0 + x + 1];
+      const d = gray[l1 + x - 1];
+      const f = gray[l1 + x + 1];
+      const g = gray[l2 + x - 1];
+      const h = gray[l2 + x];
+      const i = gray[l2 + x + 1];
+      const gx = c + 2 * f + i - a - 2 * d - g;
+      const gy = g + 2 * h + i - a - 2 * b - c;
+      const m = Math.sqrt(gx * gx + gy * gy);
+      const k = l1 + x;
+      magnitude[k] = m;
+      gxs[k] = gx;
+      gys[k] = gy;
+      if (m > max) max = m;
     }
+  }
+  const orientation = new Float32Array(width * height);
+  const seuil = max * 0.03;
+  for (let k = 0; k < magnitude.length; k += 1) {
+    if (magnitude[k] < seuil) continue;
+    let a = Math.atan2(gys[k], gxs[k]);
+    if (a < 0) a += Math.PI;
+    orientation[k] = a;
   }
   return { magnitude, orientation };
 }
 
-/** Flou 3×3 en boîte, pour ne pas voter avec le grain du capteur. */
+/**
+ * Flou 3×3 en boîte, pour ne pas voter avec le grain du capteur. Séparable :
+ * une passe horizontale, une passe verticale, trois lectures par pixel
+ * chacune, bords répétés.
+ */
 export function flouter(gray, width, height) {
+  const tmp = new Uint16Array(gray.length);
+  for (let y = 0; y < height; y += 1) {
+    const l = y * width;
+    for (let x = 0; x < width; x += 1) {
+      const g = gray[l + (x > 0 ? x - 1 : 0)];
+      const d = gray[l + (x < width - 1 ? x + 1 : width - 1)];
+      tmp[l + x] = g + gray[l + x] + d;
+    }
+  }
   const out = new Uint8ClampedArray(gray.length);
   for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      let s = 0;
-      let n = 0;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= height) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const xx = x + dx;
-          if (xx < 0 || xx >= width) continue;
-          s += gray[yy * width + xx];
-          n += 1;
-        }
-      }
-      out[y * width + x] = s / n;
-    }
+    const h = (y > 0 ? y - 1 : 0) * width;
+    const m = y * width;
+    const b = (y < height - 1 ? y + 1 : height - 1) * width;
+    for (let x = 0; x < width; x += 1) out[m + x] = (tmp[h + x] + tmp[m + x] + tmp[b + x]) / 9;
   }
   return out;
 }
@@ -310,19 +335,23 @@ const cote = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
  * maximal de l'image. Dans [0, 1].
  */
 function soutien(magnitude, width, height, a, b, max) {
-  const n = 32;
+  // 20 points par côté, maximum dans un voisinage de ±1 px : mesuré, la même
+  // précision qu'avec 32 points et ±2 px, pour six fois moins de lectures —
+  // et ce calcul se fait sur plus de mille candidats par image.
+  const n = 20;
   let total = 0;
   for (let k = 0; k <= n; k += 1) {
     const x = Math.round(a.x + ((b.x - a.x) * k) / n);
     const y = Math.round(a.y + ((b.y - a.y) * k) / n);
     let local = 0;
-    for (let dy = -2; dy <= 2; dy += 1) {
+    for (let dy = -1; dy <= 1; dy += 1) {
       const yy = y + dy;
       if (yy < 0 || yy >= height) continue;
-      for (let dx = -2; dx <= 2; dx += 1) {
+      const l = yy * width;
+      for (let dx = -1; dx <= 1; dx += 1) {
         const xx = x + dx;
         if (xx < 0 || xx >= width) continue;
-        const m = magnitude[yy * width + xx];
+        const m = magnitude[l + xx];
         if (m > local) local = m;
       }
     }
@@ -425,18 +454,22 @@ export function noirceur(gray, width, height, coins) {
  */
 export function trouverQuads(imageData, { fraction = 0.15, aireMin = 0.03, soutienMin = 0.12, k = 40, variantes = 4, lignes = 24, puissance = 1, journal = null } = {}) {
   const { width, height } = imageData;
+  const tDebut = performance.now();
   const gray = flouter(toGrayscale(imageData), width, height);
   const { magnitude, orientation } = sobel(gray, width, height);
   let max = 0;
   for (const v of magnitude) if (v > max) max = v;
   if (max === 0) return [];
+  const tGradient = performance.now();
   const droites = droitesHough(magnitude, orientation, width, height, { fraction, n: lignes, puissance });
+  const tHough = performance.now();
 
   const marge = 0.08; // les coins peuvent déborder un peu de l'image
   const dedans = (p) =>
     p.x > -marge * width && p.x < (1 + marge) * width && p.y > -marge * height && p.y < (1 + marge) * height;
 
   const candidats = [];
+  let plancher = -Infinity;
   const n = droites.length;
   for (let i = 0; i < n; i += 1) {
     for (let j = i + 1; j < n; j += 1) {
@@ -470,18 +503,10 @@ export function trouverQuads(imageData, { fraction = 0.15, aireMin = 0.03, souti
           const type = ratio < CARTE_RATIO * 1.3 ? 'carte' : ratio > 0.86 ? 'art' : null;
           if (journal) Object.assign(journal.at(-1), { etape: 'aire', ratio });
           if (!type || ratio < CARTE_RATIO * 0.75 || ratio > 1.3) continue;
-          let appui = 0;
-          for (let c = 0; c < 4; c += 1) appui += soutien(magnitude, width, height, coins[c], coins[(c + 1) % 4], max);
-          appui /= 4;
-          if (journal) Object.assign(journal.at(-1), { etape: 'ratio', appui });
-          if (appui < soutienMin) continue;
-          if (journal) journal.at(-1).etape = 'accepté';
-          // Le classement ne sert qu'à choisir les `k` hypothèses soumises à
-          // l'appariement : bords soutenus ET intérieur riche. La taille n'y
-          // entre que faiblement — une première version préférait le plus
-          // grand, et les cases d'une nappe quadrillée, immenses et vides,
-          // passaient devant la carte.
-          const plein = richesse(magnitude, width, height, coins, max);
+          // Les traits bon marché d'abord (liseré, taille, proportions), et le
+          // soutien des bords — cinq cents lectures — seulement si le candidat
+          // peut encore entrer dans les `k` retenus avec un soutien parfait :
+          // plus de mille candidats par image, la plupart s'arrêtent ici.
           // Le liseré noir ne vaut que pour le bord de la carte ; le cadre de
           // l'illustration (type « art ») n'en a pas, on ne le lui demande pas.
           const noir = type === 'carte' ? noirceur(gray, width, height, coins) : 0.3;
@@ -492,10 +517,29 @@ export function trouverQuads(imageData, { fraction = 0.15, aireMin = 0.03, souti
           // ne compte pas. Mesuré contre la formule manuelle qui précédait :
           // le vrai contour passe du rang médian 4 au rang 0, et se trouve
           // dans les cinq premiers 84 % du temps contre 52 %.
-          const score =
-            0.26 * appui + 1.85 * noir + 0.81 * Math.log(surface / (width * height) + 1e-4) - 1.92 * Math.abs(ratio - CARTE_RATIO);
+          const base = 1.85 * noir + 0.81 * Math.log(surface / (width * height) + 1e-4) - 1.92 * Math.abs(ratio - CARTE_RATIO);
+          if (base + 0.26 < plancher) {
+            if (journal) journal.at(-1).etape = 'élagué';
+            continue;
+          }
+          let appui = 0;
+          for (let c = 0; c < 4; c += 1) appui += soutien(magnitude, width, height, coins[c], coins[(c + 1) % 4], max);
+          appui /= 4;
+          if (journal) Object.assign(journal.at(-1), { etape: 'ratio', appui });
+          if (appui < soutienMin) continue;
+          if (journal) journal.at(-1).etape = 'accepté';
+          const plein = richesse(magnitude, width, height, coins, max);
+          const score = 0.26 * appui + base;
           if (journal) Object.assign(journal.at(-1), { richesse: plein, noirceur: noir, score, surface });
           candidats.push({ coins, type, aire: surface, soutien: appui, richesse: plein, noirceur: noir, score });
+          // Le plancher : le score du (3k)-ième meilleur candidat noté jusqu'ici,
+          // rafraîchi de loin en loin (un tri à chaque ajout coûterait plus
+          // qu'il n'économise). Trois fois k, parce que la déduplication en
+          // régions écarte ensuite des candidats bien notés.
+          if (candidats.length % 64 === 0 && candidats.length >= k * 3) {
+            const tri = candidats.map((c) => c.score).sort((a, b) => b - a);
+            plancher = tri[k * 3 - 1];
+          }
         }
       }
     }
@@ -512,6 +556,7 @@ export function trouverQuads(imageData, { fraction = 0.15, aireMin = 0.03, souti
   // niveau perdait l'un ou l'autre : trop fin, quarante variantes d'une
   // seule région ; trop large, le vrai contour d'une petite carte absorbé
   // par un voisin mieux noté.
+  const tCandidats = performance.now();
   candidats.sort((a, b) => b.score - a.score);
   const large = 0.03 * Math.hypot(width, height);
   const regions = [];
@@ -532,6 +577,11 @@ export function trouverQuads(imageData, { fraction = 0.15, aireMin = 0.03, souti
     }
     for (const g of gardes) if (sortie.length < k) sortie.push(g);
   }
+  // Temps par étape, pour le banc (propriété non énumérable : la sortie reste un tableau).
+  Object.defineProperty(sortie, 'temps', {
+    value: { gradient: tGradient - tDebut, hough: tHough - tGradient, candidats: tCandidats - tHough, tri: performance.now() - tCandidats, nb: candidats.length },
+    enumerable: false,
+  });
   return sortie;
 }
 

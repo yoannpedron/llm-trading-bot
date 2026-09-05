@@ -302,6 +302,29 @@ dès que la carte occupe 60 % de la hauteur de l'image (81 %), 89 % à 90 % ;
 similarité ≥ 70 et avance ≥ 5 sur le deuxième code : 100 % de précision,
 77 % de rappel ; 210 ms par bande en WebGPU.
 
+### Vitesse : où passe le temps, et ce qui l'a divisé par trois
+
+Instrumenté par étape (`ms` rendu par `identifierCarte`, imprimé par le
+banc). Sur la machine de développement, 1080×1920 réduit à 448 :
+
+| étape | avant | après |
+|---|---|---|
+| détection (gris, flou, Sobel, Hough, candidats) | 100 ms | 55 ms |
+| gris pleine résolution | 7 | 7 |
+| hypothèses évaluées (affinage, empreinte, recherche) | 101 ms pour 44 | 10 ms pour 2 |
+| détection rapprochée | 83 | 0 (seulement si rien de sûr) |
+| finalistes | 30 | 10 |
+| **image entière** | **276 ms** | **83 ms** |
+
+Ce qui a compté : pics de Hough ramassés en une passe au lieu de 24
+balayages ; `atan2` seulement pour les pixels qui votent ; flou séparable ;
+arrêt de l'évaluation dès qu'une hypothèse atteint la zone sûre de
+`verdictArt` (le pré-classement appris met le vrai contour en tête dans
+84 % des cas) ; soutien des bords calculé seulement pour les candidats qui
+peuvent encore entrer dans les quarante retenus (1 582 → 664 candidats
+notés). Précision inchangée (86-88 % sur la même graine, dans le bruit de
+mesure). Sur téléphone, compter deux à trois fois plus.
+
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
 - Dilater par homothétie pour retrouver le bord depuis le liseré : ne

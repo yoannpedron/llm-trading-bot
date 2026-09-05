@@ -367,6 +367,11 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
     toutes,
     ms: {
       quad: Math.round(t1 - t0),
+      gradient: Math.round(quads.temps?.gradient ?? 0),
+      hough: Math.round(quads.temps?.hough ?? 0),
+      candidats: Math.round(quads.temps?.candidats ?? 0),
+      tri: Math.round(quads.temps?.tri ?? 0),
+      nbCandidats: quads.temps?.nb ?? 0,
       gris: Math.round(tGris - t1),
       etage1: Math.round(tEtage1 - tGris),
       zoom: Math.round(t2 - tEtage1),

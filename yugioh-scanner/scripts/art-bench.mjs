@@ -186,7 +186,7 @@ try {
   console.log(`  marge médiane (bonnes)   ${mediane(lignes.filter((l) => l.bonne).map((l) => l.marge)).toFixed(3)}   score médian ${mediane(lignes.filter((l) => l.bonne).map((l) => l.score)).toFixed(3)}`);
   const fausses = lignes.filter((l) => l.trouve && !l.bonne && l.candidats?.length);
   console.log(`  temps médian             quad ${mediane(lignes.map((l) => l.msQuad))} ms, total ${mediane(lignes.map((l) => l.msTotal))} ms`);
-  const etapes = ['quad', 'gris', 'etage1', 'zoom', 'etage2'];
+  const etapes = ['quad', 'gradient', 'hough', 'candidats', 'tri', 'nbCandidats', 'gris', 'etage1', 'zoom', 'etage2'];
   console.log(`  par étape (médiane)      ${etapes.map((e) => `${e} ${mediane(lignes.map((l) => l.ms?.[e] ?? 0))}`).join(', ')}   évaluées ${mediane(lignes.map((l) => l.evaluees ?? 0))}`);
 
   // Seuil d'acceptation : quelle marge sépare bonnes et fausses en tête ?
