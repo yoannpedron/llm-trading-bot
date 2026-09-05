@@ -486,7 +486,13 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
                 {ajout.compte > 1 && <span className="ml-1 text-tertiaire">×{ajout.compte}</span>}
               </p>
               <p className="truncate font-mono text-micro text-tertiaire">
-                {ajout.precis ? `Tirage lu : ${ajout.code}` : `Tirage probable : ${ajout.code}`}
+                {ajout.precis
+                  ? `Tirage lu : ${ajout.code}`
+                  : ajout.lecture === 'préparation'
+                    ? `Tirage probable : ${ajout.code} — lecteur de code en préparation (31 Mo, une fois)`
+                    : ajout.lecture === 'en cours'
+                      ? `Tirage probable : ${ajout.code} — lecture du code…`
+                      : `Tirage probable : ${ajout.code} — ${ajout.lecture ?? 'code non lu'}`}
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-1">

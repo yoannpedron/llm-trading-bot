@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeEntry, retirerUn, upsertEntry, withTirage } from '../src/lib/collection.js';
-import { AntiDoublon, DELAI_DOUBLON_MS, ecrireSerie, lireSerie, tirageProbable } from '../src/lib/serie.js';
+import { AntiDoublon, PASSES_ABSENCE, ecrireSerie, lireSerie, tirageProbable } from '../src/lib/serie.js';
 
 const carte = { id: 46986414, name: 'Dark Magician', image: null, images: [] };
 const tirages = [
@@ -30,18 +30,24 @@ test('le tirage probable est le premier dans la langue choisie, code converti', 
   assert.equal(tirageProbable([], 'FR'), null);
 });
 
-test('la même carte devant l’objectif n’est pas ajoutée deux fois en huit secondes', () => {
-  let temps = 0;
-  const garde = new AntiDoublon({ now: () => temps });
+test('la même carte devant l’objectif n’est pas ré-ajoutée tant qu’elle n’a pas disparu', () => {
+  const garde = new AntiDoublon();
   assert.equal(garde.dejaVu(1), false);
   garde.noter(1);
-  temps += 1000;
-  assert.equal(garde.dejaVu(1), true, 'même carte, une seconde après');
-  garde.noter(2);
-  assert.equal(garde.dejaVu(1), false, 'une autre carte est passée');
+  for (let i = 0; i < 50; i += 1) garde.voir(1);
+  assert.equal(garde.dejaVu(1), true, 'toujours là, même longtemps après');
+  // Elle disparaît le temps de quelques passes : la revoir est un doublon voulu.
+  for (let i = 0; i < PASSES_ABSENCE; i += 1) garde.voir(null);
+  assert.equal(garde.dejaVu(1), false);
+  // Une autre carte passe : la première peut revenir.
   garde.noter(1);
-  temps += DELAI_DOUBLON_MS;
-  assert.equal(garde.dejaVu(1), false, 'le délai est écoulé : doublon voulu');
+  garde.noter(2);
+  assert.equal(garde.dejaVu(1), false);
+  assert.equal(garde.dejaVu(2), true);
+  // Une absence trop courte ne compte pas.
+  garde.voir(null);
+  garde.voir(2);
+  assert.equal(garde.dejaVu(2), true);
 });
 
 test('une entrée ajoutée en série porte « tirage à préciser », qu’un ajout précis efface', () => {

@@ -9,6 +9,7 @@ import { entryKey } from './lib/collection.js';
 import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
 import { codePourRegion } from './lib/region.js';
 import { tirageProbable } from './lib/serie.js';
+import { moteur } from './lib/ocr.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
 import { useJournal } from './lib/useJournal.js';
@@ -65,14 +66,28 @@ export default function App() {
       journal.consignerIdentification(ficheDepuisScan(resolved, null, region));
       journal.consignerEnregistrement(entree.carte.id);
       const compte = (collection.entryFor?.(cle)?.count ?? 0) + 1;
-      setAjout({ cle, resolved, nom: entree.carte.name, image: entree.carte.images?.[0]?.small ?? entree.carte.image, code: entree.tirage.setCode, compte, precis: false, at: Date.now() });
-      lecture?.then((lu) => {
-        if (!lu?.tirage) return;
-        const tirage = { ...lu.tirage, setCode: codePourRegion(lu.tirage.setCode, region), setCodePublie: lu.tirage.setCode };
-        collection.remplacerTirage(cle, tirage);
-        const nouvelleCle = entryKey(entree.carte.id, tirage.setCode, tirage.rarity);
-        setAjout((courant) => (courant && courant.cle === cle ? { ...courant, cle: nouvelleCle, code: tirage.setCode, precis: true } : courant));
-      });
+      // Le lecteur de code (31 Mo) se télécharge à la première carte assez
+      // proche : on le dit dans le bandeau plutôt que de laisser attendre.
+      const lecteurAPreparer = !moteur().provider && Boolean(resolved.quad) && (resolved.printings?.length ?? 0) > 1;
+      setAjout({ cle, resolved, nom: entree.carte.name, image: entree.carte.images?.[0]?.small ?? entree.carte.image, code: entree.tirage.setCode, compte, precis: false, lecture: lecteurAPreparer ? 'préparation' : 'en cours', at: Date.now() });
+      // La correction par le code lu, maintenant ou à une relecture : la clé
+      // de l'entrée suit le tirage, on la garde à jour ici.
+      let cleCourante = cle;
+      const corriger = (promesse) =>
+        promesse?.then((lu) => {
+          if (!lu?.tirage) {
+            setAjout((courant) => (courant && courant.cle === cleCourante ? { ...courant, lecture: lu?.raison ?? 'code illisible' } : courant));
+            return;
+          }
+          const tirage = { ...lu.tirage, setCode: codePourRegion(lu.tirage.setCode, region), setCodePublie: lu.tirage.setCode };
+          collection.remplacerTirage(cleCourante, tirage);
+          const nouvelleCle = entryKey(entree.carte.id, tirage.setCode, tirage.rarity);
+          const ancienne = cleCourante;
+          cleCourante = nouvelleCle;
+          setAjout((courant) => (courant && courant.cle === ancienne ? { ...courant, cle: nouvelleCle, code: tirage.setCode, precis: true, lecture: 'lu' } : courant));
+        });
+      corriger(lecture);
+      return corriger;
     },
     [region, collection, journal],
   );

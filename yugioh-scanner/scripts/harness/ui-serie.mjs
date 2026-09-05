@@ -51,15 +51,30 @@ if (bandeau) {
   const entrees = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
   console.log(`  inventaire : ${entrees.length} entrée(s) — ${entrees.map((e) => `${e.name} ${e.setCode} ×${e.count} ${e.tirageAPreciser ? 'à préciser' : 'précisée'}`).join(' ; ')}`);
   await page.screenshot({ path: `${SP}/ui-serie.png` });
-  await page.getByRole('button', { name: 'Annuler' }).click();
-  await page.waitForTimeout(500);
-  const apres = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
-  console.log(`  après Annuler : ${apres.length} entrée(s)`);
-  // La même carte reste devant l'objectif : pas de nouvel ajout avant 8 s.
-  await page.waitForTimeout(3000);
-  const rejoue = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
-  console.log(`  3 s plus tard, même carte devant l'objectif : ${rejoue.length} entrée(s) (0 attendu : anti-doublon)`);
+  // Si la carte est assez proche, le code est lu (moteur OCR chargé à ce
+  // moment-là) et l'entrée est corrigée : on attend jusqu'à 60 s.
+  const corrigee = await page
+    .waitForFunction(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]').some((e) => !e.tirageAPreciser), { timeout: 60000 })
+    .then(() => true)
+    .catch(() => false);
+  const apresLecture = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
+  console.log(`  lecture du code : ${corrigee ? 'entrée corrigée' : 'pas de correction en 60 s'} — ${apresLecture.map((e) => `${e.name} ${e.setCode} ${e.tirageAPreciser ? 'à préciser' : 'précisée'}`).join(' ; ')} (${((Date.now() - depart) / 1000).toFixed(1)} s)`);
+  const annuler = page.getByRole('button', { name: 'Annuler' });
+  if (await annuler.count()) {
+    await annuler.click();
+    await page.waitForTimeout(500);
+    const apres = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
+    console.log(`  après Annuler : ${apres.length} entrée(s) (0 attendu)`);
+    // La même carte reste devant l'objectif : pas de nouvel ajout avant 8 s.
+    await page.waitForTimeout(3000);
+    const rejoue = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]'));
+    console.log(`  3 s plus tard, même carte devant l'objectif : ${rejoue.length} entrée(s) (0 attendu : anti-doublon)`);
+  } else {
+    // Le bandeau s'efface après six secondes : l'attente de la lecture l'a dépassé.
+    const compte = await page.evaluate(() => JSON.parse(localStorage.getItem('ygo-scanner:collection:v1') ?? '[]').reduce((s, e) => s + (e.count ?? 1), 0));
+    console.log(`  bandeau effacé (lecture plus longue que six secondes) ; exemplaires au classeur : ${compte} (1 attendu : anti-doublon)`);
+  }
 }
-console.log(traces.filter((t) => /tirage|passe/.test(t)).slice(0, 4).map((t) => `  ${t}`).join('\n'));
+console.log(traces.filter((t) => /tirage/.test(t)).slice(0, 3).concat(traces.filter((t) => /passe/.test(t)).slice(0, 2)).map((t) => `  ${t}`).join('\n'));
 console.log(errors.length ? `PREMIERE ERREUR :\n${errors[0]}` : 'aucune erreur console');
 await browser.close();

@@ -338,7 +338,11 @@ chargé à ce moment-là), et l'entrée est corrigée après coup
 secondes, avec « Annuler » (`retirerUnExemplaire`) et « Préciser le tirage »
 (écran de résultat, dont « Enregistrer » remplace la ligne au lieu d'en
 créer une). La même carte encore devant l'objectif n'est pas ré-ajoutée
-pendant huit secondes (`AntiDoublon`). Dans l'inventaire, les entrées « à
+tant qu'elle n'a pas quitté le champ (trois passes sans elle) ou qu'une
+autre carte n'est pas passée (`AntiDoublon` — une règle au temps, huit
+secondes, ré-ajoutait trois fois une carte laissée vingt secondes). Si le
+code n'a pas été lu à l'ajout (moteur en chargement, image floue), il est
+relu sur les images suivantes, quatre fois au plus. Dans l'inventaire, les entrées « à
 préciser » portent un badge qui ouvre la liste des tirages de la carte.
 
 Hors série, l'écran de résultat lance la même lecture du code et se

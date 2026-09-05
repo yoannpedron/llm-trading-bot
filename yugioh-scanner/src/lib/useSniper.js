@@ -8,7 +8,7 @@ import { scanCode } from './scanApi.js';
 import { lireTirage } from './lireTirage.js';
 import { AntiDoublon } from './serie.js';
 import { assezGrande, tiragesDuCode } from './tirage.js';
-import { VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
+import { SCORE_PROPOSE, VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
 
 /**
  * Pause entre deux passes d'identification.
@@ -40,6 +40,9 @@ const COTE_MAX = 1600;
  * Le code d'extension n'identifie plus la carte ; il reste disponible en
  * saisie manuelle, pour les cas où la caméra ne peut pas.
  */
+/** Tentatives de lecture du code, au plus, pour une carte laissée devant l'objectif. */
+const RELECTURES_MAX = 4;
+
 /**
  * Lit le code de tirage sur l'image figée. Ne rejette jamais : une lecture
  * qui échoue (moteur indisponible, carte trop petite) rend un tirage nul
@@ -89,6 +92,8 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
   serieRef.current = serie;
   onSerieRef.current = onSerie;
   const antiDoublonRef = useRef(new AntiDoublon());
+  /** Suivi de la lecture du code pour la carte ajoutée en dernier (relectures). */
+  const relectureRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const trackRef = useRef(null);
@@ -431,6 +436,13 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
 
       const verdict = voteRef.current.cast(r.candidats);
       setLecture({ id: verdict.id, score: verdict.score, marge: verdict.marge, zone: verdict.zone, ms: r.ms?.total ?? 0 });
+      // Présence de la carte ajoutée en dernier : c'est ce qui décide qu'une
+      // carte revue est la même (toujours là) ou un deuxième exemplaire.
+      // Vue = la meilleure carte de la passe, même quand la passe n'est pas
+      // assez sûre pour verrouiller : une passe moyenne sur la même carte ne
+      // veut pas dire qu'elle a quitté le champ.
+      const vue = (r.candidats?.[0]?.score ?? 0) >= SCORE_PROPOSE ? r.candidats[0].id : null;
+      antiDoublonRef.current.voir(vue);
       if (verdict.zone === 'proposer') {
         const actuelles = propositionsRef.current;
         if (actuelles[0]?.id !== verdict.propositions[0]?.id) {
@@ -463,18 +475,41 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
       // propres tirages. Lancé sans attendre : le moteur OCR se charge à la
       // première lecture (31 Mo), la carte s'affiche avant.
       const coinsStill = r.quad ? r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur })) : null;
-      const lecture = lireTirageSurImage(still, coinsStill, resolved);
 
       if (serieRef.current && onSerieRef.current) {
-        // La même carte encore devant l'objectif n'est pas un doublon.
-        if (antiDoublonRef.current.dejaVu(resolved.card.id)) return;
+        // La même carte encore devant l'objectif n'est pas un doublon. Si son
+        // code n'a pas pu être lu la première fois (moteur en chargement,
+        // image floue), on réessaie sur les images suivantes, trois fois au
+        // plus, et l'entrée est corrigée après coup.
+        if (antiDoublonRef.current.dejaVu(resolved.card.id)) {
+          const suivi = relectureRef.current;
+          if (suivi && suivi.id === resolved.card.id && !suivi.enCours && !suivi.lu && suivi.essais < RELECTURES_MAX && coinsStill && assezGrande(coinsStill, still.height)) {
+            suivi.essais += 1;
+            suivi.enCours = true;
+            const relecture = lireTirageSurImage(still, coinsStill, resolved);
+            relecture.then((lu) => {
+              suivi.enCours = false;
+              if (lu?.tirage) suivi.lu = true;
+            });
+            suivi.corriger?.(relecture);
+          }
+          return;
+        }
         antiDoublonRef.current.noter(resolved.card.id);
-        onSerieRef.current(resolved, lecture);
+        const lecture = lireTirageSurImage(still, coinsStill, resolved);
+        const corriger = onSerieRef.current(resolved, lecture);
+        const suivi = { id: resolved.card.id, corriger: typeof corriger === 'function' ? corriger : null, essais: 1, enCours: true, lu: false };
+        relectureRef.current = suivi;
+        lecture.then((lu) => {
+          suivi.enCours = false;
+          if (lu?.tirage) suivi.lu = true;
+        });
         chime();
         vibrate();
         return;
       }
 
+      const lecture = lireTirageSurImage(still, coinsStill, resolved);
       setFrozenFrame(still.toDataURL('image/jpeg', 0.9));
       setResult({ ...resolved, lectureTirage: coinsStill && assezGrande(coinsStill, still.height) ? 'en cours' : 'carte trop petite' });
       lecture.then((lu) => {

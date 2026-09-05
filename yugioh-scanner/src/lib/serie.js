@@ -17,12 +17,11 @@ import { tiragesPourRegion } from './region.js';
 export const CLE_SERIE = 'ygo.serie';
 
 /**
- * Le même passcode, revu moins de huit secondes après son ajout et sans
- * qu'une autre carte soit passée entre-temps, est la même carte encore devant
- * l'objectif — pas un deuxième exemplaire. Au-delà, ou après une autre carte,
- * c'est un doublon voulu.
+ * Passes consécutives sans la carte au-delà desquelles on considère qu'elle a
+ * quitté le champ : la revoir ensuite, c'est un deuxième exemplaire. Trois
+ * passes, c'est moins d'une seconde — assez pour poser la carte suivante.
  */
-export const DELAI_DOUBLON_MS = 8000;
+export const PASSES_ABSENCE = 3;
 
 /**
  * Le mode série est-il actif ? Activé par défaut (c'est le geste grand
@@ -59,28 +58,45 @@ export function tirageProbable(printings, region) {
   return tries[0] ?? null;
 }
 
-/** Garde-fou contre l'ajout répété de la carte qui reste devant l'objectif. */
+/**
+ * Garde-fou contre l'ajout répété de la carte qui reste devant l'objectif.
+ *
+ * Une première version se fondait sur le temps (huit secondes) : une carte
+ * laissée vingt secondes devant l'appareil entrait trois fois au classeur.
+ * La règle est maintenant la PRÉSENCE : tant que la même carte est vue à
+ * chaque passe, elle n'est pas ré-ajoutée ; il faut qu'elle disparaisse
+ * (`PASSES_ABSENCE` passes sans elle) ou qu'une autre carte passe.
+ */
 export class AntiDoublon {
-  constructor({ delai = DELAI_DOUBLON_MS, now = () => Date.now() } = {}) {
-    this.delai = delai;
-    this.now = now;
+  constructor({ absence = PASSES_ABSENCE } = {}) {
+    this.absence = absence;
     this.dernier = null;
-    this.quand = 0;
+    this.manques = 0;
   }
 
-  /** Vrai si `id` vient d'être ajouté et n'a pas été suivi d'une autre carte. */
+  /** À appeler à CHAQUE passe, avec la carte vue (ou null). */
+  voir(id) {
+    if (this.dernier === null) return;
+    if (id === this.dernier) this.manques = 0;
+    else {
+      this.manques += 1;
+      if (this.manques >= this.absence) this.dernier = null;
+    }
+  }
+
+  /** Vrai si `id` est la carte ajoutée en dernier, toujours présente. */
   dejaVu(id) {
-    return this.dernier === id && this.now() - this.quand < this.delai;
+    return this.dernier === id;
   }
 
   /** À appeler après chaque ajout. */
   noter(id) {
     this.dernier = id;
-    this.quand = this.now();
+    this.manques = 0;
   }
 
   reset() {
     this.dernier = null;
-    this.quand = 0;
+    this.manques = 0;
   }
 }
