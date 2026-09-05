@@ -61,18 +61,22 @@ try {
         const concordance = new ConcordanceTirage();
         const lectures = [];
         let retenu = null;
+        let premiereImage = false;
         for (const bis of [0, 1]) {
           const p = { graine: 3000 + n * 2 + bis, taille, perspective: 0.06, rotation: 5, flou, bruit: 8, eclairage: 0.3, reflet: 0, fondTexture: false, parasite: false, retournee: false };
           const rendu = await page.evaluate(([u, c, p]) => window.__sceneCode(u, c, p), [`${origine}/full/${id}.jpg`, code, p]);
           const r = await page.evaluate(([b, c, pr, o]) => window.__lireTirageApp(b, c, pr, o), [rendu.png, rendu.coins, printings, OPTIONS]);
           lectures.push(r);
           if (!retenu && r.tirage) {
-            const decision = concordance.ajouter({ tirage: { setCode: r.tirage }, exact: r.exact, ambigu: r.ambigu, similarite: r.similarite });
-            if (decision) retenu = decision.setCode;
+            const decision = concordance.ajouter({ tirage: { setCode: r.tirage }, exact: r.exact, net: r.net, ambigu: r.ambigu, similarite: r.similarite });
+            if (decision) {
+              retenu = decision.setCode;
+              premiereImage = bis === 0;
+            }
           }
         }
         const juste = retenu !== null && sansRegion(retenu) === sansRegion(code);
-        lignes.push({ id, taille, flou, code, lectures: lectures.map((l) => l.lecture), bruts: lectures.map((l) => l.brut ?? ''), tirages: lectures.map((l) => l.tirage ?? null), exacts: lectures.map((l) => Boolean(l.exact)), printings: printings.map((p) => p.setCode), retenu, juste, faux: retenu !== null && !juste, exact: lectures.some((l) => l.exact), msOcr: lectures[0].msOcr ?? 0 });
+        lignes.push({ id, taille, flou, code, lectures: lectures.map((l) => l.lecture), bruts: lectures.map((l) => l.brut ?? ''), tirages: lectures.map((l) => l.tirage ?? null), exacts: lectures.map((l) => Boolean(l.exact)), printings: printings.map((p) => p.setCode), retenu, juste, faux: retenu !== null && !juste, exact: lectures.some((l) => l.exact), premiereImage: premiereImage && juste, msOcr: lectures[0].msOcr ?? 0 });
         if (SP && !juste && n <= 40) {
           fs.mkdirSync(path.join(SP, 'code-echecs'), { recursive: true });
           fs.writeFileSync(path.join(SP, 'code-echecs', `${n}-${taille}-${flou}.txt`), `${code}\n${lectures.map((l) => `${l.lecture} sim ${l.similarite} ${l.raison ?? ''}`).join('\n')}\n`);
@@ -83,11 +87,11 @@ try {
   }
   process.stdout.write('\r');
   const pct = (l, f) => `${Math.round((100 * l.filter(f).length) / Math.max(1, l.length))} %`;
-  console.log(`options : ${JSON.stringify(OPTIONS)} — règle : exact tout de suite, sinon deux lectures d'accord (deux images par cas)`);
-  console.log('taille → tirage retenu juste / FAUX retenu / au moins une lecture exacte');
+  console.log(`options : ${JSON.stringify(OPTIONS)} — règle : exacte ou nette tout de suite, sinon deux lectures d'accord (deux images par cas)`);
+  console.log('taille → tirage retenu juste / FAUX retenu / au moins une lecture exacte / retenu dès la première image');
   for (const t of TAILLES) {
     const s = lignes.filter((l) => l.taille === t);
-    console.log(`  ${String(t).padEnd(5)} ${pct(s, (l) => l.juste).padStart(5)} / ${pct(s, (l) => l.faux).padStart(5)} / ${pct(s, (l) => l.exact).padStart(5)}   ` + FLOUS.map((f) => `flou ${f}: ${pct(s.filter((l) => l.flou === f), (l) => l.juste)}`).join('  '));
+    console.log(`  ${String(t).padEnd(5)} ${pct(s, (l) => l.juste).padStart(5)} / ${pct(s, (l) => l.faux).padStart(5)} / ${pct(s, (l) => l.exact).padStart(5)} / ${pct(s, (l) => l.premiereImage).padStart(5)}   ` + FLOUS.map((f) => `flou ${f}: ${pct(s.filter((l) => l.flou === f), (l) => l.juste)}`).join('  '));
   }
   console.log(`  total ${pct(lignes, (l) => l.juste)} justes, ${lignes.filter((l) => l.faux).length} faux sur ${lignes.length}`);
   console.log('exemples : ' + lignes.slice(0, 4).map((l) => `${l.code}→« ${l.lectures.join(' | ')} »`).join(' ; '));

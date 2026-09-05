@@ -302,23 +302,33 @@ officiels qui sont des « Replica » sans code, donc borne haute ; 12 cartes ×
 
 | taille de la carte (hauteur de l'image) | 45 % | 50 % | 60 % | 70 % et plus |
 |---|---|---|---|---|
-| tirage retenu juste (deux images) | 81 % | 92 % | 100 % | 100 % |
+| tirage retenu juste (deux images) | 89 % | 94 % | 100 % | 100 % |
 | faux tirage retenu | 0 | 0 | 0 | 0 |
-| au moins une lecture exacte | 53 % | 69 % | 78 % | 86-92 % |
+| retenu dès la première image | 75 % | 78 % | 81 % | 86-92 % |
+| au moins une lecture exacte | 56 % | 67 % | 78 % | 78-89 % |
 
-En tout : 95 % de tirages justes, 0 faux, 78 % de cas avec une lecture
-exacte (contre 71 % / 0 / 58 % avant le 6 septembre). Ce qui l'a fait, dans l'ordre de ce
+En tout : 97 % de tirages justes, 0 faux, 84 % retenus dès la première
+image (contre 71 % / 0 / — avant le 6 septembre, avec une lecture approchée
+acceptée d'emblée).
+Ce qui l'a fait, dans l'ordre de ce
 que chacun rapporte :
 
-- **La règle « exact tout de suite, sinon deux lectures d'accord »**
-  (`ConcordanceTirage`). Une lecture exacte est le code de la carte tel
-  quel, région ignorée ; une lecture approchée (similarité ≥ 70, avance ≥ 5
-  sur le deuxième code de la carte) n'est retenue que si une seconde image
-  donne le même code. Une lecture n'est jamais « exacte » quand un autre
-  code de la carte est à un caractère (`DISTANCE_EXACTE`, 636 cartes de
-  l'index ont deux codes ainsi voisins : « MP18-064 » / « MP18-004 ») : là,
-  il faut trois lectures du code tel quel (`LECTURES_AMBIGUES`), car un
-  chiffre mal lu de la même façon deux fois de suite n'est pas rare.
+- **La règle « exacte ou nette tout de suite, sinon deux lectures
+  d'accord »** (`ConcordanceTirage`). Une lecture exacte est le code de la
+  carte tel quel, région ignorée ; une lecture nette en est à un caractère
+  (similarité ≥ 85) avec une avance ≥ 15 sur le deuxième code de la carte ;
+  l'une et l'autre sont retenues sur une image. Une lecture seulement
+  approchée (similarité ≥ 70, avance ≥ 5) n'est retenue que si une seconde
+  image donne le même code. Une lecture n'est jamais exacte ni nette quand
+  un autre code de la carte est à un caractère (`DISTANCE_EXACTE`, 636
+  cartes de l'index ont deux codes ainsi voisins : « MP18-064 » /
+  « MP18-004 ») : là, il faut trois lectures du code tel quel
+  (`LECTURES_AMBIGUES`), car un chiffre mal lu de la même façon deux fois
+  de suite n'est pas rare. Aucune lecture nette fausse sur 1 000 lectures
+  rendues. Une première version exigeait deux images d'accord pour toute
+  lecture non exacte : sur le téléphone, « ça marche mieux avant » — les
+  lectures réelles sont plus souvent approchées que sur le banc, et la
+  plupart des codes n'étaient plus retenus.
 - **Le contraste étiré** de la bande (2e-98e centile, `etirerContraste`) :
   71 → 84 % de tirages justes à lui seul, surtout sur les petites cartes et
   les images floues. Une bande plus haute (100 px), ou plus large, n'apporte
@@ -330,9 +340,10 @@ que chacun rapporte :
   une erreur. Avec tout séparateur pris pour tiret (« : », « · », « = »,
   espace) et le tiret réinséré quand il manque (« MP25EN051 »,
   `lecturesPossibles`) : 71 → 84 % aussi, cumulable avec le contraste.
-- **La seconde lecture** : si la bande étirée ne donne pas de lecture exacte,
-  la bande telle quelle est lue aussi (un quart des cas) ; lectures exactes
-  81 → 87 %.
+- **La seconde lecture** : si la bande étirée ne donne pas de lecture nette,
+  la bande telle quelle est lue aussi (12 % des cas) ; tirages justes 96 →
+  97 %. Sur les trois bandes réelles de `scripts/fixtures`, brutes ou
+  étirées, à 60, 80 ou 115 px de haut : toutes exactes sauf une, nette.
 - **Lisible dès 40 %** de la hauteur (`HAUTEUR_LISIBLE`) : 64 % de justes à
   40 % (100 % sans flou), 0 faux ; en dessous, 44 % à 35 %, on ne tente pas.
 

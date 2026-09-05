@@ -30,6 +30,15 @@ export const HAUTEUR_LISIBLE = 0.4;
 
 export const SIMILARITE_MINIMALE = 70;
 export const AVANCE_MINIMALE = 5;
+/**
+ * Lecture « nette » : à un caractère près du code (85 sur 7 caractères et
+ * plus) et loin de tout autre code de la carte. Retenue à elle seule, comme
+ * une lecture exacte : sur l'appareil, la plupart des lectures sont
+ * approchées (grain, reflet), et exiger deux images identiques faisait
+ * perdre la plupart des codes lus. Aucune fausse en 1 000 lectures rendues.
+ */
+export const SIMILARITE_NETTE = 85;
+export const AVANCE_NETTE = 15;
 
 /**
  * La carte est-elle assez grande dans l'image pour que son code se lise ?
@@ -181,7 +190,7 @@ const mieux = (a, b) => {
  *   est à un caractère de la lecture.
  */
 export function apparierTirage(lecture, printings) {
-  const vide = { tirage: null, exact: false, ambigu: false, similarite: 0, avance: 0, lecture: '', candidats: [] };
+  const vide = { tirage: null, exact: false, net: false, ambigu: false, similarite: 0, avance: 0, lecture: '', candidats: [] };
   // Les codes distincts de la carte, région ignorée : « LOB-EN005 » et
   // « LOB-FR005 » sont le même tirage vu de deux pays.
   const parCle = new Map();
@@ -206,9 +215,11 @@ export function apparierTirage(lecture, printings) {
       const avance = premier.similarite - (second?.similarite ?? 0);
       const sur = premier.similarite >= SIMILARITE_MINIMALE && (second === undefined || avance >= AVANCE_MINIMALE);
       const loin = second === undefined || levenshtein(lu, second.cle) >= DISTANCE_EXACTE;
+      const exact = sur && premier.similarite >= 100 && loin;
       const resultat = {
         tirage: sur ? parCle.get(premier.cle) : null,
-        exact: sur && premier.similarite >= 100 && loin,
+        exact,
+        net: exact || (sur && loin && premier.similarite >= SIMILARITE_NETTE && (second === undefined || avance >= AVANCE_NETTE)),
         ambigu: sur && !loin,
         similarite: premier.similarite,
         avance,
@@ -267,7 +278,7 @@ export class ConcordanceTirage {
    */
   ajouter(lu) {
     if (!lu?.tirage) return null;
-    if (lu.exact) return lu.tirage;
+    if (lu.exact || lu.net) return lu.tirage;
     if (lu.ambigu && (lu.similarite ?? 0) < 100) return null;
     const cle = setCodeMatchKey(lu.tirage.setCode);
     if (cle === this.cle) this.compte += 1;

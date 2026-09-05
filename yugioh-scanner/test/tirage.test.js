@@ -60,13 +60,20 @@ test('le code est extrait d’une lecture qui a attrapé du texte autour', () =>
 
 test('une lecture exacte se suffit ; une lecture approchée attend une jumelle', () => {
   assert.equal(apparierTirage('LDK2-FRY10', tirages).exact, true);
-  assert.equal(apparierTirage('LDK2-FRY70', tirages).exact, false, '7 pour 1 : chiffre pour chiffre, rien ne le corrige');
+  const nette = apparierTirage('LDK2-FRY70', tirages);
+  assert.equal(nette.exact, false, '7 pour 1 : chiffre pour chiffre, rien ne le corrige');
+  assert.equal(nette.net, true, 'à un caractère près, loin des autres codes : nette');
   const c = new ConcordanceTirage();
   assert.equal(LECTURES_CONCORDANTES, 2);
-  assert.equal(c.ajouter(apparierTirage('LDK2-FRY70', tirages)), null, 'approchée, première fois');
-  assert.equal(apparierTirage('SDY-EN086', tirages).tirage?.setCode, 'SDY-EN006');
-  assert.equal(c.ajouter(apparierTirage('SDY-EN086', tirages)), null, 'approchée, autre code : remise à zéro');
-  assert.equal(c.ajouter(apparierTirage('SDY-EN086', tirages))?.setCode, 'SDY-EN006', 'deux approchées d’accord');
+  assert.equal(c.ajouter(nette)?.setCode, 'LDK2-ENY10', 'nette : retenue tout de suite');
+  const floue = apparierTirage('LDK2-FRY77', tirages);
+  assert.equal(floue.tirage?.setCode, 'LDK2-ENY10');
+  assert.equal(floue.net, false, 'deux caractères : approchée seulement');
+  assert.equal(c.ajouter(floue), null, 'approchée, première fois');
+  assert.equal(apparierTirage('SDY-EN088', tirages).tirage?.setCode, 'SDY-EN006');
+  assert.equal(apparierTirage('SDY-EN088', tirages).net, false);
+  assert.equal(c.ajouter(apparierTirage('SDY-EN088', tirages)), null, 'approchée, autre code : remise à zéro');
+  assert.equal(c.ajouter(apparierTirage('SDY-EN088', tirages))?.setCode, 'SDY-EN006', 'deux approchées d’accord');
   assert.equal(c.ajouter(apparierTirage('LDK2-FRY10', tirages))?.setCode, 'LDK2-ENY10', 'exacte : tout de suite');
   assert.equal(c.ajouter({ tirage: null }), null);
 });

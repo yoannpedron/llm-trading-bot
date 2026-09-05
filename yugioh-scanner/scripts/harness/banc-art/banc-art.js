@@ -637,5 +637,5 @@ window.__lireTirageApp = async (b64, coins, printings, options = {}) => {
   sx.drawImage(img, 0, 0);
   const plein = sx.getImageData(0, 0, scene.width, scene.height);
   const r = await L.lireTirage(plein, coins, printings, options);
-  return { tirage: r.tirage?.setCode ?? null, exact: Boolean(r.exact), ambigu: Boolean(r.ambigu), lecture: r.lecture, brut: r.brut ?? '', similarite: r.similarite, avance: r.avance, raison: r.raison, ms: r.ms };
+  return { tirage: r.tirage?.setCode ?? null, exact: Boolean(r.exact), net: Boolean(r.net), ambigu: Boolean(r.ambigu), lecture: r.lecture, brut: r.brut ?? '', similarite: r.similarite, avance: r.avance, raison: r.raison, ms: r.ms };
 };

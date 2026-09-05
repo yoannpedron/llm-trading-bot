@@ -26,10 +26,10 @@ const HAUTEUR_BANDE = 80;
  */
 const CONTRASTE = true;
 /**
- * Si la bande étirée ne donne pas de lecture exacte, lire aussi la bande
- * telle quelle et garder la meilleure. Mesuré : lectures exactes de 81 à
- * 87 % des bandes (une image suffit alors, au lieu de deux d'accord), pour
- * une seconde passe du moteur dans un quart des cas.
+ * Si la bande étirée ne donne pas de lecture nette, lire aussi la bande
+ * telle quelle et garder la meilleure. Mesuré : tirages justes de 96 à
+ * 97 %, lectures exactes de 81 à 83 %, pour une seconde passe du moteur
+ * dans 12 % des cas (le moteur prend une à deux secondes sur téléphone).
  */
 const SECONDE_LECTURE = true;
 
@@ -66,15 +66,15 @@ export async function lireTirage(image, coins, printings, { bande = BANDE_CODE, 
     return { ...apparierTirage(text, printings), brut: text };
   };
 
-  // La bande au contraste étiré d'abord ; si la lecture n'est pas exacte,
+  // La bande au contraste étiré d'abord ; si la lecture n'est pas nette,
   // la bande telle quelle aussi, et l'on garde la meilleure des deux.
   let appariement = await lireBande(contraste);
-  if (!appariement.exact && contraste && secondeLecture) {
+  if (!appariement.net && contraste && secondeLecture) {
     const brute = await lireBande(false);
     if (brute.exact || (!appariement.tirage && brute.tirage) || (Boolean(brute.tirage) === Boolean(appariement.tirage) && brute.similarite > appariement.similarite)) appariement = brute;
   }
   return fini(
-    { tirage: appariement.tirage, exact: appariement.exact, ambigu: appariement.ambigu, lecture: appariement.lecture, brut: appariement.brut, similarite: appariement.similarite, avance: appariement.avance },
+    { tirage: appariement.tirage, exact: appariement.exact, net: appariement.net, ambigu: appariement.ambigu, lecture: appariement.lecture, brut: appariement.brut, similarite: appariement.similarite, avance: appariement.avance },
     appariement.tirage ? null : 'code illisible',
   );
 }
@@ -84,7 +84,7 @@ export async function lireTirage(image, coins, printings, { bande = BANDE_CODE, 
  * Le code est une encre sombre sur un cadre clair ; sous une lampe ou dans
  * l'ombre, la bande est terne et le moteur hésite.
  */
-function etirerContraste(cx, largeur, hauteur) {
+export function etirerContraste(cx, largeur, hauteur) {
   const img = cx.getImageData(0, 0, largeur, hauteur);
   const d = img.data;
   const histo = new Uint32Array(256);
