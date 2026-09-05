@@ -25,6 +25,10 @@ const TAILLES = (process.env.TAILLES ?? '0.45,0.5,0.6,0.7,0.8,0.9').split(',').m
 const FLOUS = (process.env.FLOUS ?? '0,0.8,1.6').split(',').map(Number);
 /** Options passées à lireTirage (bande, hauteurBande, contraste), pour comparer des variantes. */
 const OPTIONS = JSON.parse(process.env.OPTIONS ?? '{}');
+/** Scène de nuit : luminosité de l'image entière (1 = jour), grain du capteur, dominante chaude. */
+const LUMINOSITE = Number(process.env.LUMINOSITE ?? 1);
+const BRUIT = Number(process.env.BRUIT ?? 8);
+const CHALEUR = Number(process.env.CHALEUR ?? 0);
 
 const { ConcordanceTirage } = await import(path.join(APP, 'src/lib/tirage.js'));
 const index = JSON.parse(fs.readFileSync(path.join(APP, 'public/card-index.json'), 'utf8'));
@@ -63,7 +67,7 @@ try {
         let retenu = null;
         let premiereImage = false;
         for (const bis of [0, 1]) {
-          const p = { graine: 3000 + n * 2 + bis, taille, perspective: 0.06, rotation: 5, flou, bruit: 8, eclairage: 0.3, reflet: 0, fondTexture: false, parasite: false, retournee: false };
+          const p = { graine: 3000 + n * 2 + bis, taille, perspective: 0.06, rotation: 5, flou, bruit: BRUIT, eclairage: 0.3, reflet: 0, fondTexture: false, parasite: false, retournee: false, luminosite: LUMINOSITE, chaleur: CHALEUR };
           const rendu = await page.evaluate(([u, c, p]) => window.__sceneCode(u, c, p), [`${origine}/full/${id}.jpg`, code, p]);
           const r = await page.evaluate(([b, c, pr, o]) => window.__lireTirageApp(b, c, pr, o), [rendu.png, rendu.coins, printings, OPTIONS]);
           lectures.push(r);
@@ -87,7 +91,7 @@ try {
   }
   process.stdout.write('\r');
   const pct = (l, f) => `${Math.round((100 * l.filter(f).length) / Math.max(1, l.length))} %`;
-  console.log(`options : ${JSON.stringify(OPTIONS)} — règle : exacte ou nette tout de suite, sinon deux lectures d'accord (deux images par cas)`);
+  console.log(`options : ${JSON.stringify(OPTIONS)}${LUMINOSITE !== 1 ? ` — nuit : luminosité ${LUMINOSITE}, grain ${BRUIT}, chaleur ${CHALEUR}` : ''} — règle : exacte ou nette tout de suite, sinon deux lectures d'accord (deux images par cas)`);
   console.log('taille → tirage retenu juste / FAUX retenu / au moins une lecture exacte / retenu dès la première image');
   for (const t of TAILLES) {
     const s = lignes.filter((l) => l.taille === t);

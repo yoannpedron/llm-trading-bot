@@ -375,6 +375,39 @@ peuvent encore entrer dans les quarante retenus (1 582 → 664 candidats
 notés). Précision inchangée (86-88 % sur la même graine, dans le bruit de
 mesure). Sur téléphone, compter deux à trois fois plus.
 
+### La nuit : « ça marche tellement mieux en journée »
+
+Mesuré avec une scène de nuit (`NUIT=1` pour `art-bench.mjs`,
+`LUMINOSITE=0.35 BRUIT=32 CHALEUR=0.25` pour `code-bench.mjs` : image
+entière assombrie, grain du capteur monté, dominante chaude d'ampoule) :
+
+| | jour | nuit, avant | nuit, après |
+|---|---|---|---|
+| identification : bonne carte en tête | 85 % | 81 % | 85 % |
+| identification : contour à moins de 60 px | 85 % | 69 % | 73 % |
+| identification : verrouillée (politique actuelle), faux | 67 %, 0 | 68,5 %, 0 | 68 %, 0 |
+| code de tirage juste (deux images) | 97 % | 45 % | 58 % |
+| faux tirage | 0 | 0 | 0 |
+
+Ce qui a été fait :
+
+- **Niveaux étirés quand l'image est sous-exposée** (`normaliserExposition`
+  dans `identifierCarte`, quand le 99e centile est sous 150) : le liseré
+  noir redevient « sous 60 » et le reste « au-dessus de 90 », ce que
+  `noirceur` attend. Une image de jour n'est pas touchée.
+- **Grain lissé avant l'étirement du contraste de la bande** (`LISSAGE`,
+  moyenne glissante de rayon 2 sur la bande agrandie) : 45 → 58 % de nuit,
+  97 → 98 % de jour.
+- **Peu de lumière, dit et agi** : trois passes de suite sur une image
+  sous-exposée, l'écran affiche « Peu de lumière — allumez la torche » et
+  la torche s'allume d'elle-même, une fois par session, sauf si l'utilisateur
+  l'a éteinte lui-même (une carte brillante sous la lampe fait un reflet).
+
+Ce qui reste, et que le logiciel ne rattrape pas : le flou. De nuit, le
+téléphone pose plus longtemps, la main bouge ; sur le banc, à flou 0 le code
+se lit à 67-100 % même de nuit, à flou 0,8 il tombe à 8-83 %. La torche
+raccourcit la pose : c'est elle qui fait la nuit.
+
 ### Mode série : zéro geste par carte
 
 Activé par défaut (`serie.js`, préférence `ygo.serie`, `?serie=0` pour une

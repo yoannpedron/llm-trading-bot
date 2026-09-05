@@ -42,6 +42,8 @@ const COTE_MAX = 1600;
  */
 /** Tentatives de lecture du code, au plus, pour une carte laissée devant l'objectif. */
 const RELECTURES_MAX = 10;
+/** Passes sombres de suite avant de parler de peu de lumière. */
+const PASSES_SOMBRES = 3;
 
 /**
  * Lit le code de tirage sur l'image figée. Ne rejette jamais : une lecture
@@ -116,7 +118,11 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
    * échoue — c'est la lumière qui décide de la lisibilité d'une inscription de
    * deux millimètres, elle mérite le bénéfice du doute.
    */
+  const torchRef = useRef({ available: false, on: false });
   const [torch, setTorch] = useState({ available: false, on: false, declaree: false });
+  useEffect(() => {
+    torchRef.current = torch;
+  }, [torch]);
 
   /**
    * La torche reste allumée d'une carte à l'autre.
@@ -126,6 +132,17 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
    * verrouillage et se réapplique à la piste.
    */
   const torcheVoulueRef = useRef(false);
+  /**
+   * Peu de lumière : `PASSES_SOMBRES` passes de suite sur une image
+   * sous-exposée (niveaux étirés par `identifierCarte`). L'écran le dit, et
+   * la torche s'allume d'elle-même une fois par session — sauf si
+   * l'utilisateur l'a éteinte lui-même : sur une carte brillante, la lampe
+   * fait un reflet, c'est à lui de juger. Mesuré : de nuit, le code se lit
+   * deux fois moins bien qu'au jour (45 % contre 97 % sur le banc).
+   */
+  const [faibleLumiere, setFaibleLumiere] = useState(false);
+  const passesSombresRef = useRef(0);
+  const torcheAutoRef = useRef({ tentee: false, refusee: false });
   const [zoom, setZoom] = useState({ available: false, value: 1, min: 1, max: 1, step: 0.1 });
 
   const [modelReady, setModelReady] = useState(false);
@@ -230,6 +247,27 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     }
     return false;
   }, []);
+
+  /**
+   * Compte les passes sombres ; à `PASSES_SOMBRES` de suite, signale le peu
+   * de lumière et tente la torche (une fois, si elle n'a pas été refusée).
+   */
+  const signalerLumiere = useCallback((sombre) => {
+    passesSombresRef.current = sombre ? passesSombresRef.current + 1 : 0;
+    const faible = passesSombresRef.current >= PASSES_SOMBRES;
+    setFaibleLumiere((etat) => (etat === faible ? etat : faible));
+    if (!faible) return;
+    const auto = torcheAutoRef.current;
+    const track = trackRef.current;
+    if (auto.tentee || auto.refusee || !track || torchRef.current.on || !torchRef.current.available) return;
+    auto.tentee = true;
+    appliquerTorche(track, true).then((allumee) => {
+      if (!allumee) return;
+      torcheVoulueRef.current = true;
+      setTorch((etat) => ({ ...etat, on: true, available: true }));
+      console.debug('[viseur] peu de lumière : torche allumée');
+    });
+  }, [appliquerTorche]);
 
 
   /**
@@ -352,6 +390,8 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
 
     if (obtenu) {
       torcheVoulueRef.current = next;
+      // Éteinte à la main : on ne la rallumera pas tout seul.
+      if (!next) torcheAutoRef.current.refusee = true;
       setTorch((current) => ({ ...current, on: next, available: true }));
       return;
     }
@@ -431,6 +471,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
 
       const verdict = voteRef.current.cast(r.candidats);
       setLecture({ id: verdict.id, score: verdict.score, marge: verdict.marge, zone: verdict.zone, ms: r.ms?.total ?? 0 });
+      signalerLumiere(Boolean(r.sombre));
       // Présence de la carte ajoutée en dernier : c'est ce qui décide qu'une
       // carte revue est la même (toujours là) ou un deuxième exemplaire.
       // Vue = la meilleure carte de la passe, même quand la passe n'est pas
@@ -595,6 +636,8 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     setContour(null);
     setLecture(null);
     preLectureRef.current = null;
+    passesSombresRef.current = 0;
+    setFaibleLumiere(false);
     setAttempts(0);
     setFailure(null);
   }, []);
@@ -612,6 +655,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
     modelProgress,
     contour,
     lecture,
+    faibleLumiere,
     attempts,
     failure,
     result,

@@ -116,3 +116,17 @@ test('identifierCarte retrouve la carte, ses coins et son sens dans une scène s
   assert.ok(erreur < 20, `erreur de coin ${erreur} px`);
   assert.ok(r.ms.total >= 0 && r.evaluees > 0);
 });
+
+test('une image sous-exposée a ses niveaux étirés, une image de jour est laissée telle quelle', async () => {
+  const { normaliserExposition } = await import('../src/lib/identifier.js');
+  const image = (niveau) => ({ width: 4, height: 4, data: new Uint8ClampedArray(64).map((_, i) => (i % 4 === 3 ? 255 : niveau + (i % 16 < 8 ? 0 : 20))) });
+  const nuit = image(30);
+  const nuitReduite = image(30);
+  assert.equal(normaliserExposition(nuit, nuitReduite), true);
+  assert.ok(Math.max(...nuit.data.filter((_, i) => i % 4 === 0)) >= 250, 'le plus clair monte vers 255');
+  assert.equal(Math.min(...nuit.data.filter((_, i) => i % 4 === 0)), 0, 'le plus sombre descend à 0');
+  const jour = image(200);
+  const avant = Array.from(jour.data);
+  assert.equal(normaliserExposition(jour, image(200)), false);
+  assert.deepEqual(Array.from(jour.data), avant);
+});

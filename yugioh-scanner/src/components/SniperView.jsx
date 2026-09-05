@@ -30,7 +30,7 @@ const INDEX_OCTETS = 8_963_000;
  * L'ordre des cas est celui de l'urgence : ce qui empêche toute lecture passe
  * avant ce qui la dégrade.
  */
-export function consigne({ contour, lecture, modelReady, modelProgress = 0, frozenFrame, manuel, attempts = 0 }) {
+export function consigne({ contour, lecture, modelReady, modelProgress = 0, frozenFrame, manuel, attempts = 0, faibleLumiere = false, torche = null }) {
   if (manuel) return 'Saisie du code';
   if (frozenFrame) return 'Carte identifiée';
   if (!modelReady) {
@@ -43,6 +43,9 @@ export function consigne({ contour, lecture, modelReady, modelProgress = 0, froz
       : `Téléchargement de l’index — ${recus} sur ${total} Mo`;
   }
   if (attempts === 0) return 'Montrez une carte, entière dans l’image';
+  // Peu de lumière : le code de tirage se lit deux fois moins bien. La torche
+  // s'allume seule quand elle existe ; sinon, une lampe.
+  if (faibleLumiere && !torche?.on) return torche?.available ? 'Peu de lumière — allumez la torche' : 'Peu de lumière — approchez d’une lampe';
   if (!contour) return 'Aucune carte vue — montrez-la entière, sur un fond uni';
   if (!lecture?.id) return 'Carte repérée, identification…';
   if (lecture.score >= SCORE_SUR) return 'Carte reconnue';
@@ -257,6 +260,7 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
     modelProgress,
     contour,
     lecture,
+    faibleLumiere,
     attempts,
     failure,
     frozenFrame,
@@ -304,6 +308,8 @@ export default function SniperView({ sniper, onRefus, region, onRegion, serie = 
         modelProgress,
         frozenFrame,
         manuel: saisieVisible,
+        faibleLumiere,
+        torche: torch,
         attempts,
       });
 

@@ -59,6 +59,7 @@ self.onmessage = (evenement) => {
         candidats: r.candidats,
         sens: r.sens,
         hypothese: r.hypothese,
+        sombre: r.sombre,
         ms: r.ms,
         echelle,
         largeur: image.width,

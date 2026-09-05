@@ -245,7 +245,10 @@ async function sceneDepuis(carte, p) {
       for (let c = 0; c < 3; c += 1) {
         let v = dedans ? d[i + c] : f[i + c];
         v = 255 * (v / 255) ** gamma;
-        v = v * lumiere * balance[c] + 255 * spec;
+        // `luminosite` < 1 : scène de nuit, l'image entière s'assombrit (le
+        // grain, ajouté après, ne s'assombrit pas : c'est le bruit du capteur
+        // qui monte avec le gain), avec une dominante chaude d'ampoule.
+        v = v * lumiere * balance[c] * (p.luminosite ?? 1) * (c === 2 ? 1 - (p.chaleur ?? 0) : 1) + 255 * spec;
         d[i + c] = v;
       }
       d[i + 3] = 255;

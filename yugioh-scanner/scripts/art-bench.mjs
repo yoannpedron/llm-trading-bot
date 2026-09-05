@@ -81,6 +81,13 @@ const CONDITIONS = {
 
 // L'ordre des tirages est celui d'origine : les SCENES scènes « connues »
 // d'une graine donnée sont les mêmes qu'avant l'ajout des familles négatives.
+/**
+ * Scène de nuit (`NUIT=1`) : image entière assombrie (luminosité 0,25 à
+ * 0,45), grain du capteur monté (24 à 40), dominante chaude d'ampoule, pas
+ * de reflet — ce que donne un téléphone sous une lampe le soir.
+ */
+const NUIT = process.env.NUIT === '1';
+const nuit = () => (NUIT ? { luminosite: choix([0.25, 0.35, 0.45]), bruit: choix([24, 32, 40]), chaleur: choix([0.15, 0.3]), reflet: 0 } : {});
 const conditions = () => ({
   taille: choix(CONDITIONS.taille),
   perspective: choix(CONDITIONS.perspective),
@@ -92,6 +99,7 @@ const conditions = () => ({
   fondTexture: alea() < 0.4,
   parasite: alea() < 0.4,
   retournee: alea() < 0.15,
+  ...nuit(),
 });
 const connues = Array.from({ length: SCENES }, (_, i) => ({ famille: 'connue', id: choix(ids), graine: GRAINE * 100000 + i, ...conditions() }));
 
@@ -113,7 +121,7 @@ const scenes = [...connues, ...inconnues, ...sansCarte];
 // fond, reflet, parasites changent). La graine reste hors de celles des scènes.
 const doublon = (scene, i) => ({ ...scene, graine: GRAINE * 100000 + 50000 + i });
 
-const serveur = await createServer({ root: APP, configFile: false, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } });
+const serveur = await createServer({ root: APP, configFile: false, logLevel: 'error', server: { port: 0, host: '127.0.0.1', hmr: false, watch: { ignored: ['**'] } } });
 await serveur.listen();
 const origine = serveur.resolvedUrls.local[0].replace(/\/$/, '');
 const browser = await chromium.launch({ executablePath: CHROMIUM });

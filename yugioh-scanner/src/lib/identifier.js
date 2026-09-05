@@ -229,6 +229,42 @@ function recadrerReduire(source, cadre, echelle) {
 }
 
 /**
+ * Image sous-exposée (nuit, lampe) : le liseré noir n'est plus « en dessous
+ * de 60 » et le reste « au-dessus de 90 » (`noirceur`), tout est en dessous
+ * de 90. On étire les niveaux quand le 99e centile de l'image réduite est
+ * sous `SOUS_EXPOSEE`, par une table appliquée aux deux images ; une image
+ * de jour n'est pas touchée. Mesuré : voir PASSATION (« la nuit »).
+ */
+export const EXPOSITION = true;
+const SOUS_EXPOSEE = 150;
+
+export function normaliserExposition(plein, reduite) {
+  const histo = new Uint32Array(256);
+  const r = reduite.data;
+  for (let i = 0; i < r.length; i += 4) histo[(r[i] * 299 + r[i + 1] * 587 + r[i + 2] * 114) / 1000 | 0] += 1;
+  const total = r.length / 4;
+  let haut = 255;
+  let cumul = 0;
+  while (haut > 0 && cumul + histo[haut] < total * 0.01) cumul += histo[haut--];
+  if (haut >= SOUS_EXPOSEE) return false;
+  let bas = 0;
+  cumul = 0;
+  while (bas < haut && cumul + histo[bas] < total * 0.01) cumul += histo[bas++];
+  const etendue = Math.max(1, haut - bas);
+  const table = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v += 1) table[v] = ((v - bas) * 255) / etendue;
+  for (const image of [plein, reduite]) {
+    const d = image.data;
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = table[d[i]];
+      d[i + 1] = table[d[i + 1]];
+      d[i + 2] = table[d[i + 2]];
+    }
+  }
+  return true;
+}
+
+/**
  * Identifie la carte visible dans `plein`.
  *
  * @param {ImageData} plein image en pleine résolution
@@ -236,11 +272,13 @@ function recadrerReduire(source, cadre, echelle) {
  * @param {object} index index d'empreintes (`lireIndexArt`)
  * @param {{hypotheses?: number, finalistes?: number, lignes?: number}} options
  * @returns {{quad: Array|null, candidats: Array<{id:number, score:number}>, sens: string|null,
- *   hypothese: string|null, evaluees: number, toutes: Array, ms: {quad:number, total:number}}}
+ *   hypothese: string|null, evaluees: number, toutes: Array, sombre: boolean, ms: {quad:number, total:number}}}
+ *   `sombre` : l'image était sous-exposée et ses niveaux ont été étirés
  */
-export function identifierCarte(plein, reduite, index, { hypotheses = 40, finalistes = 6, lignes = 24, bande = 0.03, variantes = 4 } = {}) {
+export function identifierCarte(plein, reduite, index, { hypotheses = 40, finalistes = 6, lignes = 24, bande = 0.03, variantes = 4, exposition = EXPOSITION } = {}) {
   const t0 = performance.now();
   const facteur = plein.width / reduite.width;
+  const sombre = exposition ? normaliserExposition(plein, reduite) : false;
   const quads = trouverQuads(reduite, { k: hypotheses, lignes, variantes });
   const t1 = performance.now();
   // Le gris pleine résolution, une fois pour tous les affinages.
@@ -357,6 +395,7 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
     hypothese: meilleur?.hypothese ?? null,
     evaluees: toutes.length,
     toutes,
+    sombre,
     ms: {
       quad: Math.round(t1 - t0),
       gradient: Math.round(quads.temps?.gradient ?? 0),

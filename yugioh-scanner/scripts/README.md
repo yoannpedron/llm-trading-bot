@@ -110,7 +110,13 @@ en scène, la redresse depuis ses vrais coins et la fait lire par
 SP=$SP FULL=$SP/arts/full node scripts/harness/code-bench.mjs                      # réglages de l'application
 SP=$SP FULL=$SP/arts/full OPTIONS='{"contraste":false}' node scripts/harness/code-bench.mjs   # une variante
 TAILLES=0.35,0.4 FLOUS=0,0.8 SP=$SP FULL=$SP/arts/full node scripts/harness/code-bench.mjs
+LUMINOSITE=0.35 BRUIT=32 CHALEUR=0.25 SP=$SP FULL=$SP/arts/full node scripts/harness/code-bench.mjs   # de nuit
 ```
+
+De nuit (`LUMINOSITE` < 1 : image assombrie, `BRUIT` : grain du capteur,
+`CHALEUR` : dominante d'ampoule), et `NUIT=1` pour `art-bench.mjs` avec les
+mêmes conditions tirées au sort : c'est la mesure derrière « ça marche
+tellement mieux en journée » (PASSATION, « La nuit »).
 
 Trois chiffres par taille : tirages justes, FAUX retenus (doit rester 0),
 cas avec au moins une lecture exacte. `code-bench.json` garde les textes
