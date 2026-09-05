@@ -287,6 +287,21 @@ verrouillages faux qui se répètent. La fiche affiche « confiance / marge »
 pour toute carte reconnue par l'illustration : c'est ce qu'il faut lire dans
 une capture d'écran quand la carte est fausse.
 
+### Le tirage : lu sur la carte, parmi les tirages de la carte
+
+Une fois la carte identifiée, son code de tirage (« LDK2-FR001 ») n'a plus à
+être cherché parmi 44 000 codes mais parmi les siens (3 en médiane, 59 au
+pire). `src/lib/tirage.js` (pur) apparie une lecture OCR au code le plus
+proche de la carte, `src/lib/lireTirage.js` redresse la carte en 813×1185,
+découpe la bande du code (`BANDE_CODE`), l'agrandit et la lit avec
+`ocr.js` — le moteur de 31 Mo n'est chargé qu'à ce moment-là.
+
+Mesuré (`scripts/harness/code-bench.mjs`, code imprimé sur les visuels
+officiels qui sont des « Replica » sans code, donc borne haute) : lisible
+dès que la carte occupe 60 % de la hauteur de l'image (81 %), 89 % à 90 % ;
+similarité ≥ 70 et avance ≥ 5 sur le deuxième code : 100 % de précision,
+77 % de rappel ; 210 ms par bande en WebGPU.
+
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
 - Dilater par homothétie pour retrouver le bord depuis le liseré : ne

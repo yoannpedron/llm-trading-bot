@@ -46,6 +46,7 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `harness/manual-entry.mjs` | saisie manuelle du code, avec et sans caméra : frappe, complétion, validation, enchaînement |
 | `build-art-index.mjs` | génère `public/art-index.bin`, l'index des empreintes d'illustration (14 523 cartes × 2 cadrages, 8,8 Mo), depuis les visuels `cards_small` téléchargés une fois dans un dossier local |
 | `art-bench.mjs` | **le banc de l'identification par illustration** : photos de téléphone simulées (perspective, rotation, flou, grain, éclairage, reflet, parasites) contre l'index complet — taux de bonne carte, localisation, temps, par condition |
+| `harness/code-bench.mjs` | à partir de quelle taille de carte le code de tirage se lit sur la carte redressée (code imprimé sur les visuels officiels, qui n'en ont pas), et la précision de l'appariement restreint aux tirages de la carte |
 | `harness/scene-camera.mjs` | fabrique la caméra simulée (MJPEG) d'une carte posée sur une table, pour `ui-e2e.mjs` |
 | `harness/banc-art/` | la page servie par Vite qui exécute le VRAI code de l'application (`src/lib/art.js`, `quad.js`, `identifier.js`) pour les trois scripts ci-dessus |
 
