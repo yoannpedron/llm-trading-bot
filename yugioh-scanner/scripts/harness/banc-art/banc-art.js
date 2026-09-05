@@ -630,12 +630,12 @@ window.__lireCode = async (b64, coins, { largeurCarte = 813, hauteurCarte = 1185
 window.__ocrPret = async () => (await import('/src/lib/ocr.js')).warmUp().then((r) => r.provider);
 
 /** La lecture du tirage telle que l'application la fait (`src/lib/lireTirage.js`). */
-window.__lireTirageApp = async (b64, coins, printings) => {
+window.__lireTirageApp = async (b64, coins, printings, options = {}) => {
   const L = await import('/src/lib/lireTirage.js');
   const img = await charger(`data:image/jpeg;base64,${b64}`);
   const [scene, sx] = canvasDe(img.naturalWidth, img.naturalHeight);
   sx.drawImage(img, 0, 0);
   const plein = sx.getImageData(0, 0, scene.width, scene.height);
-  const r = await L.lireTirage(plein, coins, printings);
-  return { tirage: r.tirage?.setCode ?? null, lecture: r.lecture, similarite: r.similarite, avance: r.avance, raison: r.raison, ms: r.ms };
+  const r = await L.lireTirage(plein, coins, printings, options);
+  return { tirage: r.tirage?.setCode ?? null, exact: Boolean(r.exact), ambigu: Boolean(r.ambigu), lecture: r.lecture, brut: r.brut ?? '', similarite: r.similarite, avance: r.avance, raison: r.raison, ms: r.ms };
 };

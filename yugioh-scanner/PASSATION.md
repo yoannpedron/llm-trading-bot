@@ -297,10 +297,49 @@ découpe la bande du code (`BANDE_CODE`), l'agrandit et la lit avec
 `ocr.js` — le moteur de 31 Mo n'est chargé qu'à ce moment-là.
 
 Mesuré (`scripts/harness/code-bench.mjs`, code imprimé sur les visuels
-officiels qui sont des « Replica » sans code, donc borne haute) : lisible
-dès que la carte occupe 60 % de la hauteur de l'image (81 %), 89 % à 90 % ;
-similarité ≥ 70 et avance ≥ 5 sur le deuxième code : 100 % de précision,
-77 % de rappel ; 210 ms par bande en WebGPU.
+officiels qui sont des « Replica » sans code, donc borne haute ; 12 cartes ×
+6 tailles × 3 flous, deux images par cas) : 210 ms par bande en WebGPU, et
+
+| taille de la carte (hauteur de l'image) | 45 % | 50 % | 60 % | 70 % et plus |
+|---|---|---|---|---|
+| tirage retenu juste (deux images) | 81 % | 92 % | 100 % | 100 % |
+| faux tirage retenu | 0 | 0 | 0 | 0 |
+| au moins une lecture exacte | 53 % | 69 % | 78 % | 86-92 % |
+
+En tout : 95 % de tirages justes, 0 faux, 78 % de cas avec une lecture
+exacte (contre 71 % / 0 / 58 % avant le 6 septembre). Ce qui l'a fait, dans l'ordre de ce
+que chacun rapporte :
+
+- **La règle « exact tout de suite, sinon deux lectures d'accord »**
+  (`ConcordanceTirage`). Une lecture exacte est le code de la carte tel
+  quel, région ignorée ; une lecture approchée (similarité ≥ 70, avance ≥ 5
+  sur le deuxième code de la carte) n'est retenue que si une seconde image
+  donne le même code. Une lecture n'est jamais « exacte » quand un autre
+  code de la carte est à un caractère (`DISTANCE_EXACTE`, 636 cartes de
+  l'index ont deux codes ainsi voisins : « MP18-064 » / « MP18-004 ») : là,
+  il faut trois lectures du code tel quel (`LECTURES_AMBIGUES`), car un
+  chiffre mal lu de la même façon deux fois de suite n'est pas rare.
+- **Le contraste étiré** de la bande (2e-98e centile, `etirerContraste`) :
+  71 → 84 % de tirages justes à lui seul, surtout sur les petites cartes et
+  les images floues. Une bande plus haute (100 px), ou plus large, n'apporte
+  rien ou fait perdre.
+- **La correction par gabarit** (`corrigerSelon`) : le moteur écrit O pour
+  0, S pour 5, B pour 8, A pour 4, D pour 0… ; là où le code de la carte
+  attend un chiffre, la lettre qui lui ressemble devient ce chiffre, et
+  l'inverse. On ne touche qu'aux confusions lettre↔chiffre : un 8 lu 0 reste
+  une erreur. Avec tout séparateur pris pour tiret (« : », « · », « = »,
+  espace) et le tiret réinséré quand il manque (« MP25EN051 »,
+  `lecturesPossibles`) : 71 → 84 % aussi, cumulable avec le contraste.
+- **La seconde lecture** : si la bande étirée ne donne pas de lecture exacte,
+  la bande telle quelle est lue aussi (un quart des cas) ; lectures exactes
+  81 → 87 %.
+- **Lisible dès 40 %** de la hauteur (`HAUTEUR_LISIBLE`) : 64 % de justes à
+  40 % (100 % sans flou), 0 faux ; en dessous, 44 % à 35 %, on ne tente pas.
+
+Ce qui reste : à 45-50 % avec du flou, le moteur ne trouve pas de texte
+(lecture vide) ou lit un chiffre pour un autre (8 → 0, 6 → 0) ; c'est la
+résolution, pas l'appariement. Le viseur relit sur les images suivantes
+(`RELECTURES_MAX`).
 
 ### Vitesse : où passe le temps, et ce qui l'a divisé par trois
 
@@ -332,7 +371,7 @@ session). La carte reconnue est ajoutée au classeur aussitôt
 (`App.jsx : ajouterEnSerie`) avec le tirage le plus probable
 (`tirageProbable` : le premier dans la langue choisie) et l'indicateur
 `tirageAPreciser` ; le viseur continue. Le code de tirage est lu sur l'image
-si la carte occupe au moins 55 % de la hauteur (`lireTirage.js`, moteur OCR
+si la carte occupe au moins 40 % de la hauteur (`lireTirage.js`, moteur OCR
 chargé à ce moment-là), et l'entrée est corrigée après coup
 (`collection.remplacerTirage`). Le bandeau du viseur montre l'ajout six
 secondes, avec « Annuler » (`retirerUnExemplaire`) et « Préciser le tirage »
@@ -364,15 +403,17 @@ je ne veux pas de tirage estimé ; un prix à chaque tirage lu ». D'où :
   synthétique n'avait montré aucune fausse carte à 0,85/0,05 sur une image ;
   l'appareil réel, si — les scores réels sont plus serrés que les scores
   simulés.
-- **Tirage** : l'appariement du code (similarité 70, avance 5) est resté tel
-  quel, il n'a pas produit de faux tirage sur l'appareil. Un essai plus
-  strict (numéro exact, 80/15, deux lectures d'accord) a été écrit puis
-  retiré le même jour : il faisait baisser le taux de lecture pour un
-  problème qui n'existait pas. Le code est maintenant EXTRAIT de la lecture
+- **Tirage** : l'appariement du code (similarité 70, avance 5) n'a pas
+  produit de faux tirage sur l'appareil. Un essai plus strict (numéro exact,
+  80/15, deux lectures d'accord) a été écrit puis retiré le même jour : il
+  faisait baisser le taux de lecture pour un problème qui n'existait pas. Le
+  lendemain, demande d'un taux de lecture bien meilleur SANS aucun faux :
+  c'est la section « Le tirage » ci-dessus (95 % de justes, 0 faux, règle
+  exact-ou-concordance). Le code est EXTRAIT de la lecture
   (`extraireCode`) : « MP17-EN171ITTOTHEGY… » donnait 22 de similarité, le
-  code exact était dedans. Lecture tentée dès que la carte fait 45 % de la
-  hauteur, sur la première image sûre puis au verrouillage, puis jusqu'à six
-  relectures en série.
+  code exact était dedans. Lecture tentée dès que la carte fait 40 % de la
+  hauteur, sur la première image sûre puis au verrouillage, puis jusqu'à dix
+  relectures en série (`RELECTURES_MAX`).
 - **Plus de tirage estimé** : en série, l'entrée est créée SANS tirage (badge
   « Tirage à préciser », liste dans l'inventaire) tant que le code n'est pas
   lu ; une carte à tirage unique n'attend rien. Le bandeau affiche

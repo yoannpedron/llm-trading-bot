@@ -7,7 +7,7 @@ import { grabFrame } from './preprocess.js';
 import { scanCode } from './scanApi.js';
 import { lireTirage } from './lireTirage.js';
 import { AntiDoublon } from './serie.js';
-import { assezGrande, tiragesDuCode } from './tirage.js';
+import { ConcordanceTirage, assezGrande, tiragesDuCode } from './tirage.js';
 import { SCORE_VU, VoteArt, resultatDepuisArt, tiragesDistincts } from './verdictArt.js';
 
 /**
@@ -41,7 +41,7 @@ const COTE_MAX = 1600;
  * saisie manuelle, pour les cas où la caméra ne peut pas.
  */
 /** Tentatives de lecture du code, au plus, pour une carte laissée devant l'objectif. */
-const RELECTURES_MAX = 6;
+const RELECTURES_MAX = 10;
 
 /**
  * Lit le code de tirage sur l'image figée. Ne rejette jamais : une lecture
@@ -467,17 +467,23 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
       // première lecture (31 Mo), la carte s'affiche avant.
       const coinsStill = r.quad ? r.quad.map((p) => ({ x: p.x / facteur, y: p.y / facteur })) : null;
 
+      // Le tirage n'est donné que s'il est sûr : une lecture EXACTE d'un code
+      // de la carte, ou deux lectures approchées identiques sur deux images.
       // Deux images ont déjà été jugées sûres : le code est lu sur les deux
-      // (la première lecture est partie avant le verrouillage), la première
-      // qui rend un tirage l'emporte.
+      // (la première lecture est partie avant le verrouillage).
+      const concordance = new ConcordanceTirage();
+      const retenir = (lu) => {
+        const tirage = concordance.ajouter(lu);
+        return { ...lu, tirage, raison: tirage ? null : lu?.tirage ? 'à confirmer' : (lu?.raison ?? 'code illisible') };
+      };
       const pre = preLectureRef.current;
       preLectureRef.current = null;
       const lecturesInitiales = async () => {
         if (pre && pre.id === resolved.card.id) {
-          const premiere = await pre.promesse;
-          if (premiere?.tirage) return premiere;
+          const premiere = retenir(await pre.promesse);
+          if (premiere.tirage) return premiere;
         }
-        return lireTirageSurImage(still, coinsStill, resolved);
+        return retenir(await lireTirageSurImage(still, coinsStill, resolved));
       };
 
       if (serieRef.current && onSerieRef.current) {
@@ -489,7 +495,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
           if (suivi && suivi.id === resolved.card.id && !suivi.enCours && !suivi.lu && suivi.essais < RELECTURES_MAX && coinsStill && assezGrande(coinsStill, still.height)) {
             suivi.essais += 1;
             suivi.enCours = true;
-            const relecture = lireTirageSurImage(still, coinsStill, resolved);
+            const relecture = lireTirageSurImage(still, coinsStill, resolved).then(suivi.retenir);
             relecture.then((lu) => {
               suivi.enCours = false;
               if (lu?.tirage) suivi.lu = true;
@@ -501,7 +507,7 @@ export function useSniper({ serie = false, onSerie = null } = {}) {
         antiDoublonRef.current.noter(resolved.card.id);
         const lecture = lecturesInitiales();
         const corriger = onSerieRef.current(resolved, lecture);
-        const suivi = { id: resolved.card.id, corriger: typeof corriger === 'function' ? corriger : null, essais: 1, enCours: true, lu: false };
+        const suivi = { id: resolved.card.id, corriger: typeof corriger === 'function' ? corriger : null, retenir, essais: 1, enCours: true, lu: false };
         relectureRef.current = suivi;
         lecture.then((lu) => {
           suivi.enCours = false;

@@ -44,7 +44,7 @@ de la largeur du viseur, comme le cadre un utilisateur.
 | `harness/manual-entry.mjs` | saisie manuelle du code, avec et sans caméra : frappe, complétion, validation, enchaînement |
 | `build-art-index.mjs` | génère `public/art-index.bin`, l'index des empreintes d'illustration (14 523 cartes × 2 cadrages, 8,8 Mo), depuis les visuels `cards_small` téléchargés une fois dans un dossier local |
 | `art-bench.mjs` | **le banc de l'identification par illustration** : photos de téléphone simulées (perspective, rotation, flou, grain, éclairage, reflet, parasites) contre l'index complet — taux de bonne carte, localisation, temps, par condition |
-| `harness/code-bench.mjs` | à partir de quelle taille de carte le code de tirage se lit sur la carte redressée (code imprimé sur les visuels officiels, qui n'en ont pas), et la précision de l'appariement restreint aux tirages de la carte |
+| `harness/code-bench.mjs` | **le banc de la lecture du tirage** : code imprimé sur les visuels officiels (qui n'en ont pas), carte mise en scène à six tailles et trois flous, deux images par cas, lue par le VRAI lecteur (`lireTirage.js`) avec la règle de l'application (exact tout de suite, sinon deux lectures d'accord) — tirages justes, FAUX, lectures exactes, par taille ; `OPTIONS='{"contraste":false}'` pour comparer une variante du lecteur, textes bruts dans `code-bench.json` pour rejouer l'appariement sans relancer le moteur |
 | `harness/ui-serie.mjs` | le mode série de bout en bout : carte reconnue → entrée au classeur sans écran, bandeau, « Annuler », anti-doublon |
 | `harness/scene-camera.mjs` | fabrique la caméra simulée (MJPEG) d'une carte posée sur une table, pour `ui-e2e.mjs` |
 | `harness/banc-art/` | la page servie par Vite qui exécute le VRAI code de l'application (`src/lib/art.js`, `quad.js`, `identifier.js`) pour les trois scripts ci-dessus |
@@ -99,6 +99,23 @@ disponible.
 Le script est conservé parce que la conclusion est utile : **ce n'est pas la
 forme des glyphes qu'il faut mesurer, c'est ce que le pipeline confond**. C'est
 ce que fait `ocr-confusions.mjs`.
+
+## Lecture du tirage
+
+`harness/code-bench.mjs` imprime un code sur la carte haute résolution, la met
+en scène, la redresse depuis ses vrais coins et la fait lire par
+`lireTirage.js` ; deux images par cas, décision par `ConcordanceTirage` :
+
+```bash
+SP=$SP FULL=$SP/arts/full node scripts/harness/code-bench.mjs                      # réglages de l'application
+SP=$SP FULL=$SP/arts/full OPTIONS='{"contraste":false}' node scripts/harness/code-bench.mjs   # une variante
+TAILLES=0.35,0.4 FLOUS=0,0.8 SP=$SP FULL=$SP/arts/full node scripts/harness/code-bench.mjs
+```
+
+Trois chiffres par taille : tirages justes, FAUX retenus (doit rester 0),
+cas avec au moins une lecture exacte. `code-bench.json` garde les textes
+bruts du moteur (`bruts`) et les tirages de la carte : un changement de
+l'appariement (`tirage.js`) se rejoue dessus en une seconde, sans moteur.
 
 ## Fixtures réelles
 
