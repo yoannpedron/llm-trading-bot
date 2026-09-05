@@ -262,6 +262,31 @@ l'ordre, avec la mesure qui l'a justifié :
    : tolérance à ±24 px passée de 87 à 93 %.
 6. **Seconde détection rapprochée** pour les petites cartes (56 → 63-68 %).
 
+### Faux positifs : ce que le banc étendu a dit, et la politique retenue
+
+Le banc mesure depuis le 5 septembre les FAUX POSITIFS (`SCENES=200
+INCONNUES=60 SANS_CARTE=40`) : cartes absentes de l'index, scènes sans carte.
+Résultat : la politique « deux images d'accord entre 0,70 et 0,85 » n'accepte
+rien de faux sur le banc… parce que le banc tire deux images DIFFÉRENTES de
+la même carte. Sur un téléphone immobile, les images sont identiques et une
+mauvaise lecture se confirme elle-même : c'est l'explication la plus probable
+des fausses cartes vues sur l'appareil. La confirmation par répétition a donc
+été retirée. Ce qui tient, c'est la MARGE avec la deuxième carte : cartes
+connues 0,27 en médiane, cartes inconnues 0,03.
+
+Politique en place (`verdictArt.js`, chiffres du banc étendu) :
+
+| zone | règle | bonnes acceptées | fausses (connues / inconnues / sans carte) |
+|---|---|---|---|
+| sûre | score ≥ 0,85 et marge ≥ 0,05, ou score ≥ 0,75 et marge ≥ 0,12 | 77,5 % | 0,5 % / 0 % / 0 % |
+| à proposer | score ≥ 0,70 et marge ≥ 0,03 : les trois meilleures cartes, l'utilisateur touche la sienne | la bonne est dans les trois 8 fois sur 19 | 13 scènes négatives sur 60 déclenchent une proposition |
+| rien | en dessous | — | — |
+
+Le prix : 77,5 % de verrouillage automatique au lieu de 88 %, contre des
+verrouillages faux qui se répètent. La fiche affiche « confiance / marge »
+pour toute carte reconnue par l'illustration : c'est ce qu'il faut lire dans
+une capture d'écran quand la carte est fausse.
+
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
 - Dilater par homothétie pour retrouver le bord depuis le liseré : ne

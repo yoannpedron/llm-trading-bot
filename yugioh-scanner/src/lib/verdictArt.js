@@ -1,43 +1,76 @@
 /**
  * De l'identification par illustration à une décision, et à un résultat.
  *
- * Une passe rend une carte et un score. Quand accepter ? Mesuré sur le banc
- * (200 scènes, index complet) : les bonnes cartes ont un score médian de 0,93
- * et une marge médiane de 0,31 sur la deuxième ; les fausses en tête, 0,73 et
- * 0,03. Un score d'au moins 0,85 avec une marge d'au moins 0,05 accepte 78 %
- * des bonnes cartes sans en accepter aucune fausse. En dessous, on demande à
- * une deuxième image de confirmer la même carte — le bruit change, la carte
- * non. Sous 0,70, la passe ne compte pas.
+ * Une passe rend une carte, un score et une MARGE (l'écart avec la deuxième
+ * carte). Trois zones, mesurées sur le banc étendu (`scripts/art-bench.mjs` :
+ * 200 cartes connues, 60 cartes absentes de l'index, 40 scènes sans carte) :
+ *
+ *   - **sûre** : score ≥ 0,85 et marge ≥ 0,05, OU score ≥ 0,75 et marge ≥ 0,12.
+ *     La carte est verrouillée à cette image. Mesuré : 77,5 % des bonnes
+ *     cartes, 0,5 % de mauvaises sur les scènes connues (une sur 200), 0 %
+ *     sur les cartes inconnues, 0 % sur les scènes sans carte ;
+ *   - **à proposer** : score ≥ 0,70 et marge ≥ 0,03. On ne tranche pas : les
+ *     trois meilleures cartes sont proposées à l'utilisateur, qui touche la
+ *     sienne. Mesuré : la bonne est dans les trois dans 8 cas sur 19 ; 13
+ *     scènes négatives sur 60 déclenchent une proposition — un dérangement,
+ *     pas une erreur ;
+ *   - **rien** : en dessous, la passe ne compte pas.
+ *
+ * Pourquoi la marge et non une confirmation par une deuxième image : sur un
+ * téléphone posé devant une carte, deux images successives sont presque
+ * identiques, et une mauvaise lecture se répète telle quelle. Une première
+ * version acceptait « deux images d'accord » entre 0,70 et 0,85 ; c'est
+ * l'explication la plus probable des fausses cartes vues sur l'appareil.
+ * Une marge de 0,12 n'a laissé passer aucune scène négative sur le banc.
  */
 
 import { cardFromIndex } from './cardIndex.js';
-import { ReadingVote } from './vote.js';
 
 export const SCORE_SUR = 0.85;
 export const MARGE_SURE = 0.05;
-export const SCORE_MINIMAL = 0.7;
+export const SCORE_FERME = 0.75;
+export const MARGE_FERME = 0.12;
+export const SCORE_PROPOSE = 0.7;
+export const MARGE_PROPOSE = 0.03;
+export const NOMBRE_PROPOSITIONS = 3;
 
-export class VoteArt {
-  constructor(options = {}) {
-    this.vote = new ReadingVote(options);
+/**
+ * La zone d'une passe.
+ *
+ * @param {Array<{id: number, score: number}>} candidats triés par score décroissant
+ * @returns {{zone: 'sure'|'proposer'|'rien', id: number|null, score: number, marge: number,
+ *   propositions: Array<{id: number, score: number}>}}
+ */
+export function zoneDe(candidats) {
+  const premier = candidats?.[0];
+  if (!premier) return { zone: 'rien', id: null, score: 0, marge: 0, propositions: [] };
+  const marge = premier.score - (candidats[1]?.score ?? 0);
+  const sure =
+    (premier.score >= SCORE_SUR && marge >= MARGE_SURE) || (premier.score >= SCORE_FERME && marge >= MARGE_FERME);
+  if (sure) return { zone: 'sure', id: premier.id, score: premier.score, marge, propositions: [] };
+  if (premier.score >= SCORE_PROPOSE && marge >= MARGE_PROPOSE) {
+    return { zone: 'proposer', id: premier.id, score: premier.score, marge, propositions: candidats.slice(0, NOMBRE_PROPOSITIONS) };
   }
+  return { zone: 'rien', id: null, score: premier.score, marge, propositions: [] };
+}
 
+/**
+ * Le verdict d'une suite de passes. Sans mémoire désormais : la décision
+ * tient à la passe seule (voir l'en-tête). La classe reste pour que le viseur
+ * garde un point d'appel unique, et pour `reset()`.
+ */
+export class VoteArt {
   /**
    * @param {Array<{id: number, score: number}>} candidats triés par score
-   * @returns {{accepted: boolean, id: number|null, score: number, marge: number, count: number}}
+   * @returns {{accepted: boolean, id: number|null, score: number, marge: number, zone: string,
+   *   propositions: Array<{id: number, score: number}>}}
    */
   cast(candidats) {
-    const premier = candidats?.[0];
-    if (!premier || premier.score < SCORE_MINIMAL) return { accepted: false, id: null, score: premier?.score ?? 0, marge: 0, count: 0 };
-    const marge = premier.score - (candidats[1]?.score ?? 0);
-    const certain = premier.score >= SCORE_SUR && marge >= MARGE_SURE;
-    const { accepted, count } = this.vote.cast(String(premier.id), { certain });
-    return { accepted, id: premier.id, score: premier.score, marge, count };
+    const z = zoneDe(candidats);
+    return { accepted: z.zone === 'sure', id: z.zone === 'sure' ? z.id : null, score: z.score, marge: z.marge, zone: z.zone, propositions: z.propositions };
   }
 
-  reset() {
-    this.vote.reset();
-  }
+  reset() {}
 }
 
 /**

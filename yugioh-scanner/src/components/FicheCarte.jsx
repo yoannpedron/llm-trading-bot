@@ -146,8 +146,17 @@ export default function FicheCarte({
           <p className="mt-3 flex gap-2 rounded-controle border border-trait bg-relief px-3 py-2 text-donnee text-second">
             <span aria-hidden>◎</span>
             <span>
-              Reconnue par son illustration. Le tirage se lit sur la carte, sous l’illustration
-              à droite : un code comme «&nbsp;LDK2-FR001&nbsp;».
+              {fiche.choisie ? 'Choisie par vous parmi les propositions. ' : 'Reconnue par son illustration. '}
+              Le tirage se lit sur la carte, sous l’illustration à droite : un code comme
+              «&nbsp;LDK2-FR001&nbsp;».
+              {fiche.confiance !== null && !fiche.choisie && (
+                <span className="mt-1 block font-mono text-micro text-tertiaire">
+                  {/* Les deux chiffres qui décident du verrouillage : à lire
+                      dans une capture d'écran quand la carte est fausse. */}
+                  confiance {fiche.confiance}&nbsp;%
+                  {fiche.marge !== null ? `, marge ${fiche.marge.toFixed(2)}` : ''}
+                </span>
+              )}
             </span>
           </p>
         )}

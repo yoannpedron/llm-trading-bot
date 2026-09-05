@@ -96,6 +96,13 @@ export function useSniper() {
    */
   const [manualEntry, setManualEntry] = useState(false);
   /**
+   * Cartes proposées quand la passe n'est pas assez sûre pour trancher : les
+   * trois meilleures, avec leur nom, à toucher. Renouvelées seulement quand
+   * la première change, pour ne pas bouger sous le doigt.
+   */
+  const [propositions, setPropositions] = useState([]);
+  const propositionsRef = useRef([]);
+  /**
    * Le même état, lisible depuis la lecture en cours.
    *
    * Suspendre la boucle empêche le *prochain* tour, pas celui qui est déjà
@@ -372,7 +379,24 @@ export function useSniper() {
       );
 
       const verdict = voteRef.current.cast(r.candidats);
-      setLecture({ id: verdict.id, score: verdict.score, marge: verdict.marge, count: verdict.count, ms: r.ms?.total ?? 0 });
+      setLecture({ id: verdict.id, score: verdict.score, marge: verdict.marge, zone: verdict.zone, ms: r.ms?.total ?? 0 });
+      if (verdict.zone === 'proposer') {
+        const actuelles = propositionsRef.current;
+        if (actuelles[0]?.id !== verdict.propositions[0]?.id) {
+          const index = await loadCardIndex();
+          const nommees = verdict.propositions
+            .map((p) => {
+              const position = index.byPasscode.get(p.id);
+              return position === undefined ? null : { id: p.id, score: p.score, nom: index.cards[position].name };
+            })
+            .filter(Boolean);
+          propositionsRef.current = nommees;
+          setPropositions(nommees);
+        }
+      } else if (verdict.zone === 'sure' && propositionsRef.current.length) {
+        propositionsRef.current = [];
+        setPropositions([]);
+      }
       if (!verdict.accepted) return;
       // La saisie manuelle a pu s'ouvrir pendant cette passe : verrouiller
       // maintenant démonterait le formulaire sous les doigts.
@@ -439,6 +463,24 @@ export function useSniper() {
     return resolved;
   }, []);
 
+  /**
+   * L'utilisateur a touché une des cartes proposées : on verrouille dessus,
+   * même écran de résultat, avec la source qui dit que c'est son choix.
+   */
+  const choisir = useCallback(async (id) => {
+    const proposition = propositionsRef.current.find((p) => p.id === id);
+    if (!proposition) return;
+    const index = await loadCardIndex();
+    const resolved = resultatDepuisArt(index, id, { score: proposition.score, marge: 0, sens: null, quad: null });
+    if (resolved.status === 'no_match') return;
+    propositionsRef.current = [];
+    setPropositions([]);
+    setFrozenFrame(null);
+    setResult({ ...resolved, source: 'local:art:choix' });
+    chime();
+    vibrate();
+  }, []);
+
   /** Relance la visée : l'image se dégèle et la boucle repart. */
   const rescan = useCallback(() => {
     abortRef.current?.abort();
@@ -448,6 +490,8 @@ export function useSniper() {
     setFrozenFrame(null);
     setContour(null);
     setLecture(null);
+    propositionsRef.current = [];
+    setPropositions([]);
     setAttempts(0);
     setFailure(null);
   }, []);
@@ -465,6 +509,8 @@ export function useSniper() {
     modelProgress,
     contour,
     lecture,
+    propositions,
+    choisir,
     attempts,
     failure,
     result,
