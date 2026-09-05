@@ -118,9 +118,11 @@ function aleatoire(graine) {
  * remplace `parasite` (booléen) par des rectangles plus variés : tournés,
  * parfois cerclés d'un liseré sombre comme un téléphone ou une boîte.
  */
-window.__scene = async (url, p) => {
+window.__scene = async (url, p) => sceneDepuis(p.sansCarte ? null : await carteCanonique(url), p);
+
+/** La scène, depuis une carte déjà rendue (ImageData, n'importe quelle résolution), ou sans carte. */
+async function sceneDepuis(carte, p) {
   const alea = aleatoire(p.graine);
-  const carte = p.sansCarte ? null : await carteCanonique(url);
 
   // Position et perspective de la carte.
   const hauteur = (p.taille ?? 0.5) * SCENE_H;
@@ -271,7 +273,7 @@ window.__scene = async (url, p) => {
   }
 
   return { png: scene.toDataURL('image/jpeg', 0.85).split(',')[1], coins: carte ? coins : null, largeur: SCENE_L, hauteur: SCENE_H };
-};
+}
 
 /* --- Identification -------------------------------------------------------- */
 
@@ -594,3 +596,56 @@ window.__traits = async (b64, coinsVrais, largeur = 448) => {
   const faux = lignes.filter((l) => !l.vrai).sort(() => Math.random() - 0.5).slice(0, 80);
   return { vrais: vrais_, faux, total: lignes.length };
 };
+
+/* --- Lecture du code de tirage sur la carte redressée ------------------- */
+
+/**
+ * Une carte haute résolution (visuel officiel 813×1185, sans code : ce sont
+ * des « Replica ») sur laquelle on IMPRIME un code de tirage à sa place —
+ * sous l'illustration, aligné à droite, 1,75 % de la hauteur — puis mise en
+ * scène comme `__scene`. Sert à mesurer à partir de quelle taille de carte à
+ * l'écran le code se lit, en borne haute (police approchée, impression nette).
+ */
+window.__sceneCode = async (url, code, p) => {
+  const img = await charger(url);
+  const [carte, cx] = canvasDe(img.naturalWidth, img.naturalHeight);
+  cx.drawImage(img, 0, 0);
+  const h = carte.height;
+  cx.font = `bold ${Math.round(h * 0.0175)}px "Liberation Sans", Arial, sans-serif`;
+  cx.textAlign = 'right';
+  cx.textBaseline = 'alphabetic';
+  cx.fillStyle = '#1a1a1a';
+  cx.fillText(code, Math.round(carte.width * 0.905), Math.round(h * 0.7475));
+  const source = cx.getImageData(0, 0, carte.width, carte.height);
+  return sceneDepuis(source, p);
+};
+
+/** Position de la bande du code sur une carte redressée (fractions). */
+const BANDE_CODE = { x0: 0.45, x1: 0.93, y0: 0.722, y1: 0.758 };
+
+/**
+ * Redresse la carte en haute résolution depuis la scène, découpe la bande du
+ * code, l'agrandit et la lit avec le moteur OCR de l'application.
+ */
+window.__lireCode = async (b64, coins, { largeurCarte = 813, hauteurCarte = 1185, zoom = 2 } = {}) => {
+  const O = await import('/src/lib/ocr.js');
+  const img = await charger(`data:image/jpeg;base64,${b64}`);
+  const [scene, sx] = canvasDe(img.naturalWidth, img.naturalHeight);
+  sx.drawImage(img, 0, 0);
+  const plein = sx.getImageData(0, 0, scene.width, scene.height);
+  const t0 = performance.now();
+  const carte = redresser(plein, coins, largeurCarte, hauteurCarte);
+  const [cc, ccx] = canvasDe(carte.width, carte.height);
+  ccx.putImageData(enImageData(carte), 0, 0);
+  const x = Math.round(BANDE_CODE.x0 * carte.width);
+  const y = Math.round(BANDE_CODE.y0 * carte.height);
+  const w = Math.round((BANDE_CODE.x1 - BANDE_CODE.x0) * carte.width);
+  const hb = Math.round((BANDE_CODE.y1 - BANDE_CODE.y0) * carte.height);
+  const [bande, bx] = canvasDe(w * zoom, hb * zoom);
+  bx.imageSmoothingQuality = 'high';
+  bx.drawImage(cc, x, y, w, hb, 0, 0, w * zoom, hb * zoom);
+  const t1 = performance.now();
+  const { text, ms } = await O.recognize(bande);
+  return { texte: text, msRedressement: Math.round(t1 - t0), msOcr: ms, bande: bande.toDataURL('image/png').split(',')[1] };
+};
+window.__ocrPret = async () => (await import('/src/lib/ocr.js')).warmUp().then((r) => r.provider);
