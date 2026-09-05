@@ -329,6 +329,7 @@ window.__identifier = async (b64, coinsVrais = null, { hypotheses = 40, finalist
     toutes: r.toutes.map((h) => ({ nom: h.nom, coins: h.coins, id: h.candidats[0]?.id, score: h.score })),
     msQuad: r.ms.quad,
     msTotal: r.ms.total,
+    ms: r.ms,
   };
 
   if (coinsVrais) {

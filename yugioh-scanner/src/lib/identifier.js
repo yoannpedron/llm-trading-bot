@@ -21,6 +21,10 @@
 import { CADRE_ART, MARGE_ART, chercher, empreinte } from './art.js';
 import { toGrayscale } from './preprocess.js';
 import { affiner, carteDepuisArt, dilater, homographie, noirceur, remettreEchelle, trouverQuads } from './quad.js';
+import { MARGE_SURE, SCORE_SUR } from './verdictArt.js';
+
+/** Une recherche qui désigne une carte avec la certitude de la zone sûre de `verdictArt`. */
+const estSure = (trouves) => (trouves[0]?.score ?? 0) >= SCORE_SUR && trouves[0].score - (trouves[1]?.score ?? 0) >= MARGE_SURE;
 
 /** Côté du rééchantillonnage de l'illustration pour l'empreinte. */
 export const COTE_ART = 96;
@@ -249,6 +253,7 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
   const t1 = performance.now();
   // Le gris pleine résolution, une fois pour tous les affinages.
   const gris = { gray: toGrayscale(plein), width: plein.width, height: plein.height };
+  const tGris = performance.now();
 
   // Étage 1 : chaque candidat, affiné au pixel, tel quel, à l'endroit. Les
   // cadres carrés (type « art ») donnent deux lectures de carte.
@@ -263,34 +268,44 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
   // contour soit celui d'une carte. Elle pondère le score d'appariement.
   const prior = (q) => 1 / (1 + Math.exp(-q.score));
   const noter = (coins, score, q) => score * (0.4 + 0.6 * (q ? prior(q) : noirceur(gris.gray, gris.width, gris.height, coins)));
+  // Les hypothèses sont évaluées dans l'ordre du pré-classement, et l'on
+  // S'ARRÊTE dès qu'une carte est trouvée avec certitude (score et marge de la
+  // zone sûre de `verdictArt`) : le pré-classement met le vrai contour en tête
+  // dans 84 % des cas, inutile d'évaluer les quarante autres.
   const toutes = [];
-  quads.forEach((q, rang) => {
+  let sur = false;
+  const evaluer = (q, coins, nom) => {
+    // L'orientation vient de la carte elle-même (zone de texte claire en
+    // bas), pas de l'appariement : une carte à l'envers ressemble parfois
+    // mieux à une autre carte qu'à elle-même. Indice faible : les deux sens.
+    const orientation = orientationDepuisCoins(plein, coins);
+    const sens = orientation > ORIENTATION_SURE ? ['droite'] : orientation < -ORIENTATION_SURE ? ['tournée'] : ['droite', 'tournée'];
+    for (const s of sens) {
+      const e = empreinteDepuisCoins(plein, coins, { demiTour: s === 'tournée' });
+      const trouves = chercher(index, e, 3);
+      const appariement = trouves[0]?.score ?? 0;
+      toutes.push({ nom: `${nom}${s === 'tournée' ? '↺' : ''}`, coins, candidats: trouves, appariement, score: noter(coins, appariement, q), sens: s, orientation, quad: q });
+      if (estSure(trouves)) sur = true;
+    }
+  };
+  for (let rang = 0; rang < quads.length && !sur; rang += 1) {
+    const q = quads[rang];
     const base = affiner(gris, remettreEchelle(q.coins, facteur), { bande });
     const variantes = q.type === 'art' ? carteDepuisArt(base).map((c, i) => [`art${i}`, c]) : [['brut', base]];
-    for (const [nom, coins] of variantes) {
-      // L'orientation vient de la carte elle-même (zone de texte claire en
-      // bas), pas de l'appariement : une carte à l'envers ressemble parfois
-      // mieux à une autre carte qu'à elle-même. Indice faible : les deux sens.
-      const orientation = orientationDepuisCoins(plein, coins);
-      const sens = orientation > ORIENTATION_SURE ? ['droite'] : orientation < -ORIENTATION_SURE ? ['tournée'] : ['droite', 'tournée'];
-      for (const s of sens) {
-        const e = empreinteDepuisCoins(plein, coins, { demiTour: s === 'tournée' });
-        const trouves = chercher(index, e, 3);
-        const appariement = trouves[0]?.score ?? 0;
-        toutes.push({ nom: `${rang}:${nom}${s === 'tournée' ? '↺' : ''}`, coins, candidats: trouves, appariement, score: noter(coins, appariement), sens: s, orientation });
-      }
-    }
-  });
+    for (const [nom, coins] of variantes) evaluer(q, coins, `${rang}:${nom}`);
+  }
   toutes.sort((a, b) => b.score - a.score);
 
+  const tEtage1 = performance.now();
   // Seconde détection, RAPPROCHÉE, autour des meilleures petites régions :
   // une carte qui n'occupe qu'un quart de l'image ne fait que cent pixels de
   // large à l'échelle de détection, son liseré un pixel — les droites sont
   // trop grossières. On recadre autour d'elle dans l'image d'origine, on
   // détecte à nouveau à l'échelle de travail, et l'on soumet ces contours au
   // même appariement. Mesuré : les petites cartes passaient de 56 % à ...
+  // Seulement si rien de sûr n'a été trouvé : mesuré, la passe coûte 80 ms.
   const regionsFaites = [];
-  for (const h of toutes.slice(0, 6)) {
+  for (const h of sur ? [] : toutes.slice(0, 6)) {
     const xs = h.coins.map((p) => p.x);
     const ys = h.coins.map((p) => p.y);
     const largeur = Math.max(...xs) - Math.min(...xs);
@@ -311,21 +326,14 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
     const echelle = Math.min(1, reduite.width / cadre.w);
     const zoom = recadrerReduire(plein, cadre, echelle);
     const proches = trouverQuads(zoom, { k: 12, lignes, variantes });
-    proches.forEach((q, rang) => {
+    for (let rang = 0; rang < proches.length && !sur; rang += 1) {
+      const q = proches[rang];
       const coinsPlein = q.coins.map((p) => ({ x: cadre.x + p.x / echelle, y: cadre.y + p.y / echelle }));
       const base = affiner(gris, coinsPlein, { bande });
       const variantesQ = q.type === 'art' ? carteDepuisArt(base).map((c, i) => [`art${i}`, c]) : [['brut', base]];
-      for (const [nom, coins] of variantesQ) {
-        const orientation = orientationDepuisCoins(plein, coins);
-        const sens = orientation > ORIENTATION_SURE ? ['droite'] : orientation < -ORIENTATION_SURE ? ['tournée'] : ['droite', 'tournée'];
-        for (const s2 of sens) {
-          const e = empreinteDepuisCoins(plein, coins, { demiTour: s2 === 'tournée' });
-          const trouves = chercher(index, e, 3);
-          const appariement = trouves[0]?.score ?? 0;
-          toutes.push({ nom: `z${regionsFaites.length}.${rang}:${nom}${s2 === 'tournée' ? '↺' : ''}`, coins, candidats: trouves, appariement, score: noter(coins, appariement, q), sens: s2, orientation, quad: q });
-        }
-      }
-    });
+      for (const [nom, coins] of variantesQ) evaluer(q, coins, `z${regionsFaites.length}.${rang}:${nom}`);
+    }
+    if (sur) break;
   }
   toutes.sort((a, b) => b.score - a.score);
   const t2 = performance.now();
@@ -357,6 +365,13 @@ export function identifierCarte(plein, reduite, index, { hypotheses = 40, finali
     hypothese: meilleur?.hypothese ?? null,
     evaluees: toutes.length,
     toutes,
-    ms: { quad: Math.round(t1 - t0), etage1: Math.round(t2 - t1), total: Math.round(performance.now() - t0) },
+    ms: {
+      quad: Math.round(t1 - t0),
+      gris: Math.round(tGris - t1),
+      etage1: Math.round(tEtage1 - tGris),
+      zoom: Math.round(t2 - tEtage1),
+      etage2: Math.round(performance.now() - t2),
+      total: Math.round(performance.now() - t0),
+    },
   };
 }

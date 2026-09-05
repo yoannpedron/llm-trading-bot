@@ -210,26 +210,27 @@ export function droitesHough(magnitude, orientation, width, height, { fraction =
     }
   }
 
-  // Pics, avec suppression des voisins (±4°, ±6 px).
+  // Pics, avec suppression des voisins (±4°, ±6 px). Une seule passe pour
+  // ramasser les cases qui valent au moins un dixième du maximum (quelques
+  // milliers), triées, puis la suppression dans l'ordre. Une première
+  // version rebalayait l'accumulateur entier (330 000 cases) pour chaque pic :
+  // 24 balayages, 8 millions de lectures, la moitié du temps de détection.
+  let max = 0;
+  for (let i = 0; i < acc.length; i += 1) if (acc[i] > max) max = acc[i];
+  if (max === 0) return [];
+  const seuilPic = max * 0.1;
+  const cases = [];
+  for (let i = 0; i < acc.length; i += 1) if (acc[i] >= seuilPic) cases.push(i);
+  cases.sort((a, b) => acc[b] - acc[a]);
+
   const droites = [];
   const pris = new Uint8Array(acc.length);
-  for (let k = 0; k < n; k += 1) {
-    let meilleur = -1;
-    let valeur = 0;
-    for (let i = 0; i < acc.length; i += 1) {
-      if (!pris[i] && acc[i] > valeur) {
-        valeur = acc[i];
-        meilleur = i;
-      }
-    }
-    if (meilleur < 0 || valeur === 0) break;
-    const t = Math.floor(meilleur / rhoBins);
-    const r = meilleur % rhoBins;
-    droites.push({ theta: t * DEG, rho: r - diag, poids: valeur });
-    // Une droite a une représentation unique avec theta dans [0, π) et rho
-    // signé : la suppression ne concerne que ses voisines immédiates. (Une
-    // première version supprimait aussi une case à theta + 90°, croyant y
-    // voir un doublon : elle effaçait des côtés perpendiculaires légitimes.)
+  for (const i of cases) {
+    if (droites.length >= n) break;
+    if (pris[i]) continue;
+    const t = Math.floor(i / rhoBins);
+    const r = i % rhoBins;
+    droites.push({ theta: t * DEG, rho: r - diag, poids: acc[i] });
     for (let dt = -4; dt <= 4; dt += 1) {
       const tt = (t + dt + THETA_BINS) % THETA_BINS;
       for (let dr = -6; dr <= 6; dr += 1) {

@@ -157,7 +157,7 @@ try {
     const proches = rendu.coins ? (r.toutes ?? []).map((h) => ({ ...h, erreur: erreurCoins(rendu.coins, h.coins) })) : [];
     const meilleureProche = proches.reduce((m, h) => (!m || h.erreur < m.erreur ? h : m), null);
     lignes.push({ ...scene, idVrai: scene.id, trouve, erreur, bonne, dansTrois, dansTroisHypotheses, marge, borne, hypothese: r.hypothese, trouveId, sens: r.sens,
-      procheErreur: meilleureProche?.erreur ?? null, procheBonne: meilleureProche?.id === scene.id, procheScore: meilleureProche?.score ?? 0, score, candidats, bis, msQuad: r.msQuad, msTotal: r.msTotal });
+      procheErreur: meilleureProche?.erreur ?? null, procheBonne: meilleureProche?.id === scene.id, procheScore: meilleureProche?.score ?? 0, score, candidats, bis, msQuad: r.msQuad, msTotal: r.msTotal, ms: r.ms, evaluees: r.evaluees });
     // Pour l'œil : les échecs des scènes connues, et les scènes négatives où
     // une carte passe le score minimal (de possibles faux positifs).
     const suspect = scene.famille !== 'connue' && score >= SCORE_MINIMAL;
@@ -186,6 +186,8 @@ try {
   console.log(`  marge médiane (bonnes)   ${mediane(lignes.filter((l) => l.bonne).map((l) => l.marge)).toFixed(3)}   score médian ${mediane(lignes.filter((l) => l.bonne).map((l) => l.score)).toFixed(3)}`);
   const fausses = lignes.filter((l) => l.trouve && !l.bonne && l.candidats?.length);
   console.log(`  temps médian             quad ${mediane(lignes.map((l) => l.msQuad))} ms, total ${mediane(lignes.map((l) => l.msTotal))} ms`);
+  const etapes = ['quad', 'gris', 'etage1', 'zoom', 'etage2'];
+  console.log(`  par étape (médiane)      ${etapes.map((e) => `${e} ${mediane(lignes.map((l) => l.ms?.[e] ?? 0))}`).join(', ')}   évaluées ${mediane(lignes.map((l) => l.evaluees ?? 0))}`);
 
   // Seuil d'acceptation : quelle marge sépare bonnes et fausses en tête ?
   const margesFausses = lignes.filter((l) => l.trouve && !l.bonne).map((l) => l.marge);
