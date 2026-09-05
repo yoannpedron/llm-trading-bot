@@ -60,8 +60,9 @@ export function warmUpArt(onProgress) {
       console.debug(`[viseur] index téléchargé en ${Math.round(performance.now() - depart)} ms`);
       // L'index est renvoyé au worker sous forme d'octets : c'est lui qui
       // cherche, le fil principal n'en a pas besoin.
-      const octets = new Uint8Array(index.empreintes.buffer.slice(0));
-      worker.postMessage({ type: 'init', index: octets.buffer }, [octets.buffer]);
+      // Une copie reste ici, pour réinstaller l'index dans un worker de rechange.
+      indexOctets = index.empreintes.buffer.slice(0);
+      worker.postMessage({ type: 'init', index: indexOctets.slice(0) });
     })
     .catch((erreur) => {
       pret.reject(erreur);
@@ -78,15 +79,49 @@ export function identifier(image) {
   if (!worker) throw new Error('worker non démarré');
   const id = (compteur += 1);
   return new Promise((resolve, reject) => {
-    enAttente.set(id, { resolve, reject });
+    // Chien de garde : un worker qui ne répond plus (mémoire, appareil qui
+    // suspend l'onglet) ne doit pas figer le viseur pour de bon. Passé le
+    // délai, on le remplace et la passe est perdue, pas la session.
+    const garde = setTimeout(() => {
+      if (!enAttente.has(id)) return;
+      enAttente.delete(id);
+      redemarrer();
+      reject(new Error(`identification interrompue après ${DELAI_GARDE_MS / 1000} s`));
+    }, DELAI_GARDE_MS);
+    enAttente.set(id, {
+      resolve: (v) => {
+        clearTimeout(garde);
+        resolve(v);
+      },
+      reject: (e) => {
+        clearTimeout(garde);
+        reject(e);
+      },
+    });
     worker.postMessage({ type: 'identifier', id, image, largeur: LARGEUR_DETECTION_APP }, [image.data.buffer]);
   });
+}
+
+/** Délai au-delà duquel une passe est considérée perdue. Une passe normale dure moins d'une seconde. */
+export const DELAI_GARDE_MS = 8000;
+
+let indexOctets = null;
+
+/** Remplace un worker muet par un neuf, avec le même index. */
+function redemarrer() {
+  worker?.terminate();
+  worker = null;
+  for (const attente of enAttente.values()) attente.reject(new Error('worker remplacé'));
+  enAttente.clear();
+  demarrer();
+  if (indexOctets) worker.postMessage({ type: 'init', index: indexOctets.slice(0) });
 }
 
 export async function shutdownArt() {
   worker?.terminate();
   worker = null;
   pret = null;
+  indexOctets = null;
   for (const attente of enAttente.values()) attente.reject(new Error('arrêt'));
   enAttente.clear();
 }
