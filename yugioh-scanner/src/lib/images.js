@@ -37,6 +37,8 @@ export const imagePetite = (carte) => {
   return id ? `${BASE}/cards_small/${id}.jpg` : null;
 };
 
+/** Illustration seule, sans le cadre de la carte. */
+export const imageRognee = (carte) => {
   const id = identifiant(carte);
   return id ? `${BASE}/cards_cropped/${id}.jpg` : null;
 };

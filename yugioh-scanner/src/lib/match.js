@@ -230,6 +230,18 @@ export function findCandidates(index, reading, { limit = 5 } = {}) {
   return results.slice(0, limit);
 }
 
+/**
+ * Passcode exploitable : lu en entier, ou reconstitué sans ambiguïté.
+ * @returns {number|null} la clé présente dans la base, ou `null`
+ */
+export function resolvePasscode(index, passcode) {
+  const digits = String(passcode ?? '').replace(/[^0-9]/g, '');
+  if (digits.length === 8) {
+    const value = Number(digits);
+    return index.byPasscode.has(value) ? value : null;
+  }
+  return completePasscode(index.byPasscode, digits);
+}
 
 /**
  * Tirages à proposer : ceux du code lu s'il en désigne, sinon tous.
