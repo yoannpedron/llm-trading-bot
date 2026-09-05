@@ -5,8 +5,9 @@
  *
  * Expose sur `window` :
  *   __empreintes(urls)        empreintes des visuels officiels (index)
- *   __chargerIndex(octets)    index sérialisé → mémoire
+ *   __chargerIndex(octets, ignores)  index sérialisé → mémoire, moins les passcodes `ignores`
  *   __scene(url, params)      une photo synthétique de la carte, avec ses vrais coins
+ *                             (`sansCarte: true` : le fond et ses parasites seuls)
  *   __identifier(sceneB64)    la chaîne complète, chronométrée
  */
 import {
@@ -16,6 +17,7 @@ import {
   chercher,
   empreinte,
   lireIndexArt,
+  masquerCartes,
   zoneArt,
 } from '../../../src/lib/art.js';
 import { identifierCarte } from '../../../src/lib/identifier.js';
@@ -80,9 +82,15 @@ window.__empreintes = async (urls, contraction = 0) => {
 };
 
 let index = null;
-window.__chargerIndex = (octets) => {
-  index = lireIndexArt(Uint8Array.from(octets));
-  return index.taille;
+/**
+ * `ignores` : passcodes à faire disparaître de l'index (id à -1, sautés par
+ * `chercher`), pour mesurer ce que rend une carte que l'index ne connaît pas.
+ * Rend le nombre d'entrées et le nombre masquées.
+ */
+window.__chargerIndex = (octets, ignores = []) => {
+  index = masquerCartes(lireIndexArt(Uint8Array.from(octets)), ignores);
+  const masquees = index.ids.reduce((n, id) => n + (id < 0 ? 1 : 0), 0);
+  return { taille: index.taille, masquees };
 };
 window.__tailleEmpreinte = TAILLE_EMPREINTE;
 
@@ -104,17 +112,22 @@ function aleatoire(graine) {
  * Une photo de téléphone simulée : fond, carte en perspective, éclairage
  * inégal, reflet, balance des blancs, flou, grain. Rend le PNG et les coins
  * réels de la carte dans la scène.
+ *
+ * `sansCarte` : la même photo sans la carte (coins à `null`), pour mesurer ce
+ * que la chaîne invente sur un fond et ses parasites. `parasites` (nombre)
+ * remplace `parasite` (booléen) par des rectangles plus variés : tournés,
+ * parfois cerclés d'un liseré sombre comme un téléphone ou une boîte.
  */
 window.__scene = async (url, p) => {
   const alea = aleatoire(p.graine);
-  const carte = await carteCanonique(url);
+  const carte = p.sansCarte ? null : await carteCanonique(url);
 
   // Position et perspective de la carte.
-  const hauteur = p.taille * SCENE_H;
+  const hauteur = (p.taille ?? 0.5) * SCENE_H;
   const largeur = hauteur * (59 / 86);
   const cx = SCENE_L / 2 + (alea() - 0.5) * (SCENE_L - largeur) * 0.8;
   const cy = SCENE_H / 2 + (alea() - 0.5) * (SCENE_H - hauteur) * 0.8;
-  const angle = ((alea() - 0.5) * 2 * p.rotation * Math.PI) / 180;
+  const angle = ((alea() - 0.5) * 2 * (p.rotation ?? 0) * Math.PI) / 180;
   const base = [
     { x: -largeur / 2, y: -hauteur / 2 },
     { x: largeur / 2, y: -hauteur / 2 },
@@ -166,18 +179,44 @@ window.__scene = async (url, p) => {
     sx.fillStyle = `rgb(${[alea() * 255, alea() * 255, alea() * 255].map(Math.round).join(',')})`;
     sx.fillRect(alea() * SCENE_L * 0.6, alea() * SCENE_H * 0.7, SCENE_L * 0.3, SCENE_H * 0.2);
   }
+  // Des parasites plus trompeurs : rectangle plein, tourné, aux proportions
+  // d'un objet posé sur la table, une fois sur deux cerclé d'un liseré sombre
+  // (un téléphone, une boîte de deck). Ils ne portent aucune illustration :
+  // ce que la chaîne y reconnaît, elle l'invente.
+  for (let n = 0; n < (p.parasites ?? 0); n += 1) {
+    const l = SCENE_L * (0.2 + alea() * 0.4);
+    const h = l * (0.6 + alea() * 1.4);
+    const x = SCENE_L * (0.1 + alea() * 0.8);
+    const y = SCENE_H * (0.1 + alea() * 0.8);
+    const a = (alea() - 0.5) * Math.PI * 0.5;
+    const bordure = alea() < 0.5;
+    sx.save();
+    sx.translate(x, y);
+    sx.rotate(a);
+    if (bordure) {
+      sx.fillStyle = `rgb(${[alea() * 40, alea() * 40, alea() * 40].map(Math.round).join(',')})`;
+      sx.fillRect(-l / 2, -h / 2, l, h);
+    }
+    const marge = bordure ? Math.round(l * 0.03) : 0;
+    sx.fillStyle = `rgb(${[alea() * 255, alea() * 255, alea() * 255].map(Math.round).join(',')})`;
+    sx.fillRect(-l / 2 + marge, -h / 2 + marge, l - 2 * marge, h - 2 * marge);
+    sx.restore();
+  }
 
   // La carte, par homographie scène → carte.
   const fond = sx.getImageData(0, 0, SCENE_L, SCENE_H);
-  const versCarte = homographie(coins, [
-    { x: 0, y: 0 },
-    { x: carte.width - 1, y: 0 },
-    { x: carte.width - 1, y: carte.height - 1 },
-    { x: 0, y: carte.height - 1 },
-  ]);
-  const rendu = deformer(carte, versCarte, SCENE_L, SCENE_H);
+  const versCarte = carte
+    ? homographie(coins, [
+      { x: 0, y: 0 },
+      { x: carte.width - 1, y: 0 },
+      { x: carte.width - 1, y: carte.height - 1 },
+      { x: 0, y: carte.height - 1 },
+    ])
+    : null;
+  const rendu = carte ? deformer(carte, versCarte, SCENE_L, SCENE_H) : fond;
   // `deformer` met du noir hors source ; on y remet le fond.
   const insideMask = (x, y) => {
+    if (!carte) return false;
     const w = versCarte[6] * x + versCarte[7] * y + versCarte[8];
     const u = (versCarte[0] * x + versCarte[1] * y + versCarte[2]) / w;
     const v = (versCarte[3] * x + versCarte[4] * y + versCarte[5]) / w;
@@ -231,7 +270,7 @@ window.__scene = async (url, p) => {
     sx.putImageData(img, 0, 0);
   }
 
-  return { png: scene.toDataURL('image/jpeg', 0.85).split(',')[1], coins, largeur: SCENE_L, hauteur: SCENE_H };
+  return { png: scene.toDataURL('image/jpeg', 0.85).split(',')[1], coins: carte ? coins : null, largeur: SCENE_L, hauteur: SCENE_H };
 };
 
 /* --- Identification -------------------------------------------------------- */

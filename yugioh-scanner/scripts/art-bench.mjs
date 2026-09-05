@@ -12,11 +12,27 @@
  *     échecs de détection des échecs d'appariement ;
  *   - le temps par étape.
  *
+ * Trois familles de scènes, parce qu'un scanner qui affiche une MAUVAISE carte
+ * est pire qu'un scanner qui n'affiche rien :
+ *
+ *   - « connue »    : une carte de l'index (SCENES scènes) — mesure le rappel et
+ *                     les fausses cartes en tête ;
+ *   - « inconnue »  : une carte réelle MASQUÉE de l'index (INCONNUES passcodes,
+ *                     graine fixe) — ce que la chaîne rend d'une carte qu'elle
+ *                     ne peut pas connaître ;
+ *   - « sansCarte » : un fond et un ou deux parasites, pas de carte (SANS_CARTE
+ *                     scènes) — ce qu'elle invente sur une table.
+ *
+ * Chaque scène a un DOUBLON (même carte, autre graine : autre position, autre
+ * bruit), pour juger la politique « deux images d'accord » de `VoteArt`. À la
+ * fin, une grille de politiques d'acceptation (score ≥ S, marge ≥ M) donne le
+ * rappel et les faux positifs de chaque famille, puis la politique en vigueur.
+ *
  * Un banc synthétique a déjà menti une fois sur ce projet : celui-ci ne
  * remplace pas des photos réelles, il dit seulement où chercher.
  *
  *     ARTS=/chemin/arts/small INDEX=public/art-index.bin node scripts/art-bench.mjs
- *     SCENES=200 GRAINE=7 ...
+ *     SCENES=200 INCONNUES=60 SANS_CARTE=40 GRAINE=7 ...
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,12 +43,18 @@ const APP = path.resolve(import.meta.dirname, '..');
 const ARTS = process.env.ARTS;
 const INDEX = path.resolve(process.env.INDEX ?? path.join(APP, 'public/art-index.bin'));
 const SCENES = Number(process.env.SCENES ?? 120);
+const INCONNUES = Number(process.env.INCONNUES ?? 60);
+const SANS_CARTE = Number(process.env.SANS_CARTE ?? 40);
 const GRAINE = Number(process.env.GRAINE ?? 1);
+// Les cartes masquées de l'index ne dépendent pas de GRAINE : la même mesure
+// « inconnue » d'un lancement à l'autre.
+const GRAINE_INCONNUES = 7;
 const CHROMIUM = process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const SP = process.env.SP;
 const OPTIONS = JSON.parse(process.env.OPTIONS ?? '{}');
 
 const { lireIndexArt } = await import(path.join(APP, 'src/lib/art.js'));
+const { SCORE_MINIMAL, VoteArt } = await import(path.join(APP, 'src/lib/verdictArt.js'));
 const octets = fs.readFileSync(INDEX);
 const index = lireIndexArt(octets.buffer.slice(octets.byteOffset, octets.byteOffset + octets.byteLength));
 const ids = Array.from(index.ids);
@@ -55,9 +77,9 @@ const CONDITIONS = {
   reflet: [0, 0.35, 0.7],
 };
 
-const scenes = Array.from({ length: SCENES }, (_, i) => ({
-  id: choix(ids),
-  graine: GRAINE * 100000 + i,
+// L'ordre des tirages est celui d'origine : les SCENES scènes « connues »
+// d'une graine donnée sont les mêmes qu'avant l'ajout des familles négatives.
+const conditions = () => ({
   taille: choix(CONDITIONS.taille),
   perspective: choix(CONDITIONS.perspective),
   rotation: choix(CONDITIONS.rotation),
@@ -68,7 +90,26 @@ const scenes = Array.from({ length: SCENES }, (_, i) => ({
   fondTexture: alea() < 0.4,
   parasite: alea() < 0.4,
   retournee: alea() < 0.15,
+});
+const connues = Array.from({ length: SCENES }, (_, i) => ({ famille: 'connue', id: choix(ids), graine: GRAINE * 100000 + i, ...conditions() }));
+
+// Les cartes inconnues : tirées à graine fixe, hors des cartes des scènes
+// connues, sans doublon (l'index porte deux cadrages par carte).
+g = GRAINE_INCONNUES;
+const idsConnus = new Set(connues.map((s) => s.id));
+const inconnus = [];
+while (inconnus.length < INCONNUES) {
+  const id = choix(ids);
+  if (!idsConnus.has(id) && !inconnus.includes(id)) inconnus.push(id);
+}
+const inconnues = inconnus.map((id, i) => ({ famille: 'inconnue', id, graine: GRAINE * 100000 + SCENES + i, ...conditions() }));
+const sansCarte = Array.from({ length: SANS_CARTE }, (_, i) => ({
+  famille: 'sansCarte', id: null, graine: GRAINE * 100000 + SCENES + INCONNUES + i, ...conditions(), sansCarte: true, parasite: false, retournee: false, parasites: 1 + (alea() < 0.5 ? 1 : 0),
 }));
+const scenes = [...connues, ...inconnues, ...sansCarte];
+// Le doublon : même carte, mêmes conditions, autre graine (position, bruit,
+// fond, reflet, parasites changent). La graine reste hors de celles des scènes.
+const doublon = (scene, i) => ({ ...scene, graine: GRAINE * 100000 + 50000 + i });
 
 const serveur = await createServer({ root: APP, configFile: false, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } });
 await serveur.listen();
@@ -87,37 +128,52 @@ const erreurCoins = (a, b) => Math.min(...[0, 1, 2, 3].map((d) => Math.max(...a.
 try {
   await page.goto(`${origine}/scripts/harness/banc-art/index.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__pret, { timeout: 60000 });
-  const taille = await page.evaluate((o) => window.__chargerIndex(o), Array.from(octets));
-  console.log(`index : ${taille} cartes — ${SCENES} scènes, graine ${GRAINE}\n`);
+  const chargement = await page.evaluate(([o, masque]) => window.__chargerIndex(o, masque), [Array.from(octets), inconnus]);
+  console.log(`index : ${chargement.taille} entrées, ${chargement.masquees} masquées (${inconnus.length} cartes inconnues) — ${SCENES} connues + ${INCONNUES} inconnues + ${SANS_CARTE} sans carte, chacune en double, graine ${GRAINE}\n`);
 
-  const lignes = [];
+  /** Une scène rendue puis identifiée : ce que la politique d'acceptation verra. */
+  const passe = async (scene) => {
+    const rendu = await page.evaluate(([url, p]) => window.__scene(url, p), [scene.id === null ? '' : `${origine}/arts/${scene.id}.jpg`, scene]);
+    const r = await page.evaluate(([b, c, o]) => window.__identifier(b, c, o), [rendu.png, rendu.coins, OPTIONS]);
+    const marge = r.candidats.length > 1 ? r.candidats[0].score - r.candidats[1].score : 0;
+    return { rendu, r, trouve: Boolean(r.quad), trouveId: r.candidats[0]?.id ?? null, score: r.candidats[0]?.score ?? 0, marge, candidats: r.candidats.slice(0, 3) };
+  };
+
+  let lignes = [];
   const debut = Date.now();
   for (const [n, scene] of scenes.entries()) {
-    const rendu = await page.evaluate(([url, p]) => window.__scene(url, p), [`${origine}/arts/${scene.id}.jpg`, scene]);
-    const r = await page.evaluate(([b, c, o]) => window.__identifier(b, c, o), [rendu.png, rendu.coins, OPTIONS]);
-    const trouve = Boolean(r.quad);
-    const erreur = trouve ? erreurCoins(rendu.coins, r.quad) : null;
-    const bonne = r.candidats[0]?.id === scene.id;
+    const { rendu, r, trouve, trouveId, score, marge, candidats } = await passe(scene);
+    const seconde = await passe(doublon(scene, n));
+    const bis = { graine: doublon(scene, n).graine, trouve: seconde.trouve, trouveId: seconde.trouveId, score: seconde.score, marge: seconde.marge, candidats: seconde.candidats };
+    const erreur = trouve && rendu.coins ? erreurCoins(rendu.coins, r.quad) : null;
+    const bonne = scene.id !== null && r.candidats[0]?.id === scene.id;
     const dansTrois = (r.candidats ?? []).slice(0, 3).some((c) => c.id === scene.id);
     // Union des cartes en tête des trois meilleures hypothèses.
     const dansTroisHypotheses = (r.toutes ?? []).slice(0, 3).some((h) => h.id === scene.id) || bonne;
-    const marge = r.candidats.length > 1 ? r.candidats[0].score - r.candidats[1].score : 0;
-    const borne = r.borne?.[0]?.id === scene.id;
+    const borne = scene.id !== null && r.borne?.[0]?.id === scene.id;
     // Parmi toutes les hypothèses : la plus proche de la vérité, et si elle
     // désignait la bonne carte. Sépare « la bonne n'était pas proposée » de
     // « elle l'était mais une autre a gagné ».
-    const proches = (r.toutes ?? []).map((h) => ({ ...h, erreur: erreurCoins(rendu.coins, h.coins) }));
+    const proches = rendu.coins ? (r.toutes ?? []).map((h) => ({ ...h, erreur: erreurCoins(rendu.coins, h.coins) })) : [];
     const meilleureProche = proches.reduce((m, h) => (!m || h.erreur < m.erreur ? h : m), null);
-    lignes.push({ ...scene, trouve, erreur, bonne, dansTrois, dansTroisHypotheses, marge, borne, hypothese: r.hypothese, trouveId: r.candidats[0]?.id ?? null, sens: r.sens,
-      procheErreur: meilleureProche?.erreur ?? null, procheBonne: meilleureProche?.id === scene.id, procheScore: meilleureProche?.score ?? 0, score: r.candidats[0]?.score ?? 0, msQuad: r.msQuad, msTotal: r.msTotal });
-    if (SP && (!bonne || !trouve) && n < 400) {
+    lignes.push({ ...scene, idVrai: scene.id, trouve, erreur, bonne, dansTrois, dansTroisHypotheses, marge, borne, hypothese: r.hypothese, trouveId, sens: r.sens,
+      procheErreur: meilleureProche?.erreur ?? null, procheBonne: meilleureProche?.id === scene.id, procheScore: meilleureProche?.score ?? 0, score, candidats, bis, msQuad: r.msQuad, msTotal: r.msTotal });
+    // Pour l'œil : les échecs des scènes connues, et les scènes négatives où
+    // une carte passe le score minimal (de possibles faux positifs).
+    const suspect = scene.famille !== 'connue' && score >= SCORE_MINIMAL;
+    if (SP && ((scene.famille === 'connue' && (!bonne || !trouve)) || suspect) && n < 400) {
       fs.mkdirSync(path.join(SP, 'art-echecs'), { recursive: true });
       const dessin = await page.evaluate(([b, t, v]) => window.__dessiner(b, t, v), [rendu.png, r.quad, rendu.coins]);
-      fs.writeFileSync(path.join(SP, 'art-echecs', `${n}-${scene.id}-${erreur === null ? 'x' : Math.round(erreur)}.jpg`), Buffer.from(dessin, 'base64'));
+      const nom = scene.famille === 'connue' ? `${n}-${scene.id}-${erreur === null ? 'x' : Math.round(erreur)}` : `${scene.famille}-${n}-${scene.id ?? 'aucune'}-${trouveId}-${score.toFixed(2)}`;
+      fs.writeFileSync(path.join(SP, 'art-echecs', `${nom}.jpg`), Buffer.from(dessin, 'base64'));
     }
-    if (n % 20 === 19) process.stdout.write(`\r${n + 1}/${SCENES}  ${Math.round((Date.now() - debut) / 1000)} s`);
+    if (n % 20 === 19) process.stdout.write(`\r${n + 1}/${scenes.length}  ${Math.round((Date.now() - debut) / 1000)} s`);
   }
   process.stdout.write('\r');
+  // Les rapports qui suivent portent sur les scènes connues, comme avant.
+  const toutesLignes = lignes;
+  const negatives = { inconnue: toutesLignes.filter((l) => l.famille === 'inconnue'), sansCarte: toutesLignes.filter((l) => l.famille === 'sansCarte') };
+  lignes = toutesLignes.filter((l) => l.famille === 'connue');
 
   const pct = (liste, f) => `${Math.round((100 * liste.filter(f).length) / Math.max(1, liste.length))} %`;
   const mediane = (v) => { const t = [...v].sort((a, b) => a - b); return t.length ? t[Math.floor(t.length / 2)] : NaN; };
@@ -151,7 +207,48 @@ try {
     const non = lignes.filter((l) => !l[cle]);
     console.log(`  ${cle.padEnd(12)} oui: ${pct(oui, (l) => l.bonne)} / ${pct(oui, (l) => l.trouve)} (${oui.length})   non: ${pct(non, (l) => l.bonne)} / ${pct(non, (l) => l.trouve)} (${non.length})`);
   }
-  if (SP) fs.writeFileSync(path.join(SP, 'art-bench.json'), JSON.stringify(lignes, null, 1));
+
+  /* --- Faux positifs : quelle politique d'acceptation ? ------------------ */
+
+  // Une politique rend l'id accepté, ou null. Immédiate : sur la première
+  // image seule. Deux images : les deux passes rendent le même id, chacune au
+  // moins au score minimal (ce que fait VoteArt entre 0,70 et 0,85). Actuelle :
+  // VoteArt telle qu'elle est, nourrie des deux passes dans l'ordre.
+  const immediate = (S, M) => (l) => (l.trouveId !== null && l.score >= S && l.marge >= M ? l.trouveId : null);
+  const deuxImages = (l) => (l.trouveId !== null && l.trouveId === l.bis.trouveId && l.score >= SCORE_MINIMAL && l.bis.score >= SCORE_MINIMAL ? l.trouveId : null);
+  const actuelle = (l) => {
+    const vote = new VoteArt();
+    const premiere = vote.cast(l.candidats);
+    if (premiere.accepted) return premiere.id;
+    const seconde = vote.cast(l.bis.candidats);
+    return seconde.accepted ? seconde.id : null;
+  };
+  const taux = (liste, f) => Math.round((1000 * liste.filter(f).length) / Math.max(1, liste.length)) / 10;
+  const evaluer = (politique, decision) => ({
+    politique,
+    rappel: taux(lignes, (l) => decision(l) === l.idVrai),
+    fauxConnues: taux(lignes, (l) => { const d = decision(l); return d !== null && d !== l.idVrai; }),
+    fauxInconnues: taux(negatives.inconnue, (l) => decision(l) !== null),
+    fauxSansCarte: taux(negatives.sansCarte, (l) => decision(l) !== null),
+  });
+  const politiques = [];
+  for (const S of [0.7, 0.75, 0.8, 0.85, 0.9]) for (const M of [0.02, 0.05, 0.08, 0.12]) politiques.push(evaluer(`immédiat score ≥ ${S.toFixed(2)}, marge ≥ ${M.toFixed(2)}`, immediate(S, M)));
+  politiques.push(evaluer(`deux images d'accord, score ≥ ${SCORE_MINIMAL.toFixed(2)}`, deuxImages));
+  const politiqueActuelle = evaluer('actuelle (VoteArt : immédiat 0,85/0,05, sinon deux images ≥ 0,70)', actuelle);
+
+  console.log(`\nPolitiques d'acceptation (connues ${lignes.length}, inconnues ${negatives.inconnue.length}, sans carte ${negatives.sansCarte.length}) :`);
+  console.log(`  ${'politique'.padEnd(46)} rappel   faux connues   faux inconnues   faux sans carte`);
+  for (const p of [...politiques, politiqueActuelle]) {
+    console.log(`  ${p.politique.padEnd(46)} ${String(p.rappel).padStart(5)} %  ${String(p.fauxConnues).padStart(9)} %  ${String(p.fauxInconnues).padStart(12)} %  ${String(p.fauxSansCarte).padStart(13)} %`);
+  }
+  const scoresNegatifs = (liste) => liste.map((l) => l.score).sort((a, b) => b - a).slice(0, 5).map((v) => v.toFixed(2)).join(' ');
+  console.log(`  contour trouvé : inconnues ${pct(negatives.inconnue, (l) => l.trouve)}, sans carte ${pct(negatives.sansCarte, (l) => l.trouve)}`);
+  console.log(`  cinq meilleurs scores : inconnues ${scoresNegatifs(negatives.inconnue)} — sans carte ${scoresNegatifs(negatives.sansCarte)}`);
+
+  if (SP) {
+    fs.writeFileSync(path.join(SP, 'art-bench.json'), JSON.stringify(toutesLignes, null, 1));
+    fs.writeFileSync(path.join(SP, 'art-politiques.json'), JSON.stringify({ politiques, politiqueActuelle }, null, 1));
+  }
 } finally {
   await browser.close();
   await serveur.close();

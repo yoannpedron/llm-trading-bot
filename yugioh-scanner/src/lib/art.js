@@ -260,6 +260,19 @@ export function serialiserIndexArt(index) {
   return out;
 }
 
+/**
+ * Le même index, certaines cartes en moins : leur id passe à -1 et `chercher`
+ * les saute. Sert au banc à mesurer les cartes ABSENTES de l'index sans le
+ * reconstruire. Les empreintes sont partagées, seuls les ids sont copiés.
+ *
+ * @param {Iterable<number>} passcodes cartes à masquer
+ */
+export function masquerCartes(index, passcodes) {
+  const masque = new Set(passcodes);
+  const ids = Int32Array.from(index.ids, (id) => (masque.has(id) ? -1 : id));
+  return { ...index, ids };
+}
+
 export function lireIndexArt(buffer) {
   const vue = new DataView(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
   const base = buffer instanceof ArrayBuffer ? 0 : buffer.byteOffset;
@@ -301,6 +314,11 @@ export function chercher(index, e, k = 5, poids = POIDS, preselection = PRESELEC
     const distances = new Uint8Array(n);
     const histo = new Uint32Array(65);
     for (let i = 0; i < n; i += 1) {
+      // Une carte masquée (id négatif) ne concourt pas : distance hors échelle.
+      if (index.ids[i] < 0) {
+        distances[i] = 65;
+        continue;
+      }
       const h = hamming(e, 0, index.empreintes, i * TAILLE_EMPREINTE);
       distances[i] = h;
       histo[h] += 1;
@@ -321,11 +339,12 @@ export function chercher(index, e, k = 5, poids = POIDS, preselection = PRESELEC
   const total = candidats ? candidats.length : n;
   for (let c = 0; c < total; c += 1) {
     const i = candidats ? candidats[c] : c;
+    const id = index.ids[i];
+    if (id < 0) continue;
     const score = similarite(e, index.empreintes, 0, i * TAILLE_EMPREINTE, poids);
     if (meilleurs.length < k || score > meilleurs[meilleurs.length - 1].score) {
       // Une carte peut avoir plusieurs empreintes dans l'index (variantes de
       // cadrage) : on ne garde que sa meilleure.
-      const id = index.ids[i];
       const deja = meilleurs.findIndex((m) => m.id === id);
       if (deja >= 0) {
         if (meilleurs[deja].score >= score) continue;

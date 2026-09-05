@@ -9,6 +9,7 @@ import {
   TAILLE_EMPREINTE,
   chercher,
   construireIndexArt,
+  masquerCartes,
   empreinte,
   empreinteDct,
   lireIndexArt,
@@ -122,4 +123,20 @@ test('une carte présente plusieurs fois dans l’index ne sort qu’une fois', 
   ]);
   const r = chercher(index, e, 5, undefined, 0);
   assert.deepEqual(r.map((x) => x.id), [7, 8]);
+});
+
+test('une carte masquée ne sort plus de la recherche, avec ou sans présélection', () => {
+  const entrees = [1, 2, 3, 4, 5].map((n) => ({ id: 1000 + n, empreinte: empreinte(image(120, 120, { graine: n, bruit: 200 })) }));
+  const index = construireIndexArt(entrees);
+  const requete = empreinte(image(120, 120, { graine: 3, bruit: 200, decalage: 10 }));
+  assert.equal(chercher(index, requete, 3, undefined, 0)[0].id, 1003);
+
+  const masque = masquerCartes(index, [1003]);
+  assert.equal(masque.taille, 5);
+  assert.deepEqual(Array.from(index.ids), [1001, 1002, 1003, 1004, 1005], 'l’index d’origine est intact');
+  for (const preselection of [0, 2]) {
+    const r = chercher(masque, requete, 5, undefined, preselection);
+    assert.ok(r.length > 0);
+    assert.ok(r.every((x) => x.id !== 1003 && x.id > 0), `présélection ${preselection}`);
+  }
 });
