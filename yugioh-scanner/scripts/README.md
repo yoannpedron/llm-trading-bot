@@ -66,6 +66,9 @@ SP=$SP OPTIONS='{"largeur":448}' ARTS=$SP/arts/small INDEX=public/art-index.bin 
 SP=$SP ARTS=$SP/arts/small node scripts/harness/scene-camera.mjs
 npx vite build && npx vite preview --port 4173 &
 SP=$SP node scripts/harness/ui-e2e.mjs
+# 5. Le réglage « Langue de vos cartes » (codes dans la région choisie,
+#    préférence conservée au rechargement) — même serveur, même image :
+SP=$SP PORT=4173 node scripts/harness/ui-region.mjs
 ```
 
 Le banc écrit `$SP/art-bench.json` (une ligne par scène, toutes les

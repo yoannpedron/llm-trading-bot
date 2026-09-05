@@ -14,6 +14,7 @@
 
 import { loadCardIndex } from './cardIndex.js';
 import { resolveSetCode } from './match.js';
+import { extractSetCode } from './parse.js';
 import { subtitleFr, attributeFr, raceFr, typeFr } from './frenchLabels.js';
 
 const API = (import.meta.env?.VITE_API_BASE ?? '').replace(/\/$/, '');
@@ -21,8 +22,14 @@ const YGOPRODECK = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
 
 export const usingBackend = () => Boolean(API);
 
-/** Réponse du backend Python, remise à la forme du client. */
-function fromBackend(payload) {
+/**
+ * Réponse du backend Python, remise à la forme du client.
+ *
+ * @param {string} raw la lecture envoyée, pour retrouver la région inscrite
+ *   sur la carte : le backend ne la renvoie pas, et l'affichage en a besoin
+ *   pour ne pas mettre en français un code lu « EN ».
+ */
+function fromBackend(payload, raw) {
   if (payload.status === 'no_code' || payload.status === 'no_match') return payload;
 
   const rarities = (payload.rarities ?? []).map((entry) => ({
@@ -40,6 +47,7 @@ function fromBackend(payload) {
     read: payload.read,
     code: payload.code,
     matchedCode: payload.matched_code,
+    regionLue: extractSetCode(raw)?.region ?? '',
     method: payload.method,
     confidence: payload.confidence,
     regional: Boolean(payload.synthetic),
@@ -62,7 +70,7 @@ export async function scanCode(raw, signal) {
       body: JSON.stringify({ raw }),
     });
     if (!response.ok) throw new Error(`L’API a répondu ${response.status}`);
-    return fromBackend(await response.json());
+    return fromBackend(await response.json(), raw);
   }
 
   const index = await loadCardIndex();

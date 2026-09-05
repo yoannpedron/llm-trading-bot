@@ -462,6 +462,11 @@ function describe(index, candidate, matchedCode, method, confidence, positions) 
     code: candidate.code,
     matchedCode: regional ? candidate.code : matchedCode,
     sourceCode: matchedCode,
+    // La région inscrite sur la carte, telle que lue (« FR » dans
+    // « LOB-FR001 »), ou vide. Elle prime sur la langue préférée quand
+    // l'affichage met le code publié dans la langue de l'utilisateur
+    // (`fiche.js`) : ce qui est lu sur la carte vaut mieux qu'un réglage.
+    regionLue: candidate.region ?? '',
     method,
     confidence: Math.round(confidence * 10) / 10,
     regional,

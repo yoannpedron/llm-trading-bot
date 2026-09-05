@@ -293,6 +293,42 @@ l'ordre, avec la mesure qui l'a justifié :
    liseré. La seconde passe rapprochée aide ; une troisième échelle ou une
    détection guidée par le suivi entre images sont les pistes.
 
+### La langue des cartes : le réglage « Région »
+
+L'index embarqué ne porte que des codes anglais. Mesuré sur les 44 499
+tirages de `public/card-index.json` : 41 482 têtes « EN » (dont 2 682 avec
+une lettre de série, « LEHD-ENA26 »), 456 « PT », 732 codes anciens à une
+lettre (« PSV-E088 »), 1 808 sans région (« AST-070 »), zéro code FR/DE/IT.
+Or l'utilisateur doit reconnaître le code inscrit sur SA carte.
+
+`src/lib/region.js` (pur, testé) : la liste des régions (EN, FR, DE, IT, SP,
+PT, JP, KR, AE, TC, SC — il n'existe pas de cartes danoises, le Danemark
+reçoit l'anglais, le libellé le dit), la préférence dans `localStorage`
+(`ygo.region`, défaut FR), `codePourRegion` et `tiragesPourRegion`. La
+conversion s'applique à l'AFFICHAGE (`fiche.js`, `ficheDepuisScan` et
+`entreeDepuisScan` reçoivent la région), pas à l'identification : la
+préférence peut changer devant la liste des tirages, et la liste suit.
+Ce qui est lu sur la carte prime : un code tapé « LOB-EN001 » reste anglais
+(`regionLue`, posé par `match.js` et `scanApi.js`).
+
+Ce qui n'est PAS converti, et pourquoi : un code sans région est une édition
+nord-américaine dont la numérotation diffère de l'européenne — le Magicien
+Sombre est « LOB-005 » en Amérique et « LOB-E003 » en Europe ; fabriquer
+« LOB-F005 » désignerait une autre carte. Les codes à une lettre ne se
+convertissent que vers E/F/G/I/S/P. Les régions OCG (JP, KR, AE, TC, SC)
+sont proposées mais leurs extensions ne suivent pas la numérotation TCG : le
+code dérivé est indicatif, le libellé le dit.
+
+Interface : bouton « Région : FR » dans la barre du viseur (ouvre « Langue
+de vos cartes »), et le même réglage devant la liste des tirages sur l'écran
+de résultat. Vérifié dans le navigateur (`scripts/harness/ui-region.mjs`) :
+Magicien Sombre, 59 tirages en FR puis en DE dans le même ordre, code
+enregistré « LDK2-DEY10 », préférence conservée au rechargement.
+
+Limites : l'inventaire et le journal gardent le code de la langue en vigueur
+au moment de l'enregistrement (pas de réécriture rétroactive) ; le backend
+Python (`VITE_API_BASE`) n'a pas été touché.
+
 ## 3. Ce qui bloquait — et ce que la mesure a révélé
 
 La version précédente de ce document annonçait que **le scanner identifiait

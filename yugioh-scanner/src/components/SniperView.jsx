@@ -4,6 +4,7 @@ import { loadCardIndex } from '../lib/cardIndex.js';
 import { suggestSetCodes } from '../lib/match.js';
 import { SCORE_SUR } from '../lib/verdictArt.js';
 import { toContainerPoint } from '../lib/viewport.js';
+import ChoixRegion from './ChoixRegion.jsx';
 
 /** Taille de l'index d'illustrations, pour dire ce qu'on télécharge. */
 const INDEX_OCTETS = 8_963_000;
@@ -242,7 +243,7 @@ function SaisieManuelle({ onSubmit, onRefus, autoFocus }) {
 /* Poste de lecture                                                     */
 /* ------------------------------------------------------------------ */
 
-export default function SniperView({ sniper, onRefus }) {
+export default function SniperView({ sniper, onRefus, region, onRegion }) {
   const {
     attachVideo,
     ready,
@@ -285,6 +286,10 @@ export default function SniperView({ sniper, onRefus }) {
     observateur.observe(element);
     return () => observateur.disconnect();
   }, [ready]);
+
+  // Le réglage de la langue, replié : on le change une fois, pas à chaque
+  // carte. Le bouton de la barre dit toujours ce qui est en vigueur.
+  const [reglageOuvert, setReglageOuvert] = useState(false);
 
   // Sans caméra, la saisie est le seul chemin : on l'ouvre sans attendre.
   const saisieVisible = manualEntry || Boolean(error);
@@ -405,6 +410,15 @@ export default function SniperView({ sniper, onRefus }) {
           <SaisieManuelle onSubmit={submitCode} onRefus={onRefus} autoFocus={manualEntry} />
         )}
 
+        {/* Langue des cartes : décide des codes montrés et enregistrés. Le
+            réglage se fait sans quitter le viseur, parce qu'on s'en aperçoit
+            en dépouillant un classeur, pas dans un menu. */}
+        {reglageOuvert && onRegion && (
+          <div id="reglage-region" className="panneau w-full max-w-md p-3">
+            <ChoixRegion region={region} onRegion={onRegion} id="choix-region-viseur" />
+          </div>
+        )}
+
         {zoom.available && !saisieVisible && (
           <div className="panneau flex w-full max-w-md items-center gap-3 px-3 py-2">
             <span className="intitule shrink-0">Zoom</span>
@@ -450,6 +464,23 @@ export default function SniperView({ sniper, onRefus }) {
                 <path d="M7 2h10l-1 6h3l-9 14 2-9H8z" />
               </svg>
               {torch.on ? 'Torche allumée' : 'Torche'}
+            </button>
+          )}
+
+          {onRegion && (
+            <button
+              type="button"
+              onClick={() => setReglageOuvert((ouvert) => !ouvert)}
+              aria-expanded={reglageOuvert}
+              aria-controls="reglage-region"
+              title="Langue de vos cartes"
+              className={`h-12 flex-1 rounded-controle border text-donnee font-medium transition-colors ${
+                reglageOuvert
+                  ? 'border-accent bg-panneau text-encre'
+                  : 'border-trait-fort bg-panneau text-second hover:text-encre'
+              }`}
+            >
+              Région : <span className="donnee">{region}</span>
             </button>
           )}
 

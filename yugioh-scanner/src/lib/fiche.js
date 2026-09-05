@@ -17,6 +17,19 @@
  */
 
 import { imageComplete, imagePetite, imagesDe } from './images.js';
+import { REGION_DEFAUT, codePourRegion, regionConnue, tiragesPourRegion } from './region.js';
+
+/**
+ * La région dans laquelle montrer et enregistrer les codes d'un scan.
+ *
+ * Ce qui est lu sur la carte prime sur le réglage : un code tapé « LOB-EN001 »
+ * désigne une carte anglaise, quelle que soit la langue préférée. Sans région
+ * lue — identification par l'illustration, code tapé sans région — c'est la
+ * préférence qui décide.
+ */
+function regionAffichee(scan, region) {
+  return regionConnue(scan?.regionLue) ?? regionConnue(region) ?? REGION_DEFAUT;
+}
 
 /**
  * Champs d'une carte identifiée, prêts pour l'affichage.
@@ -28,22 +41,31 @@ import { imageComplete, imagePetite, imagesDe } from './images.js';
  *
  * @param {object|null} scan résultat de `scanCode`
  * @param {object|null} detail fiche YGOPRODeck traduite, ou `null`
+ * @param {string} region langue des cartes de l'utilisateur (`region.js`)
  */
-export function ficheDepuisScan(scan, detail = null) {
+export function ficheDepuisScan(scan, detail = null, region = REGION_DEFAUT) {
   if (!scan?.card) return null;
 
   const carte = scan.card;
   const approchee = scan.method === 'fuzzy';
+  const langue = regionAffichee(scan, region);
+
+  // Le code publié par l'index est anglais. Quand la résolution a déjà retenu
+  // ce qui est inscrit sur la carte (`regional`), on le garde ; sinon on met
+  // le code publié dans la langue de l'utilisateur, qui doit reconnaître son
+  // exemplaire et non sa contrepartie anglaise. Un code sans région
+  // (« LOB-005 ») reste tel quel : voir `codePourRegion`.
+  const codePublie = scan.sourceCode ?? null;
+  const code = scan.matchedCode == null ? null : scan.regional ? scan.matchedCode : codePourRegion(scan.matchedCode, langue);
 
   return {
     identifiant: carte.id,
 
     /* --- identité --------------------------------------------------- */
-    // Le code tel qu'il est imprimé sur l'exemplaire en main, et non la forme
-    // anglaise publiée : l'utilisateur doit reconnaître sa carte.
-    code: scan.matchedCode ?? null,
-    codePublie: scan.sourceCode ?? null,
-    regionale: Boolean(scan.regional),
+    code,
+    codePublie,
+    regionale: code !== null && codePublie !== null && code !== codePublie,
+    region: langue,
     nom: detail?.name ?? carte.name ?? null,
     sousTitre: detail?.subtitle ?? null,
 
@@ -75,9 +97,28 @@ export function ficheDepuisScan(scan, detail = null) {
     imagePetite: detail?.image_small ?? imagePetite(carte.id),
 
     /* --- tirages ------------------------------------------------------ */
-    raretes: scan.rarities ?? [],
+    // Codes mis dans la langue de l'utilisateur, sa région en tête, doublons
+    // écartés. Chaque tirage garde son code publié dans `setCodePublie`.
+    raretes: tiragesPourRegion(scan.rarities ?? [], langue),
     choixRequis: scan.status === 'needs_user_selection',
   };
+}
+
+/**
+ * Le code du tirage retenu, dans la langue de la fiche.
+ *
+ * Le code lu s'il y en a un ; sinon celui du tirage choisi — identification
+ * par l'illustration, où le code n'est pas lu. Le tirage choisi a pu l'être
+ * dans une autre langue si la préférence a changé entre-temps : on repart
+ * toujours de son code publié.
+ *
+ * @returns {string|null}
+ */
+export function codeRetenu(fiche, rarete) {
+  if (!fiche) return null;
+  if (fiche.code) return fiche.code;
+  const publie = rarete?.setCodePublie ?? rarete?.setCode ?? null;
+  return publie ? codePourRegion(publie, fiche.region) : null;
 }
 
 /**
@@ -130,10 +171,12 @@ export function coteAffichable(fiche, rarete, detail) {
  * une carte sans savoir laquelle des sept versions on tient fausserait
  * l'inventaire dès la première ligne.
  *
+ * @param {string} region langue des cartes de l'utilisateur : le code
+ *   enregistré est celui de cette langue, comme sur la carte rangée
  * @returns {{carte: object, tirage: object}|null}
  */
-export function entreeDepuisScan(scan, detail, rarete) {
-  const fiche = ficheDepuisScan(scan, detail);
+export function entreeDepuisScan(scan, detail, rarete, region = REGION_DEFAUT) {
+  const fiche = ficheDepuisScan(scan, detail, region);
   if (!fiche || !rarete) return null;
 
   return {
@@ -150,9 +193,7 @@ export function entreeDepuisScan(scan, detail, rarete) {
       level: fiche.niveau,
     },
     tirage: {
-      // Le code lu s'il y en a un ; sinon celui du tirage choisi (identification
-      // par l'illustration, où le code n'est pas lu).
-      setCode: fiche.code ?? rarete.setCode ?? null,
+      setCode: codeRetenu(fiche, rarete),
       setName: rarete.setName,
       rarity: rarete.rarity,
       rarityCode: rarete.rarityCode,

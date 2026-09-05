@@ -1,6 +1,8 @@
 import { euros, ABSENT } from '../lib/format.js';
-import { caracteristiques, coteAffichable } from '../lib/fiche.js';
+import { caracteristiques, codeRetenu, coteAffichable } from '../lib/fiche.js';
 import { rarityProfile, sortRarities } from '../lib/rarity.js';
+import { trierParRegion } from '../lib/region.js';
+import ChoixRegion from './ChoixRegion.jsx';
 
 /**
  * Fiche d'une carte identifiée.
@@ -86,6 +88,8 @@ export default function FicheCarte({
   chargement,
   erreur,
   enregistree,
+  region,
+  onRegion,
   onRarete,
   onEnregistrer,
   onReprendre,
@@ -93,8 +97,11 @@ export default function FicheCarte({
   if (!fiche) return null;
 
   const choixRequis = fiche.choixRequis && !rarete;
-  // Du plus commun au plus rare : l'ordre des probabilités et des prix.
-  const options = sortRarities(fiche.raretes);
+  // Les tirages dans la langue de l'utilisateur d'abord, puis les autres ;
+  // dans chaque groupe, du plus commun au plus rare : l'ordre des
+  // probabilités et des prix. Les deux tris sont stables.
+  const options = trierParRegion(sortRarities(fiche.raretes), fiche.region);
+  const code = codeRetenu(fiche, rarete);
   const cote = coteAffichable(fiche, rarete, detail);
   const lignes = caracteristiques(fiche);
 
@@ -104,9 +111,11 @@ export default function FicheCarte({
         {/* --- Identité ---------------------------------------------------- */}
         <header>
           {/* Le code d'abord : c'est l'identifiant du tirage, et il tient sur
-              une ligne. La mention de variante le suit sans le disputer. */}
-          <p className="donnee font-medium tracking-[0.08em] whitespace-nowrap text-accent">
-            {fiche.code ?? ABSENT}
+              une ligne. La mention de variante le suit sans le disputer.
+              Reconnue par l'illustration, la carte n'a de code qu'une fois le
+              tirage choisi. */}
+          <p className="donnee font-medium tracking-[0.08em] whitespace-nowrap text-accent" data-code={code ?? ''}>
+            {code ?? ABSENT}
             {fiche.regionale && (
               <span className="ml-2 font-sans text-micro font-normal tracking-normal text-tertiaire">
                 variante régionale
@@ -158,7 +167,14 @@ export default function FicheCarte({
                 ? `Cette carte existe en ${options.length} tirages. Le code imprimé sous l’illustration désigne le vôtre ; c’est lui qui fixe la cote.`
                 : `Ce code existe en ${options.length} raretés. La caméra ne voit pas l’holographie, et c’est la rareté qui fixe la cote.`}
             </p>
-            <ul className="mt-2 divide-y divide-trait border-y border-trait">
+            {/* La langue se règle ici aussi : c'est devant cette liste qu'on
+                s'aperçoit que les codes ne sont pas ceux de sa carte. */}
+            {fiche.parIllustration && onRegion && (
+              <div className="mt-3">
+                <ChoixRegion region={region} onRegion={onRegion} id="choix-region-fiche" aide={false} />
+              </div>
+            )}
+            <ul className="mt-2 divide-y divide-trait border-y border-trait" data-tirages>
               {options.map((option) => (
                 <li key={`${option.setCode}-${option.rarity}-${option.setName}`}>
                   <button
@@ -176,7 +192,9 @@ export default function FicheCarte({
                             l'illustration) ; le nom de la série suit. */}
                         {fiche.parIllustration && option.setCode ? (
                           <>
-                            <span className="text-second">{option.setCode}</span>
+                            <span className="text-second" data-set-code={option.setCode}>
+                              {option.setCode}
+                            </span>
                             {' · '}
                           </>
                         ) : null}

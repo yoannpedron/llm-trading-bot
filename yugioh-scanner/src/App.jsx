@@ -9,6 +9,7 @@ import { entreeDepuisScan, ficheDepuisScan } from './lib/fiche.js';
 import { cardDetail, usingBackend } from './lib/scanApi.js';
 import { useCollection } from './lib/useCollection.js';
 import { useJournal } from './lib/useJournal.js';
+import { useRegion } from './lib/useRegion.js';
 import { useSniper } from './lib/useSniper.js';
 
 /**
@@ -37,6 +38,10 @@ export default function App() {
   const sniper = useSniper();
   const collection = useCollection();
   const journal = useJournal();
+  /* La langue des cartes de l'utilisateur : elle décide des codes montrés et
+     enregistrés, et vit ici parce que la fiche, la liste des tirages et
+     l'entrée d'inventaire en dépendent tous. */
+  const [region, setRegion] = useRegion();
 
   const [onglet, setOnglet] = useState('scan');
   const [rarete, setRarete] = useState(null);
@@ -46,7 +51,7 @@ export default function App() {
   const [enregistree, setEnregistree] = useState(false);
 
   const scan = sniper.result;
-  const fiche = useMemo(() => ficheDepuisScan(scan, detail), [scan, detail]);
+  const fiche = useMemo(() => ficheDepuisScan(scan, detail, region), [scan, detail, region]);
 
   /* Un code vient d'être résolu : une seule rareté se retient d'office. */
   useEffect(() => {
@@ -65,7 +70,7 @@ export default function App() {
      n'est pas attendue — le nom français arrivera, la trace compte d'abord. */
   useEffect(() => {
     if (!scan?.card) return;
-    journal.consignerIdentification(ficheDepuisScan(scan, null));
+    journal.consignerIdentification(ficheDepuisScan(scan, null, region));
     // Volontairement lié au seul scan : un rafraîchissement de la fiche
     // détaillée ne doit pas produire une seconde ligne.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,12 +97,12 @@ export default function App() {
   }, [scan?.card?.id]);
 
   const enregistrer = useCallback(() => {
-    const entree = entreeDepuisScan(scan, detail, rarete);
+    const entree = entreeDepuisScan(scan, detail, rarete, region);
     if (!entree) return;
     collection.track(entree.carte, entree.tirage);
     journal.consignerEnregistrement(entree.carte.id);
     setEnregistree(true);
-  }, [scan, detail, rarete, collection, journal]);
+  }, [scan, detail, rarete, region, collection, journal]);
 
   const reprendre = useCallback(() => {
     setEnregistree(false);
@@ -205,6 +210,8 @@ export default function App() {
               chargement={chargement}
               erreur={erreur}
               enregistree={enregistree}
+              region={region}
+              onRegion={setRegion}
               onRarete={setRarete}
               onEnregistrer={enregistrer}
               onReprendre={reprendre}
@@ -213,7 +220,12 @@ export default function App() {
         </main>
       ) : (
         <main className="min-h-0 flex-1">
-          <SniperView sniper={sniper} onRefus={journal.consignerRefus} />
+          <SniperView
+            sniper={sniper}
+            onRefus={journal.consignerRefus}
+            region={region}
+            onRegion={setRegion}
+          />
         </main>
       )}
     </div>

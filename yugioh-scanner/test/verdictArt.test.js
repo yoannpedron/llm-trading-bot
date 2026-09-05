@@ -52,13 +52,16 @@ test('le résultat a la forme d’un scan : carte, tirages distincts, choix requ
   assert.equal(unique.status, 'resolved');
   assert.equal(resultatDepuisArt(index, 123, { score: 0.9, marge: 0.2 }).status, 'no_match');
   assert.deepEqual(tiragesDistincts([]), []);
-  const tries = tiragesDistincts([
+  // Les codes restent ceux publiés, dans l'ordre de l'index : la langue de
+  // l'utilisateur s'applique à l'affichage (`fiche.js`), pas ici.
+  const distincts = tiragesDistincts([
     { setCode: 'LOB-005', rarity: 'Ultra Rare' },
-    { setCode: 'LDK2-FR001', rarity: 'Common' },
+    { setCode: 'LDK2-EN001', rarity: 'Common' },
     { setCode: 'LOB-EN005', rarity: 'Ultra Rare' },
-    { setCode: 'SDY-FR006', rarity: 'Common' },
+    { setCode: 'LDK2-EN001', rarity: 'Common' },
   ]);
-  assert.deepEqual(tries.map((t) => t.setCode), ['LDK2-FR001', 'SDY-FR006', 'LOB-005', 'LOB-EN005']);
+  assert.deepEqual(distincts.map((t) => t.setCode), ['LOB-005', 'LDK2-EN001', 'LOB-EN005']);
+  assert.equal(r.regionLue, '', 'aucun code lu : la préférence décidera');
 });
 
 test('toContainerPoint est l’inverse de toVideoRect', () => {

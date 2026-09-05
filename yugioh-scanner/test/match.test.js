@@ -194,6 +194,8 @@ test('une carte française retombe sur la donnée anglaise en affichant son code
   assert.equal(resolved.method, 'region');
   assert.equal(resolved.matchedCode, 'LOB-FR001');
   assert.equal(resolved.sourceCode, 'LOB-EN001');
+  assert.equal(resolved.regionLue, 'FR', 'la région inscrite sur la carte est conservée');
+  assert.equal(resolveSetCode(index, 'LOB-EN001').regionLue, 'EN');
 });
 
 test('une erreur sur le numéro est refusée plutôt que rapprochée', () => {

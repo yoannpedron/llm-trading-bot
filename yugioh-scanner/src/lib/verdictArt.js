@@ -40,18 +40,15 @@ export class VoteArt {
   }
 }
 
-/** Région d'un code d'extension (`LDK2-FR001` → `FR`), ou `''`. */
-const region = (setCode) => /^[A-Z0-9]+-([A-Z]{2})\d/.exec(String(setCode ?? '').toUpperCase())?.[1] ?? '';
-
 /**
- * Tirages distincts (code d'extension + rareté), les tirages FRANÇAIS
- * d'abord, puis l'ordre de l'index.
+ * Tirages distincts (code d'extension + rareté), dans l'ordre de l'index.
  *
- * Une carte reconnue par son illustration peut avoir soixante tirages. Ceux
- * que l'utilisateur tient en main sont presque toujours français : ils
- * passent en tête, le reste suit, rien n'est caché.
+ * Les codes sont ceux publiés — anglais. Leur mise dans la langue de
+ * l'utilisateur, et le tri qui met sa région en tête, se font à l'affichage
+ * (`fiche.js`, avec `region.js`) : la préférence peut changer après
+ * l'identification, et la liste doit suivre sans réidentifier la carte.
  */
-export function tiragesDistincts(printings, regionPreferee = 'FR') {
+export function tiragesDistincts(printings) {
   const vus = new Set();
   const sortie = [];
   for (const tirage of printings ?? []) {
@@ -60,15 +57,16 @@ export function tiragesDistincts(printings, regionPreferee = 'FR') {
     vus.add(cle);
     sortie.push(tirage);
   }
-  const rang = (tirage) => (region(tirage.setCode) === regionPreferee ? 0 : 1);
-  // Tri stable : à rang égal, l'ordre de l'index est conservé.
-  return sortie.map((t, i) => [t, i]).sort((a, b) => rang(a[0]) - rang(b[0]) || a[1] - b[1]).map(([t]) => t);
+  return sortie;
 }
 
 /**
  * Le résultat d'une identification par illustration, à la forme de
  * `scanCode` : ce que l'écran de résultat, le journal et l'inventaire
  * consomment déjà.
+ *
+ * Le code d'extension n'a pas été lu : `regionLue` est vide, et c'est la
+ * préférence de l'utilisateur qui décidera de la langue des codes montrés.
  *
  * @param {object} index index de cartes (`buildSearchIndex`)
  * @param {number} id passcode de la carte reconnue
@@ -87,6 +85,7 @@ export function resultatDepuisArt(index, id, { score, marge, sens, quad }) {
     read: null,
     code: null,
     matchedCode: null,
+    regionLue: '',
     confidence: Math.round(score * 100),
     marge,
     sens,
