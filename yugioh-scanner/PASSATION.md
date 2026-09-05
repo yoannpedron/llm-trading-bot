@@ -327,6 +327,12 @@ mesure). Sur téléphone, compter deux à trois fois plus.
 
 ### Ce qui a été essayé et ne marche pas (ne pas refaire)
 
+- Revenir à un seul cadrage par carte dans l'index (4,5 Mo au lieu de 8,8)
+  une fois l'affinage des coins au point : sur le banc complet, 87 % contre
+  85 % en une image, mais 2 fausses cartes (1 connue, 1 inconnue) contre 0,
+  et 89,5 % contre 95 % de verrouillages sûrs sur deux images. La taille du
+  téléchargement ne vaut pas deux fausses cartes sur 300 scènes.
+
 - Dilater par homothétie pour retrouver le bord depuis le liseré : ne
   décale pas les côtés de la même largeur. `dilater` décale chaque côté le
   long de sa normale (test).
