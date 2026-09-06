@@ -9,7 +9,7 @@ import { PREFIX_INFO, useProfile } from '../store/profile'
 import { t } from '../i18n'
 import type { CatalogView } from '../catalog/view'
 
-export interface ListRow { key: string; kind: Kind; type: 'top10' | 'row' | 'wide' | 'collection'; name: string; sub?: string; items: MediaItem[]; collections?: CollectionCard[] }
+export interface ListRow { key: string; kind: Kind; type: 'top10' | 'row' | 'wide' | 'collection'; name: string; sub?: string; items: MediaItem[]; collections?: CollectionCard[]; /** data source label */ src?: string }
 export interface CollectionPart { tmdbId: number; title: string; year?: string; rating?: number; poster?: string; item?: MediaItem }
 export interface CollectionCard { id: number; name: string; poster?: string; backdrop?: string; total: number; have: number; complete: boolean; parts: CollectionPart[] }
 

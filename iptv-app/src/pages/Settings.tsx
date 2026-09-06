@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { PREFIX_INFO, REGIONS, UI_LANGS, useProfile, type UiLang } from '../store/profile'
 import { useSettings } from '../store/settings'
+import { DETECTED } from '../store/device'
 import { useSession } from '../store/session'
 import { useCatalog } from '../store/catalog'
 import { useHomeRows } from '../hooks/useHomeRows'
@@ -212,6 +213,11 @@ function Data() {
   const download = () => { const blob = new Blob([s.exportJson()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `lumen-settings-${new Date().toISOString().slice(0, 10)}.json`; a.click() }
   return (
     <div>
+      <H>Affichage</H>
+      <p className="text-sm text-white/60">Appareil détecté : {DETECTED.why || 'inconnu'} → mode {DETECTED.lite ? 'léger' : 'complet'} conseillé. Le mode léger coupe les bandes-annonces, le flou et les animations, charge des affiches plus petites.</p>
+      <div className="mt-3 grid max-w-md grid-cols-3 rounded-lg bg-white/10 p-0.5 text-sm">
+        {([['auto', 'Automatique'], ['full', 'Complet'], ['lite', 'Léger']] as const).map(([k, l]) => <button key={k} onClick={() => s.set({ perf: k })} className={`rounded-md py-1.5 ${s.perf === k ? 'bg-white font-semibold text-black' : 'hover:bg-white/10'}`}>{l}</button>)}
+      </div>
       <H>Catalogue</H>
       <p className="text-sm text-white/60">{catalog ? `${catalog.n.toLocaleString('fr-FR')} entrées chargées le ${new Date(catalog.generatedAt).toLocaleString('fr-FR')}` : 'Aucun catalogue'}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">

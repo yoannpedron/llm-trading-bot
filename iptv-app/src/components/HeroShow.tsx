@@ -6,6 +6,7 @@ import { useEnrich } from '../hooks/useEnrich'
 import { useUi } from '../store/ui'
 import { useMyList } from '../store/mylist'
 import { useExtra } from '../hooks/useExtra'
+import { useLite } from '../store/device'
 import Trailer from './Trailer'
 
 interface Props { items: MediaItem[] }
@@ -18,6 +19,7 @@ export default function HeroShow({ items }: Props) {
   const item = items[idx % Math.max(items.length, 1)]
   const { data } = useEnrich(item)
   const ex = useExtra(item)
+  const lite = useLite()
   const setBackdrop = useUi((s) => s.setBackdrop)
   const list = useMyList()
   const next = useCallback(() => { setIdx((i) => (i + 1) % items.length); setTrailerOn(true) }, [items.length])
@@ -43,7 +45,7 @@ export default function HeroShow({ items }: Props) {
 
   return (
     <section className="relative h-[min(88vh,820px)] min-h-[520px] overflow-hidden">
-      {data?.trailer && trailerOn && <Trailer videoKey={data.trailer} onEnd={() => setTrailerOn(false)} />}
+      {data?.trailer && trailerOn && !lite && <Trailer videoKey={data.trailer} onEnd={() => setTrailerOn(false)} />}
       <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-[#08080a]/60 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:px-12 md:pb-16">
         <AnimatePresence mode="wait">

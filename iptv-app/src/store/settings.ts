@@ -23,6 +23,8 @@ interface Settings {
   hidePpv: boolean
   /** Data */
   autoRefreshHours: number
+  /** rendering tier: auto = detected from the device */
+  perf: 'auto' | 'full' | 'lite'
   addAccount: (a: Omit<Account, 'id'>) => string
   removeAccount: (id: string) => void
   setActive: (id?: string) => void
@@ -39,7 +41,7 @@ interface Settings {
 const toggle = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
 export const useSettings = create<Settings>()(persist((set, get) => ({
-  accounts: [], profiles: {}, hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, autoRefreshHours: 12,
+  accounts: [], profiles: {}, hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, autoRefreshHours: 12, perf: 'auto',
   setProfile: (id, p) => set({ profiles: { ...get().profiles, [id]: p } }),
   learn: (id, patch) => { const cur = get().profiles[id]; if (cur) set({ profiles: { ...get().profiles, [id]: { ...cur, ...patch } } }) },
   addAccount: (a) => { const id = crypto.randomUUID(); set({ accounts: [...get().accounts, { ...a, id }] }); return id },

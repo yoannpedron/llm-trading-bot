@@ -10,6 +10,7 @@ import HeroShow from '../components/HeroShow'
 import Row from '../components/Row'
 import type { ListRow } from '../api/tmdbLists'
 import type { Kind } from '../types'
+import { hubRows } from '../catalog/hub'
 
 const KIDS = /Animation|Familial|Anime|Enfant|Kids/i
 const eventCache = new Map<string, ReturnType<typeof parseEvent>>()
@@ -20,23 +21,29 @@ export default function Home() {
   const { data: rows, isLoading, error } = useHomeRows()
   const progress = useProgress((s) => s.map)
   const item = useCatalog((s) => s.item)
+  const indicesOf = useCatalog((s) => s.indicesOf)
   const kids = useProfile((s) => s.kids)
   const resume = useMemo<ListRow | undefined>(() => { const items = Object.entries(progress).sort((a, b) => b[1].updated - a[1].updated).map(([id]) => item(id)).filter((x): x is NonNullable<typeof x> => !!x); return items.length ? { key: 'resume', kind: 'movie', type: 'row', name: 'Continuer à regarder', sub: 'Reprise là où tu t’es arrêté', items } : undefined }, [progress, item])
 
   /** Fallback rows straight from the provider (no TMDB key, or TMDB down). */
   const providerRows = useMemo<ListRow[]>(() => {
     const K = { movie: 0, series: 1, live: 2 }
-    const recent = (kind: Kind, n: number) => catalog.materialize(catalog.topN(n, (i) => (catalog.kinds[i] === K[kind] && catalog.has('posters', i) ? catalog.added[i] : -1)))
+    // profile languages first, then anything else: the hero must speak the viewer's language
+    const langs = catalog.column('langs'); const mine = new Set(useProfile.getState().contentLangs)
+    const recent = (kind: Kind, n: number) => catalog.materialize(catalog.topN(n, (i) => (catalog.kinds[i] === K[kind] && catalog.has('posters', i) ? catalog.added[i] + (mine.has(langs[i]) ? 4e9 : 0) : -1)))
     const top = (kind: Kind) => catalog.categories.filter((c) => c.kind === kind).map((c) => ({ c, idx: catalog.byCategory[kind + ':' + c.id] ?? [] })).filter((x) => x.idx.length >= 8).sort((a, b) => b.idx.length - a.idx.length).slice(0, 4)
       .map(({ c, idx }) => ({ key: c.id, kind, type: 'row' as const, name: c.name, items: catalog.materialize(idx.slice(0, 40)) }))
+    const suffix = (rows: ListRow[], s: string) => rows.map((r) => ({ ...r, name: `${r.name} · ${s}` }))
     const rows: ListRow[] = [
-      { key: 'recent-m', kind: 'movie', type: 'row', name: 'Ajouts récents · Films', items: recent('movie', 40) },
-      { key: 'recent-s', kind: 'series', type: 'row', name: 'Ajouts récents · Séries', items: recent('series', 40) },
-      ...top('movie'), ...top('series'),
-      { key: 'live', kind: 'live', type: 'row', name: 'Chaînes', items: recent('live', 40) },
+      { key: 'recent-m', kind: 'movie', type: 'row', name: 'Ajouts récents · Films', items: recent('movie', 40), src: 'Serveur' },
+      { key: 'recent-s', kind: 'series', type: 'row', name: 'Ajouts récents · Séries', items: recent('series', 40), src: 'Serveur' },
+      ...suffix(hubRows(catalog, indicesOf('movie'), 'movie', 'hm:').filter((r) => r.key !== 'hm:recent'), 'Films'),
+      ...suffix(hubRows(catalog, indicesOf('series'), 'series', 'hs:').filter((r) => r.key !== 'hs:recent'), 'Séries'),
+      ...top('movie').map((r) => ({ ...r, src: 'Serveur' })), ...top('series').map((r) => ({ ...r, src: 'Serveur' })),
+      { key: 'live', kind: 'live', type: 'row', name: 'Chaînes', items: recent('live', 40), src: 'Serveur' },
     ]
-    return rows.filter((r) => r.items.length)
-  }, [catalog])
+    return rows.filter((r) => r.items.length >= 8)
+  }, [catalog, indicesOf])
 
   const { hiddenRows, pinnedRows, rowOrder, renamedRows } = useSettings()
   const matches = useMemo<ListRow | undefined>(() => {

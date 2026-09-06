@@ -9,6 +9,8 @@ import { MOVIE_GENRES, TV_GENRES } from '../api/tmdbLists'
 import { hasTmdbKey } from '../api/tmdb'
 import VirtualGrid from '../components/VirtualGrid'
 import Hero from '../components/Hero'
+import Row from '../components/Row'
+import { hubRows } from '../catalog/hub'
 
 const LABEL: Record<Kind, string> = { movie: 'Films', series: 'Séries', live: 'Live TV' }
 
@@ -19,6 +21,7 @@ const LABEL: Record<Kind, string> = { movie: 'Films', series: 'Séries', live: '
 export default function Browse({ kind }: { kind: Kind }) {
   const catalog = useCatalog((s) => s.catalog)!
   const listOf = useCatalog((s) => s.listOf)
+  const indicesOf = useCatalog((s) => s.indicesOf)
   const item = useCatalog((s) => s.item)
   const focusedId = useUi((s) => s.focusedId)
   const [params, setParams] = useSearchParams()
@@ -46,8 +49,10 @@ export default function Browse({ kind }: { kind: Kind }) {
     return listOf(kind, cat || undefined)
   }, [tmdbMode, genreName, genre.data, home.data, kind, listOf, cat])
 
+  /** dynamic page for the selected server category (or the whole kind): rows appear only when the data supports them */
+  const hub = useMemo(() => (tmdbMode ? [] : hubRows(catalog, indicesOf(kind, cat || undefined), kind, `${kind}:${cat}:`)), [tmdbMode, catalog, indicesOf, kind, cat])
   const current = catalog.categories.find((c) => c.kind === kind && c.id === cat)
-  const focused = focusedId ? item(focusedId) : undefined
+  const focused = (focusedId ? item(focusedId) : undefined) ?? hub[0]?.items[0] ?? items.at(0)
   const sideRef = useRef<HTMLDivElement>(null)
   const sv = useVirtualizer({ count: cats.length, getScrollElement: () => sideRef.current, estimateSize: () => 36, overscan: 10 })
   useEffect(() => { const i = cats.findIndex((c) => c.id === cat); if (i >= 0) sv.scrollToIndex(i, { align: 'center' }) }, [cat, cats, sv])
@@ -100,9 +105,11 @@ export default function Browse({ kind }: { kind: Kind }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="px-8 pt-3 font-display text-xl font-bold">
             {LABEL[kind]} › {heading} <span className="text-sm font-normal text-white/40">{loading ? '…' : items.length}</span>
+            {hub.length > 0 && <span className="ml-2 align-middle text-[10.5px] font-normal uppercase tracking-[.08em] text-white/35">· {hub.length} sélections</span>}
           </h2>
           <div className="min-h-0 flex-1">
-            <VirtualGrid items={items} landscape={kind === 'live'} minWidth={kind === 'live' ? 200 : 150} />
+            <VirtualGrid items={items} landscape={kind === 'live'} minWidth={kind === 'live' ? 200 : 150}
+              header={hub.length ? <div className="-mx-8 mb-6 space-y-7 border-b border-white/[.06] pb-6">{hub.map((r) => <Row key={r.key} row={r} />)}</div> : undefined} />
           </div>
         </div>
       </div>

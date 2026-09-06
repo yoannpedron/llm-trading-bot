@@ -20,12 +20,15 @@ import Multi from './pages/Multi'
 import Downloads from './pages/Downloads'
 import { UI_LANGS, useProfile } from './store/profile'
 import { useSettings } from './store/settings'
+import { useLite } from './store/device'
 
 export default function App() {
   const { mode, creds, includeAdult } = useSession()
   const { status, load } = useCatalog()
   const { uiLang, onboarded } = useProfile()
   useEffect(() => { document.documentElement.lang = uiLang; document.documentElement.dir = UI_LANGS[uiLang].dir }, [uiLang])
+  const lite = useLite()
+  useEffect(() => { document.documentElement.toggleAttribute('data-lite', lite) }, [lite])
 
   useEffect(() => { void load(mode, creds, includeAdult) }, [mode, creds, includeAdult, load])
   const hours = useSettings((s) => s.autoRefreshHours)

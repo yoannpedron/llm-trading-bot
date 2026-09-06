@@ -20,7 +20,7 @@ export default function Row({ row, to }: { row: ListRow; to?: string }) {
   const v = useVirtualizer({ horizontal: true, count, getScrollElement: () => ref.current, estimateSize: () => w + GAP, overscan: 4 })
   const scroll = (d: 1 | -1) => ref.current?.scrollBy({ left: d * (ref.current.clientWidth - w), behavior: 'smooth' })
   if (!count) return null
-  const src = row.kind === 'live' ? 'Serveur' : isCol || /serveur|4K/i.test(row.name) ? 'Serveur × TMDB' : 'TMDB'
+  const src = row.src ?? (row.kind === 'live' ? 'Serveur' : isCol || /serveur|4K/i.test(row.name) ? 'Serveur × TMDB' : 'TMDB')
   return (
     <section className="group/row relative">
       <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 px-6 md:px-12">
