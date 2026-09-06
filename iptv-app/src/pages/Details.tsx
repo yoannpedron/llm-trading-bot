@@ -5,6 +5,7 @@ import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
 import { useEnrich } from '../hooks/useEnrich'
 import Hero from '../components/Hero'
+import { useMyList } from '../store/mylist'
 import type { XtreamSeriesInfo } from '../api/xtream'
 
 export default function Details() {
@@ -15,6 +16,7 @@ export default function Details() {
   const catalog = useCatalog((s) => s.catalog)!
   const setFocused = useUi((s) => s.setFocused)
   const { data, isLoading } = useEnrich(item)
+  const list = useMyList()
   useEffect(() => { if (item) setFocused(item.id) }, [item, setFocused])
   useEffect(() => window.scrollTo({ top: 0 }), [id])
 
@@ -44,6 +46,7 @@ export default function Details() {
       <div className="grid grid-cols-1 gap-10 px-8 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-8">
           {isLoading && <p className="text-white/40">Chargement TMDB…</p>}
+          <button onClick={() => list.toggle(item.id)} className={`-mt-2 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold ${list.ids.includes(item.id) ? 'bg-amber-400 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{list.ids.includes(item.id) ? '✓ Dans ma liste' : '+ Ma liste'}</button>
           {data?.cast.length ? (
             <section>
               <h3 className="mb-3 text-lg font-semibold">Casting</h3>

@@ -3,6 +3,7 @@ import type { Catalog, Kind, MediaItem } from '../types'
 import { XtreamClient, loadMockCatalog, type XtreamCredentials } from '../api/xtream'
 import type { WorkerIn, WorkerOut } from '../workers/parser.worker'
 import ParserWorker from '../workers/parser.worker?worker'
+import { buildTmdbIndex, type TmdbIndex } from '../api/tmdbLists'
 
 type Status = 'idle' | 'loading' | 'parsing' | 'ready' | 'error'
 
@@ -13,6 +14,7 @@ interface CatalogState {
   catalog?: Catalog
   client?: XtreamClient
   byId: Map<string, number>
+  tmdbIndex: TmdbIndex
   load: (mode: 'mock' | 'live', creds?: XtreamCredentials, includeAdult?: boolean) => Promise<void>
   item: (id: string) => MediaItem | undefined
   itemsOf: (kind: Kind, categoryId?: string) => MediaItem[]
@@ -25,6 +27,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
   status: 'idle',
   progress: '',
   byId: new Map(),
+  tmdbIndex: new Map(),
 
   async load(mode, creds, includeAdult) {
     abort?.abort()
@@ -49,7 +52,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
       if (signal.aborted) return
       const byId = new Map<string, number>()
       catalog.items.forEach((it, i) => byId.set(it.id, i))
-      set({ status: 'ready', catalog, client, byId, progress: '' })
+      set({ status: 'ready', catalog, client, byId, tmdbIndex: buildTmdbIndex(catalog.items), progress: '' })
     } catch (e) {
       if (signal.aborted) return
       set({ status: 'error', error: e instanceof Error ? e.message : String(e) })

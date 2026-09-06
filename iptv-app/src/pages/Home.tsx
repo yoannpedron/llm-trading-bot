@@ -1,44 +1,43 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useCatalog } from '../store/catalog'
-import { useUi } from '../store/ui'
-import Hero from '../components/Hero'
-import Carousel from '../components/Carousel'
-import type { Kind, MediaItem } from '../types'
-
-const RECENT = 40
-const ROWS_PER_KIND = 4
+import { useHomeRows } from '../hooks/useHomeRows'
+import { hasTmdbKey } from '../api/tmdb'
+import HeroShow from '../components/HeroShow'
+import Row from '../components/Row'
+import type { ListRow } from '../api/tmdbLists'
+import type { Kind } from '../types'
 
 export default function Home() {
   const catalog = useCatalog((s) => s.catalog)!
-  const item = useCatalog((s) => s.item)
-  const focusedId = useUi((s) => s.focusedId)
-  const setFocused = useUi((s) => s.setFocused)
+  const { data: rows, isLoading, error } = useHomeRows()
 
-  const rows = useMemo(() => {
-    const recent = (kind: Kind) =>
-      catalog.items.filter((i) => i.kind === kind && i.poster).sort((a, b) => (b.added ?? 0) - (a.added ?? 0)).slice(0, RECENT)
-    const topCats = (kind: Kind) =>
-      catalog.categories.filter((c) => c.kind === kind)
-        .map((c) => ({ c, idx: catalog.byCategory[kind + ':' + c.id] ?? [] }))
-        .sort((a, b) => b.idx.length - a.idx.length)
-        .slice(0, ROWS_PER_KIND)
-        .map(({ c, idx }) => ({ title: `${c.name}${c.lang ? ` (${c.lang})` : ''}`, items: idx.slice(0, 60).map((i) => catalog.items[i]), to: `/${kind === 'movie' ? 'movies' : kind}?cat=${c.id}`, kind }))
-    return [
-      { title: 'Films récemment ajoutés', items: recent('movie'), to: '/movies', kind: 'movie' as Kind },
-      { title: 'Séries récentes', items: recent('series'), to: '/series', kind: 'series' as Kind },
-      ...topCats('movie'), ...topCats('series'),
-      { title: 'Chaînes populaires', items: recent('live'), to: '/live', kind: 'live' as Kind },
-    ].filter((r) => r.items.length)
+  /** Fallback rows straight from the provider (no TMDB key, or TMDB down). */
+  const providerRows = useMemo<ListRow[]>(() => {
+    const recent = (kind: Kind, n: number) => catalog.items.filter((i) => i.kind === kind && i.poster).sort((a, b) => (b.added ?? 0) - (a.added ?? 0)).slice(0, n)
+    const top = (kind: Kind) => catalog.categories.filter((c) => c.kind === kind).map((c) => ({ c, idx: catalog.byCategory[kind + ':' + c.id] ?? [] })).sort((a, b) => b.idx.length - a.idx.length).slice(0, 4)
+      .map(({ c, idx }) => ({ key: c.id, kind, type: 'row' as const, name: c.name, items: idx.slice(0, 40).map((i) => catalog.items[i]) }))
+    const rows: ListRow[] = [
+      { key: 'recent-m', kind: 'movie', type: 'row', name: 'Ajouts récents · Films', items: recent('movie', 40) },
+      { key: 'recent-s', kind: 'series', type: 'row', name: 'Ajouts récents · Séries', items: recent('series', 40) },
+      ...top('movie'), ...top('series'),
+      { key: 'live', kind: 'live', type: 'row', name: 'Chaînes', items: recent('live', 40) },
+    ]
+    return rows.filter((r) => r.items.length)
   }, [catalog])
 
-  const focused: MediaItem | undefined = (focusedId && item(focusedId)) || rows[0]?.items[0]
-  useEffect(() => { if (!focusedId && focused) setFocused(focused.id) }, [focusedId, focused, setFocused])
+  const list = rows?.length ? rows : providerRows
+  const hero = rows?.[0]?.items.slice(0, 6) ?? providerRows[0]?.items.slice(0, 6) ?? []
+  const liveRow = rows?.length ? providerRows.find((r) => r.kind === 'live') : undefined
 
   return (
     <div>
-      <Hero item={focused} />
-      <div className="relative space-y-2 pb-12">
-        {rows.map((r) => <Carousel key={r.title} title={r.title} items={r.items} to={r.to} landscape={r.kind === 'live'} width={r.kind === 'live' ? 200 : 150} />)}
+      <HeroShow items={hero} />
+      <div className="relative -mt-4 flex flex-col gap-7 pb-16">
+        {!hasTmdbKey() && <p className="mx-6 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-200 md:mx-12">Clé TMDB absente : rangées construites à partir des catégories du serveur uniquement.</p>}
+        {isLoading && <p className="px-6 text-sm text-white/40 md:px-12">Construction des rangées TMDB…</p>}
+        {error ? <p className="px-6 text-sm text-red-300 md:px-12">TMDB indisponible ({String(error)}), affichage des catégories serveur.</p> : null}
+        {list.map((r) => <Row key={r.key} row={r} to={r.kind === 'live' ? '/live' : undefined} />)}
+        {liveRow && <Row row={liveRow} to="/live" />}
       </div>
     </div>
   )

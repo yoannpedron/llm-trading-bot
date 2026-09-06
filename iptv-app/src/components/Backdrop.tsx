@@ -5,7 +5,7 @@ import { useUi } from '../store/ui'
 export default function Backdrop() {
   const backdrop = useUi((s) => s.backdrop)
   return (
-    <div className="fixed inset-0 z-0 overflow-hidden bg-[#0b0b0f]" aria-hidden>
+    <div className="fixed inset-0 z-0 overflow-hidden bg-[#08080a]" aria-hidden>
       <AnimatePresence mode="sync">
         {backdrop && (
           <motion.img
@@ -20,8 +20,8 @@ export default function Backdrop() {
           />
         )}
       </AnimatePresence>
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0f] via-[#0b0b0f]/70 to-[#0b0b0f]/20" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0f] via-[#0b0b0f]/40 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#08080a] via-[#08080a]/70 to-[#08080a]/20" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-[#08080a]/40 to-transparent" />
     </div>
   )
 }

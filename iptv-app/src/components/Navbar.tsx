@@ -13,14 +13,15 @@ export default function Navbar() {
   const counts = useCatalog((s) => s.catalog?.counts)
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-4 px-6 py-3 bg-gradient-to-b from-black/80 to-transparent">
-      <NavLink to="/" className="text-xl font-black tracking-tight text-white mr-2">
-        <span className="text-red-500">▶</span> LUMEN
+      <NavLink to="/" className="font-display text-xl font-black tracking-[.14em] text-white mr-2">
+        <span className="text-amber-400">▶</span>LUMEN
       </NavLink>
       <nav className="flex items-center gap-1">
         <NavLink to="/" end className={link}>Accueil</NavLink>
         <NavLink to="/movies" className={link}>Films{counts ? ` · ${fmt(counts.movie)}` : ''}</NavLink>
         <NavLink to="/series" className={link}>Séries{counts ? ` · ${fmt(counts.series)}` : ''}</NavLink>
         <NavLink to="/live" className={link}>Live TV{counts ? ` · ${fmt(counts.live)}` : ''}</NavLink>
+        <NavLink to="/list" className={link}>Ma liste</NavLink>
       </nav>
       <form
         className="ml-auto"

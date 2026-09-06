@@ -48,7 +48,7 @@ function slot(): Promise<void> {
 }
 function release() { inFlight--; queue.shift()?.() }
 
-async function tmdb<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+export async function tmdb<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   if (!KEY) throw new Error('VITE_TMDB_API_KEY missing')
   await slot()
   try {
