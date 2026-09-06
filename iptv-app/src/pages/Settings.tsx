@@ -53,7 +53,7 @@ function Accounts() {
   /** Learn how this provider behaves (redirect, ranges, busy code, connections, HLS). Runs on the device only. */
   const analyse = async (id: string, c: { url: string; username: string; password: string }) => {
     const cl = new XtreamClient(c)
-    const sample = catalog?.items.find((i) => i.kind === 'movie' && i.id.startsWith('movie:'))
+    const sample = catalog ? catalog.at(catalog.indicesOf('movie')[0] ?? -1) : undefined
     if (!sample) { alert('Charge d’abord le catalogue de ce compte.'); return }
     const me = await cl.login().catch(() => undefined)
     const p = await probeProvider({ sampleUrl: cl.movieUrl(sample.streamId, sample.ext), apiUrl: `${c.url}/player_api.php?username=${c.username}&password=${c.password}`, testBusy: +(me?.user_info.active_cons ?? 1) === 0 })
@@ -119,7 +119,7 @@ function Languages({ onboarding }: { onboarding?: boolean }) {
   const [kids, setKids] = useState(p.kids)
   const available = useMemo(() => {
     const c = new Map<string, number>()
-    for (const it of catalog?.items ?? []) if (it.lang && it.kind !== 'live' && PREFIX_INFO[it.lang]) c.set(it.lang, (c.get(it.lang) ?? 0) + 1)
+    if (catalog) { const langs = catalog.column('langs'); for (let i = 0; i < catalog.n; i++) { const l = langs[i]; if (l && catalog.kinds[i] !== 2 && PREFIX_INFO[l]) c.set(l, (c.get(l) ?? 0) + 1) } }
     return [...c.entries()].sort((a, b) => b[1] - a[1])
   }, [catalog])
   const toggle = (l: string) => setLangs((ls) => ls.includes(l) ? ls.filter((x) => x !== l) : [...ls, l])
@@ -156,7 +156,7 @@ function Categories() {
   const [kind, setKind] = useState<'movie' | 'series' | 'live'>('movie')
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<string>()
-  const langs = useMemo(() => { const c = new Map<string, number>(); for (const it of catalog?.items ?? []) if (it.lang && it.kind !== 'live' && PREFIX_INFO[it.lang]) c.set(it.lang, (c.get(it.lang) ?? 0) + 1); return [...c.entries()].sort((a, b) => b[1] - a[1]) }, [catalog])
+  const langs = useMemo(() => { const c = new Map<string, number>(); if (catalog) { const L = catalog.column('langs'); for (let i = 0; i < catalog.n; i++) { const l = L[i]; if (l && catalog.kinds[i] !== 2 && PREFIX_INFO[l]) c.set(l, (c.get(l) ?? 0) + 1) } } return [...c.entries()].sort((a, b) => b[1] - a[1]) }, [catalog])
   const cats = useMemo(() => (catalog?.categories ?? []).filter((c) => c.kind === kind && (!q || c.rawName.toLowerCase().includes(q.toLowerCase()))).map((c) => ({ c, n: catalog?.byCategory[kind + ':' + c.id]?.length ?? 0, country: countryOf(c.rawName) })), [catalog, kind, q])
   const ordered = useMemo(() => { const pos = (k: string) => { const i = s.rowOrder.indexOf(k); return i < 0 ? 1e6 : i }; return [...(rows ?? [])].sort((a, b) => pos(a.key) - pos(b.key)) }, [rows, s.rowOrder])
   const moveRow = (k: string, d: -1 | 1) => { const keys = ordered.map((r) => r.key); const i = keys.indexOf(k); const j = i + d; if (j < 0 || j >= keys.length) return; [keys[i], keys[j]] = [keys[j], keys[i]]; s.setRowOrder(keys) }
@@ -213,7 +213,7 @@ function Data() {
   return (
     <div>
       <H>Catalogue</H>
-      <p className="text-sm text-white/60">{catalog ? `${catalog.items.length.toLocaleString('fr-FR')} entrées chargées le ${new Date(catalog.generatedAt).toLocaleString('fr-FR')}` : 'Aucun catalogue'}</p>
+      <p className="text-sm text-white/60">{catalog ? `${catalog.n.toLocaleString('fr-FR')} entrées chargées le ${new Date(catalog.generatedAt).toLocaleString('fr-FR')}` : 'Aucun catalogue'}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button onClick={() => load(mode, creds, includeAdult, true)} className="h-10 rounded-lg bg-white px-5 text-sm font-semibold text-black">Rafraîchir maintenant</button>
         <label className="flex items-center gap-2 text-sm">Rafraîchissement automatique toutes les<select value={s.autoRefreshHours} onChange={(e) => s.set({ autoRefreshHours: +e.target.value })} className="rounded bg-white/10 px-2 py-1">{[0, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'jamais' : h + ' h'}</option>)}</select></label>

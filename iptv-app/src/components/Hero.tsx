@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
 import { useEnrich } from '../hooks/useEnrich'
 import { useUi } from '../store/ui'
-import { useCatalog } from '../store/catalog'
+import { useExtra } from '../hooks/useExtra'
 
 interface Props { item?: MediaItem; compact?: boolean }
 
@@ -15,8 +15,7 @@ interface Props { item?: MediaItem; compact?: boolean }
 export default function Hero({ item, compact }: Props) {
   const { data } = useEnrich(item)
   const setBackdrop = useUi((s) => s.setBackdrop)
-  const extra = useCatalog((s) => s.extra)
-  const ex = item ? extra(item) : {}
+  const ex = useExtra(item)
 
   useEffect(() => {
     if (!item) return

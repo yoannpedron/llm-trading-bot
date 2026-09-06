@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useCatalog } from '../store/catalog'
+import { allItems, bestIndex, versionsOf, is4K } from '../api/tmdbLists'
 import { useUi } from '../store/ui'
 import { useEnrich } from '../hooks/useEnrich'
+import { useExtra } from '../hooks/useExtra'
 import Hero from '../components/Hero'
 import { useMyList } from '../store/mylist'
 import { useDownloads } from '../download/store'
@@ -17,12 +19,13 @@ export default function Details() {
   const client = useCatalog((s) => s.client)
   const catalog = useCatalog((s) => s.catalog)!
   const idx = useCatalog((s) => s.tmdbIndex)
-  const extraOf = useCatalog((s) => s.extra)
-  const ex = item ? extraOf(item) : {}
+  const ex = useExtra(item)
   const tkey = item ? item.kind + ':' + item.tmdbId : ''
-  const versions = idx.versions.get(tkey) ?? (item?.lang ? [item.lang] : [])
-  const is4k = idx.fourK.has(tkey)
-  const editions = (idx.all.get(tkey) ?? (item ? [item] : [])).filter((e) => e.id.startsWith(item?.kind === 'series' ? 'series:' : 'movie:'))
+  const versionsIdx = versionsOf(idx, tkey)
+  const versions = versionsIdx.length ? versionsIdx : item?.lang ? [item.lang] : []
+  const is4k = is4K(idx, tkey)
+  const all = allItems(idx, tkey)
+  const editions = (all.length ? all : item ? [item] : []).filter((e) => e.id.startsWith(item?.kind === 'series' ? 'series:' : 'movie:'))
   const setFocused = useUi((s) => s.setFocused)
   const { data, isLoading } = useEnrich(item)
   const list = useMyList()
@@ -45,10 +48,8 @@ export default function Details() {
   /** "Similar" from TMDB, mapped back to titles present in the provider catalogue when possible. */
   const similar = useMemo(() => {
     if (!data) return []
-    const byTmdb = new Map<number, string>()
-    for (const it of catalog.items) if (it.tmdbId && it.kind === item?.kind) byTmdb.set(it.tmdbId, it.id)
-    return data.similar.map((s) => ({ ...s, localId: byTmdb.get(s.id) }))
-  }, [data, catalog, item?.kind])
+    return data.similar.map((s) => { const i = bestIndex(idx, (item?.kind ?? 'movie') + ':' + s.id); return { ...s, localId: i === undefined ? undefined : catalog.idOf(i) } })
+  }, [data, catalog, idx, item?.kind])
 
   if (!item) return <p className="p-24">Introuvable.</p>
 

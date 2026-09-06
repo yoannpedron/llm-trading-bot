@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { MediaItem } from '../types'
+import type { ItemList } from '../catalog/view'
 import PosterCard from './PosterCard'
 
-interface Props { items: MediaItem[]; landscape?: boolean; minWidth?: number }
+interface Props { items: MediaItem[] | ItemList; landscape?: boolean; minWidth?: number }
 const GAP = 14
 
 /** Row-virtualised grid: scales to 200k+ items with a constant DOM size. */
@@ -38,7 +39,7 @@ export default function VirtualGrid({ items, landscape, minWidth = 150 }: Props)
         <div className="relative" style={{ height: v.getTotalSize() }}>
           {v.getVirtualItems().map((row) => (
             <div key={row.key} className="absolute left-0 flex" style={{ top: row.start, gap: GAP }}>
-              {Array.from({ length: cols }, (_, c) => items[row.index * cols + c]).filter(Boolean).map((it) => (
+              {Array.from({ length: cols }, (_, c) => items.at(row.index * cols + c)).filter((x): x is MediaItem => !!x).map((it) => (
                 <PosterCard key={it.id} item={it} width={cardW} landscape={landscape} />
               ))}
             </div>

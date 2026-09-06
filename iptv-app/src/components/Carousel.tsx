@@ -2,9 +2,10 @@ import { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
+import type { ItemList } from '../catalog/view'
 import PosterCard from './PosterCard'
 
-interface Props { title: string; items: MediaItem[]; to?: string; width?: number; landscape?: boolean }
+interface Props { title: string; items: MediaItem[] | ItemList; to?: string; width?: number; landscape?: boolean }
 
 const GAP = 12
 
@@ -34,7 +35,7 @@ export default function Carousel({ title, items, to, width = 150, landscape }: P
         <div className="relative" style={{ width: v.getTotalSize(), height: h }}>
           {v.getVirtualItems().map((vi) => (
             <div key={vi.key} className="absolute top-0" style={{ left: vi.start, width }}>
-              <PosterCard item={items[vi.index]} width={width} landscape={landscape} />
+              {(() => { const it = items.at(vi.index); return it ? <PosterCard item={it} width={width} landscape={landscape} /> : null })()}
             </div>
           ))}
         </div>

@@ -18,7 +18,7 @@ const LABEL: Record<Kind, string> = { movie: 'Films', series: 'Séries', live: '
  */
 export default function Browse({ kind }: { kind: Kind }) {
   const catalog = useCatalog((s) => s.catalog)!
-  const itemsOf = useCatalog((s) => s.itemsOf)
+  const listOf = useCatalog((s) => s.listOf)
   const item = useCatalog((s) => s.item)
   const focusedId = useUi((s) => s.focusedId)
   const [params, setParams] = useSearchParams()
@@ -32,7 +32,8 @@ export default function Browse({ kind }: { kind: Kind }) {
 
   const cats = useMemo(() => {
     const f = filter.trim().toLowerCase()
-    return catalog.categories.filter((c) => c.kind === kind && (!f || c.rawName.toLowerCase().includes(f)))
+    // polymorphic: categories with fewer than 4 titles are not worth a page
+    return catalog.categories.filter((c) => c.kind === kind && (catalog.byCategory[kind + ':' + c.id]?.length ?? 0) >= 4 && (!f || c.rawName.toLowerCase().includes(f)))
   }, [catalog, kind, filter])
 
   const items = useMemo(() => {
@@ -42,8 +43,8 @@ export default function Browse({ kind }: { kind: Kind }) {
       for (const r of home.data ?? []) if (r.kind === kind && r.type !== 'collection') for (const i of r.items) if (!seen.has(i.id)) { seen.add(i.id); out.push(i) }
       return out
     }
-    return itemsOf(kind, cat || undefined)
-  }, [tmdbMode, genreName, genre.data, home.data, kind, itemsOf, cat])
+    return listOf(kind, cat || undefined)
+  }, [tmdbMode, genreName, genre.data, home.data, kind, listOf, cat])
 
   const current = catalog.categories.find((c) => c.kind === kind && c.id === cat)
   const focused = focusedId ? item(focusedId) : undefined

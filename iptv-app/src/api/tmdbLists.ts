@@ -7,17 +7,48 @@ import { tmdb, img, details } from './tmdb'
 import type { Kind, MediaItem } from '../types'
 import { PREFIX_INFO, useProfile } from '../store/profile'
 import { t } from '../i18n'
+import type { CatalogView } from '../catalog/view'
 
 export interface ListRow { key: string; kind: Kind; type: 'top10' | 'row' | 'wide' | 'collection'; name: string; sub?: string; items: MediaItem[]; collections?: CollectionCard[] }
 export interface CollectionPart { tmdbId: number; title: string; year?: string; rating?: number; poster?: string; item?: MediaItem }
 export interface CollectionCard { id: number; name: string; poster?: string; backdrop?: string; total: number; have: number; complete: boolean; parts: CollectionPart[] }
 
+/**
+ * Compact TMDB index: sorted numeric keys (tmdbId*2 + kindBit) + group ranges into a permutation of
+ * catalogue indices, best (profile language) entry first. Typed arrays only: ~3 MB for 250k entries.
+ */
 export interface TmdbIndex {
-  best: Map<string, MediaItem>            // `${kind}:${tmdbId}` -> preferred provider entry (FR > EN)
-  versions: Map<string, string[]>         // all language versions on the server
-  fourK: Set<string>                      // keys available in 4K/UHD
-  added: Map<string, number>              // latest `added` timestamp per key
-  all: Map<string, MediaItem[]>           // every provider entry per key (one per language version)
+  keys: Float64Array      // sorted, one per distinct (kind, tmdbId)
+  starts: Uint32Array     // group g = perm[starts[g] .. starts[g+1])
+  perm: Uint32Array       // catalogue indices, preferred language first
+  view?: CatalogView
+}
+const KBIT: Record<string, number> = { movie: 0, series: 1 }
+function keyOf(key: string): number { const c = key.indexOf(':'); const b = KBIT[key.slice(0, c)]; const id = +key.slice(c + 1); return b === undefined || !id ? -1 : id * 2 + b }
+function groupOf(idx: TmdbIndex, key: string): number {
+  const k = keyOf(key); if (k < 0) return -1
+  let lo = 0, hi = idx.keys.length - 1
+  while (lo <= hi) { const mid = (lo + hi) >> 1; const v = idx.keys[mid]; if (v === k) return mid; if (v < k) lo = mid + 1; else hi = mid - 1 }
+  return -1
+}
+/** preferred provider entry index for a TMDB key */
+export const bestIndex = (idx: TmdbIndex, key: string): number | undefined => { const g = groupOf(idx, key); return g < 0 ? undefined : idx.perm[idx.starts[g]] }
+export const bestItem = (idx: TmdbIndex, key: string): MediaItem | undefined => { const i = bestIndex(idx, key); return i === undefined ? undefined : idx.view?.at(i) }
+export const allIndices = (idx: TmdbIndex, key: string): number[] => { const g = groupOf(idx, key); return g < 0 ? [] : Array.from(idx.perm.subarray(idx.starts[g], idx.starts[g + 1])) }
+export const allItems = (idx: TmdbIndex, key: string): MediaItem[] => allIndices(idx, key).map((i) => idx.view?.at(i)).filter((x): x is MediaItem => !!x)
+/** language versions available on the server for a key */
+export const versionsOf = (idx: TmdbIndex, key: string): string[] => { const v = idx.view; if (!v) return []; const out: string[] = []; for (const i of allIndices(idx, key)) { const l = v.langOf(i); if (l && !out.includes(l)) out.push(l) } return out }
+export const is4K = (idx: TmdbIndex, key: string): boolean => { const v = idx.view; if (!v) return false; const q = v.column('qualities'); return allIndices(idx, key).some((i) => v.langOf(i) === '4K' || /^(4K|UHD|2160P)$/.test(q[i])) }
+/** tmdb ids of a kind added since `t` (unix s), most recent first */
+export function addedSince(idx: TmdbIndex, kind: Kind, t: number): number[] {
+  const v = idx.view; if (!v) return []
+  const bit = KBIT[kind]; const hits: { id: number; a: number }[] = []
+  for (let g = 0; g < idx.keys.length; g++) {
+    const k = idx.keys[g]; if (k % 2 !== bit) continue
+    let a = 0; for (let p = idx.starts[g]; p < idx.starts[g + 1]; p++) { const x = v.added[idx.perm[p]]; if (x > a) a = x }
+    if (a >= t) hits.push({ id: (k - bit) / 2, a })
+  }
+  return hits.sort((x, y) => y.a - x.a).map((h) => h.id)
 }
 
 /** Preference order = the profile's content languages, then multi-language packs, then anything. */
@@ -28,20 +59,25 @@ function prefOf(contentLangs: string[]): Record<string, number> {
   return p
 }
 
-export function buildTmdbIndex(items: MediaItem[], contentLangs = useProfile.getState().contentLangs): TmdbIndex {
+export function buildTmdbIndex(view: CatalogView, visible: (i: number) => boolean, contentLangs = useProfile.getState().contentLangs): TmdbIndex {
   const PREF = prefOf(contentLangs)
-  const best = new Map<string, MediaItem>(), versions = new Map<string, string[]>(), fourK = new Set<string>(), added = new Map<string, number>(), all = new Map<string, MediaItem[]>()
-  for (const it of items) {
-    if (!it.tmdbId || it.kind === 'live') continue
-    const k = it.kind + ':' + it.tmdbId
-    const cur = best.get(k)
-    if (!cur || (PREF[it.lang ?? ''] ?? 9) < (PREF[cur.lang ?? ''] ?? 9)) best.set(k, it)
-    if (it.lang) { const v = versions.get(k) ?? []; if (!v.includes(it.lang)) v.push(it.lang); versions.set(k, v) }
-    if (it.lang === '4K' || /^(4K|UHD|2160P)$/.test(it.quality ?? '')) fourK.add(k)
-    if (it.added) added.set(k, Math.max(added.get(k) ?? 0, it.added))
-    all.set(k, [...(all.get(k) ?? []), it])
-  }
-  return { best, versions, fourK, added, all }
+  const tmdb = view.tmdbIds, kinds = view.kinds, langs = view.column('langs')
+  // 1. one sortable number per entry: (tmdbId*2 + kindBit) * 2^20 + index
+  let m = 0
+  for (let i = 0; i < view.n; i++) if (tmdb[i] && kinds[i] !== 2 && visible(i)) m++
+  const packed = new Float64Array(m); let w = 0
+  for (let i = 0; i < view.n && i < 1048576; i++) if (tmdb[i] && kinds[i] !== 2 && visible(i)) packed[w++] = (tmdb[i] * 2 + kinds[i]) * 1048576 + i
+  packed.sort()
+  // 2. group ranges
+  const keys: number[] = [], starts: number[] = []
+  const perm = new Uint32Array(m)
+  let prev = -1
+  for (let p = 0; p < m; p++) { const k = Math.floor(packed[p] / 1048576); perm[p] = packed[p] - k * 1048576; if (k !== prev) { keys.push(k); starts.push(p); prev = k } }
+  starts.push(m)
+  // 3. preferred language first inside each group (groups are tiny)
+  const pref = (i: number) => PREF[langs[i]] ?? 9
+  for (let g = 0; g < keys.length; g++) { const a = starts[g], b = starts[g + 1]; if (b - a > 1) perm.subarray(a, b).sort((x, y) => pref(x) - pref(y)) }
+  return { keys: Float64Array.from(keys), starts: Uint32Array.from(starts), perm, view }
 }
 
 interface R { id: number; release_date?: string; vote_count?: number; job?: string }
@@ -90,12 +126,11 @@ export async function homeRows(idx: TmdbIndex, personal?: Personal): Promise<Lis
   const used = new Set<string>()
   const take = (kind: Kind, ids: number[], n: number): MediaItem[] => {
     const out: MediaItem[] = []
-    for (const id of ids) { const k = kind + ':' + id; const it = idx.best.get(k); if (it && !used.has(k)) { used.add(k); out.push(it); if (out.length >= n) break } }
+    for (const id of ids) { const k = kind + ':' + id; const it = bestItem(idx, k); if (it && !used.has(k)) { used.add(k); out.push(it); if (out.length >= n) break } }
     return out
   }
   const ids = (r: R[]) => r.map((x) => x.id)
   const dayAgo = Date.now() / 1000 - 86400, weekAgo = Date.now() / 1000 - 7 * 86400
-  const addedSince = (t: number) => [...idx.added.entries()].filter(([, a]) => a >= t).sort((a, b) => b[1] - a[1]).map(([k]) => k)
 
   /* ---- personalised sources (from history) ---- */
   const last = personal?.lastWatched.filter((i) => i.tmdbId).slice(0, 3) ?? []
@@ -120,7 +155,7 @@ export async function homeRows(idx: TmdbIndex, personal?: Personal): Promise<Lis
   // 1. temporal
   rows.push({ key: 'trend-day', kind: 'movie', type: 'top10', name: 'Tendances aujourd’hui', sub: 'Classement TMDB du jour, titres présents sur le serveur', items: take('movie', ids(trDay), 10) })
   rows.push({ key: 'now', kind: 'movie', type: 'wide', name: t('nowplaying'), sub: 'En salle cette semaine dans ton pays, déjà sur le serveur', items: take('movie', ids([...now].sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))), 16) })
-  rows.push({ key: 'added-today', kind: 'movie', type: 'wide', name: 'Ajoutés aujourd’hui sur le serveur', sub: 'Les dernières 24 h, classés par popularité TMDB', items: take('movie', ids(popM).filter((i) => addedSince(dayAgo).includes('movie:' + i)).concat(addedSince(dayAgo).filter((k) => k.startsWith('movie:')).map((k) => +k.split(':')[1])), 16) })
+  rows.push({ key: 'added-today', kind: 'movie', type: 'wide', name: 'Ajoutés aujourd’hui sur le serveur', sub: 'Les dernières 24 h, classés par popularité TMDB', items: take('movie', (() => { const today = addedSince(idx, 'movie', dayAgo); const set = new Set(today); return ids(popM).filter((i) => set.has(i)).concat(today) })(), 16) })
   rows.push({ key: 'airing', kind: 'series', type: 'wide', name: 'Nouveaux épisodes aujourd’hui', sub: 'Séries diffusées aujourd’hui, présentes sur le serveur', items: take('series', ids(airing), 16) })
   // 2. personalised
   if (seed && seedItem) {
@@ -151,10 +186,11 @@ export async function homeRows(idx: TmdbIndex, personal?: Personal): Promise<Lis
   if (sagaDay?.complete) rows.push({ key: 'saga-day', kind: 'movie', type: 'collection', name: `Saga du jour · ${sagaDay.name}`, sub: `${sagaDay.total} films, tous disponibles`, items: [], collections: [sagaDay] })
   if (hubOfDay) rows.push({ key: 'hub-day', kind: hubOfDay.kind, type: 'row', name: `Pays du jour · ${hubOfDay.name}`, sub: 'Change chaque jour', items: take(hubOfDay.kind, ids(hubDay), 16) })
   myHubs.forEach((h, i) => { const items = take(h.kind, ids(hubRows[i]), 16); if (items.length >= 4) rows.push({ key: 'hub-' + h.key, kind: h.kind, type: 'row', name: h.name, sub: t('inyourlang'), items }) })
-  rows.push({ key: 'added-week', kind: 'movie', type: 'row', name: t('fresh'), sub: 'Sept derniers jours', items: take('movie', addedSince(weekAgo).filter((k) => k.startsWith('movie:')).map((k) => +k.split(':')[1]), 20) })
-  rows.push({ key: '4k', kind: 'movie', type: 'row', name: t('fourk'), sub: 'Versions 4K/UHD du serveur, triées par popularité', items: take('movie', ids(popM).filter((i) => idx.fourK.has('movie:' + i)), 16) })
+  rows.push({ key: 'added-week', kind: 'movie', type: 'row', name: t('fresh'), sub: 'Sept derniers jours', items: take('movie', addedSince(idx, 'movie', weekAgo), 20) })
+  rows.push({ key: '4k', kind: 'movie', type: 'row', name: t('fourk'), sub: 'Versions 4K/UHD du serveur, triées par popularité', items: take('movie', ids(popM).filter((i) => is4K(idx, 'movie:' + i)), 16) })
   rows.push({ key: 'pop-tv', kind: 'series', type: 'row', name: 'Séries populaires cette semaine', items: take('series', ids(popT), 16) })
-  return rows.filter((r) => r.type === 'collection' ? (r.collections?.length ?? 0) > 0 : r.items.length >= 4)
+  // polymorphic: a row only exists when this provider has enough titles for it
+  return rows.filter((r) => r.type === 'collection' ? (r.collections?.length ?? 0) > 0 : r.items.length >= (r.type === 'top10' ? 5 : 6))
 }
 
 interface RawCollection { id: number; name: string; poster_path?: string | null; backdrop_path?: string | null; parts: { id: number; title: string; release_date?: string; vote_average?: number; poster_path?: string | null }[] }
@@ -163,7 +199,7 @@ export async function collection(id: number, idx: TmdbIndex): Promise<Collection
   if (!c) return undefined
   const today = new Date().toISOString().slice(0, 10)
   const parts = c.parts.filter((p) => p.release_date && p.release_date <= today).sort((a, b) => a.release_date!.localeCompare(b.release_date!))
-    .map((p) => ({ tmdbId: p.id, title: p.title, year: p.release_date?.slice(0, 4), rating: p.vote_average, poster: img(p.poster_path, 'w185'), item: idx.best.get('movie:' + p.id) }))
+    .map((p) => ({ tmdbId: p.id, title: p.title, year: p.release_date?.slice(0, 4), rating: p.vote_average, poster: img(p.poster_path, 'w185'), item: bestItem(idx, 'movie:' + p.id) }))
   const have = parts.filter((p) => p.item).length
   if (parts.length < 2 || have < 2) return undefined
   return { id: c.id, name: c.name, poster: img(c.poster_path, 'w342'), backdrop: img(c.backdrop_path, 'w780'), total: parts.length, have, complete: have === parts.length, parts }
@@ -173,6 +209,6 @@ export async function collection(id: number, idx: TmdbIndex): Promise<Collection
 export async function genreItems(kind: Kind, genreId: number, idx: TmdbIndex, pages = 20): Promise<MediaItem[]> {
   const l = await list(kind === 'movie' ? '/discover/movie' : '/discover/tv', pages, { with_genres: String(genreId), sort_by: 'popularity.desc', 'vote_count.gte': '50' })
   const out: MediaItem[] = []; const seen = new Set<number>()
-  for (const r of l) { const it = idx.best.get(kind + ':' + r.id); if (it && !seen.has(r.id)) { seen.add(r.id); out.push(it) } }
+  for (const r of l) { const it = bestItem(idx, kind + ':' + r.id); if (it && !seen.has(r.id)) { seen.add(r.id); out.push(it) } }
   return out
 }

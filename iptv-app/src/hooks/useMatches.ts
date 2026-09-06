@@ -20,11 +20,15 @@ export function useMatches() {
     const now = new Date()
     const catName = new Map((catalog?.categories ?? []).filter((c) => c.kind === 'live').map((c) => [c.id, c.rawName]))
     const out: { item: MediaItem; event: LiveEvent; country?: string }[] = []
-    for (const it of catalog?.items ?? []) {
-      if (it.kind !== 'live') continue
-      const e = parseEvent(it.rawName, now)
+    if (!catalog) return out
+    const cats = catalog.column('categoryIds')
+    for (const i of catalog.indicesOf('live')) {
+      const raw = catalog.rawNameOf(i)
+      if (!/^\s*(next|live|end|ended)\s*\|/i.test(raw)) continue
+      const e = parseEvent(raw, now)
       if (!e || !e.start || e.status === 'ended') continue
-      out.push({ item: it, event: e, country: countryOf(catName.get(it.categoryId) ?? '')?.code ?? e.country })
+      const it = catalog.at(i); if (!it) continue
+      out.push({ item: it, event: e, country: countryOf(catName.get(cats[i]) ?? '')?.code ?? e.country })
     }
     return out
   }, [catalog])

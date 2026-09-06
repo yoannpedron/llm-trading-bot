@@ -31,8 +31,8 @@ export default function Live() {
   const items = useMemo(() => {
     const sel = cats.filter((x) => (!cc || (x.country?.code ?? '??') === cc) && (!theme || x.theme === theme))
     const needle = q.trim().toLowerCase()
-    const out = sel.flatMap((x) => (catalog.byCategory['live:' + x.c.id] ?? []).map((i) => catalog.items[i]))
-    return needle ? out.filter((i) => i.title.toLowerCase().includes(needle)) : out
+    const idx = sel.flatMap((x) => catalog.byCategory['live:' + x.c.id] ?? [])
+    return catalog.list(needle ? idx.filter((i) => catalog.titleOf(i).toLowerCase().includes(needle)) : idx)
   }, [cats, cc, theme, q, catalog])
 
   return (

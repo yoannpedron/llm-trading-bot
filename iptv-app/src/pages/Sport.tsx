@@ -132,8 +132,8 @@ function Initials({ name, size }: { name: string; size: number }) {
 }
 function Row({ c }: { c: MatchCard }) {
   const m = c.match; const live = m.state === 'in'
-  if (m.kind === 'session' || (m.kind === 'event' && !m.awayLogo && m.away === m.competition)) return <EventRow c={c} />
   const fav = useSportPrefs((s) => s.teams)
+  if (m.kind === 'session' || (m.kind === 'event' && !m.awayLogo && m.away === m.competition)) return <EventRow c={c} />
   const star = (n: string) => fav.includes(teamKey(n)) ? <span className="mr-1 text-[11px] text-amber-400">★</span> : null
   return (
     <Link to={watchUrl(c)} className="grid min-h-[60px] grid-cols-[1fr_64px_1fr] items-center border-b border-white/[.08] px-3.5 py-2.5 last:border-b-0 hover:bg-white/5">

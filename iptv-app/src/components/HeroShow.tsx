@@ -5,7 +5,7 @@ import type { MediaItem } from '../types'
 import { useEnrich } from '../hooks/useEnrich'
 import { useUi } from '../store/ui'
 import { useMyList } from '../store/mylist'
-import { useCatalog } from '../store/catalog'
+import { useExtra } from '../hooks/useExtra'
 import Trailer from './Trailer'
 
 interface Props { items: MediaItem[] }
@@ -17,9 +17,9 @@ export default function HeroShow({ items }: Props) {
   const [trailerOn, setTrailerOn] = useState(true)
   const item = items[idx % Math.max(items.length, 1)]
   const { data } = useEnrich(item)
+  const ex = useExtra(item)
   const setBackdrop = useUi((s) => s.setBackdrop)
   const list = useMyList()
-  const extra = useCatalog((s) => s.extra)
   const next = useCallback(() => { setIdx((i) => (i + 1) % items.length); setTrailerOn(true) }, [items.length])
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function HeroShow({ items }: Props) {
               {genres.length > 0 && <span className="text-white/50">{genres.join(' · ')}</span>}
               <span className="rounded border border-white/30 px-1.5 text-[11px] font-semibold text-white/80">{item.lang}{item.quality ? ` · ${item.quality}` : ''}</span>
             </div>
-            <p className="mb-4 line-clamp-2 max-w-xl text-sm leading-relaxed text-white/85 text-shadow md:line-clamp-3 md:text-[15px]">{data?.overview ?? (item ? extra(item).plot : '')}</p>
+            <p className="mb-4 line-clamp-2 max-w-xl text-sm leading-relaxed text-white/85 text-shadow md:line-clamp-3 md:text-[15px]">{data?.overview ?? ex.plot ?? ''}</p>
             <div className="flex items-center gap-2.5">
               <Link to={`/watch/${item.id}`} className="inline-flex h-11 items-center gap-2 rounded-lg bg-white px-6 font-semibold text-black hover:bg-white/90">▶ Lecture</Link>
               <Link to={`/details/${item.id}`} className="inline-flex h-11 items-center gap-2 rounded-lg bg-white/15 px-5 font-semibold backdrop-blur hover:bg-white/25">ⓘ Infos</Link>

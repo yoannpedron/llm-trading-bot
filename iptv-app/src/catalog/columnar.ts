@@ -1,12 +1,24 @@
 /**
- * Columnar snapshot of the catalogue: a handful of big strings and typed arrays instead of
- * 300k objects. Stored as one IndexedDB record; restored into MediaItem objects in a worker.
- * Strings are joined with U+001F (never present in provider names); numbers live in typed arrays.
+ * Columnar catalogue, v2: every string column is stored as UTF-8 bytes plus a Uint32Array of entry offsets.
+ * Nothing is decoded until an entry is read, so a 300k catalogue costs ~80 MB of bytes instead of
+ * ~250 MB of UTF-16 strings and objects. The very same buffers are persisted to IndexedDB and transferred
+ * (zero-copy) between the worker and the UI thread.
  */
-import type { Catalog, Category, Kind, MediaItem } from '../types'
+import type { Category, Kind, MediaItem } from '../types'
+
+export const TAGSEP = '\u001e'
+export const STRING_COLS = ['rawNames', 'titles', 'searchTitles', 'langs', 'qualities', 'tags', 'categoryIds', 'posters', 'backdrops', 'exts', 'epg'] as const
+export type StrName = (typeof STRING_COLS)[number]
+/** heavy, rarely read columns: persisted separately and never loaded on the UI thread */
+export const EXTRA_COLS = ['plots', 'casts', 'directors', 'genres'] as const
+export type ExtraName = (typeof EXTRA_COLS)[number]
+/** entry i = dict[pre[i]] + bytes[offsets[i] .. offsets[i+1]); `pre`/`dict` only for URL-like columns (shared prefixes stored once) */
+export interface StrCol { bytes: Uint8Array; offsets: Uint32Array; pre?: Uint16Array; dict?: string[] }
+export interface Extras { v: 2; ids: Float64Array /* kind*2^32+streamId */; cols: Record<ExtraName, StrCol> }
+export interface Extra { plot?: string; cast?: string; director?: string; genre?: string }
 
 export interface Columnar {
-  v: 1
+  v: 2
   n: number
   generatedAt: number
   kinds: Uint8Array            // 0 movie, 1 series, 2 live
@@ -15,154 +27,140 @@ export interface Columnar {
   seasons: Uint8Array; episodes: Uint16Array
   tmdbIds: Uint32Array; ratings: Uint8Array /* x10 */; added: Uint32Array
   flags: Uint8Array            // bit0 adult, bit1 tvArchive
-  rawNames: string; titles: string; searchTitles: string /* empty = same as title */; langs: string; qualities: string; tags: string
-  categoryIds: string; posters: string; backdrops: string; exts: string; plots: string; casts: string; directors: string; genres: string; epg: string
+  strs: Record<StrName, StrCol>
+  /** case-folded "title rawName\n" per entry, searched directly in the bytes */
+  search: StrCol
   categories: Category[]
-  /** case-folded search text + offsets, built once, persisted with the snapshot */
-  searchText?: string
-  searchOffsets?: Uint32Array
 }
-export const SEP = '', TAGSEP = ''
 const KIND: Kind[] = ['movie', 'series', 'live']
+export const NUM_COLS = ['kinds', 'streamIds', 'years', 'seasons', 'episodes', 'tmdbIds', 'ratings', 'added', 'flags'] as const
 
-/** Builds the columnar form incrementally while lists stream in, so no 300k-object array and no final pack step. */
+/** growable UTF-8 column writer */
+class StrWriter {
+  private buf = new Uint8Array(1 << 16)
+  private len = 0
+  private off: number[] = [0]
+  private enc = new TextEncoder()
+  private pre?: number[]; private dict?: string[]; private dictIdx?: Map<string, number>
+  constructor(prefixed = false) { if (prefixed) { this.pre = []; this.dict = ['']; this.dictIdx = new Map([['', 0]]) } }
+  push(s: string) {
+    if (this.pre) {
+      // split a URL at its last '/', the prefix goes to a shared dictionary (65k max)
+      const cut = s.lastIndexOf('/') + 1; const p = cut > 8 ? s.slice(0, cut) : ''
+      let id = this.dictIdx!.get(p)
+      if (id === undefined) { if (this.dict!.length < 65535) { id = this.dict!.length; this.dict!.push(p); this.dictIdx!.set(p, id) } else id = 0 }
+      this.pre.push(id); if (id) s = s.slice(cut)
+    }
+    if (s) {
+      for (;;) {
+        const r = this.enc.encodeInto(s, this.buf.subarray(this.len))
+        if (r.read >= s.length) { this.len += r.written; break }
+        this.len += r.written; s = s.slice(r.read)
+        const nb = new Uint8Array(Math.max(this.buf.length * 2, this.len + s.length * 3 + 64)); nb.set(this.buf); this.buf = nb
+      }
+    }
+    this.off.push(this.len)
+  }
+  build(): StrCol { const c: StrCol = { bytes: this.buf.slice(0, this.len), offsets: Uint32Array.from(this.off) }; if (this.pre) { c.pre = Uint16Array.from(this.pre); c.dict = this.dict!.slice() } return c }
+}
+class NumWriter<T extends Uint8Array | Uint16Array | Uint32Array> {
+  private arr: T; private len = 0; private mk: (n: number) => T
+  constructor(mk: (n: number) => T) { this.mk = mk; this.arr = mk(1 << 14) }
+  push(v: number) { if (this.len === this.arr.length) { const nb = this.mk(this.arr.length * 2); nb.set(this.arr); this.arr = nb } this.arr[this.len++] = v }
+  build(): T { return this.arr.slice(0, this.len) as T }
+}
+
+/** Builds the columnar form incrementally while lists stream in: no object array, bounded memory. */
 export class ColumnarBuilder {
   n = 0
-  private num: Record<string, number[]> = { kinds: [], streamIds: [], years: [], seasons: [], episodes: [], tmdbIds: [], ratings: [], added: [], flags: [] }
-  private cols: Record<string, string[]> = { rawNames: [], titles: [], searchTitles: [], langs: [], qualities: [], tags: [], categoryIds: [], posters: [], backdrops: [], exts: [], plots: [], casts: [], directors: [], genres: [], epg: [] }
-  private search: string[] = []
+  private kinds = new NumWriter((n) => new Uint8Array(n)); private streamIds = new NumWriter((n) => new Uint32Array(n)); private years = new NumWriter((n) => new Uint16Array(n))
+  private seasons = new NumWriter((n) => new Uint8Array(n)); private episodes = new NumWriter((n) => new Uint16Array(n)); private tmdbIds = new NumWriter((n) => new Uint32Array(n))
+  private ratings = new NumWriter((n) => new Uint8Array(n)); private added = new NumWriter((n) => new Uint32Array(n)); private flags = new NumWriter((n) => new Uint8Array(n))
+  private strs = Object.fromEntries(STRING_COLS.map((k) => [k, new StrWriter(k === 'posters' || k === 'backdrops')])) as Record<StrName, StrWriter>
+  private xs = Object.fromEntries(EXTRA_COLS.map((k) => [k, new StrWriter()])) as Record<ExtraName, StrWriter>
+  private ids: number[] = []
+  private search = new StrWriter()
   push(it: MediaItem) {
-    const N = this.num, C = this.cols
-    N.kinds.push(KIND.indexOf(it.kind)); N.streamIds.push(it.streamId); N.years.push(it.year ?? 0); N.seasons.push(it.season ?? 0); N.episodes.push(it.episode ?? 0)
-    N.tmdbIds.push(it.tmdbId ?? 0); N.ratings.push(Math.min(255, Math.round((it.rating ?? 0) * 10))); N.added.push(it.added ?? 0); N.flags.push((it.isAdult ? 1 : 0) | (it.tvArchive ? 2 : 0))
-    C.rawNames.push(it.rawName); C.titles.push(it.title); C.searchTitles.push(it.searchTitle === it.title ? '' : it.searchTitle); C.langs.push(it.lang ?? ''); C.qualities.push(it.quality ?? '')
-    C.tags.push(it.tags.join(TAGSEP)); C.categoryIds.push(it.categoryId); C.posters.push(it.poster ?? ''); C.backdrops.push(it.backdrop ?? ''); C.exts.push(it.ext ?? '')
-    C.plots.push(it.plot ?? ''); C.casts.push(it.cast ?? ''); C.directors.push(it.director ?? ''); C.genres.push(it.genre ?? ''); C.epg.push(it.epgChannelId ?? '')
-    this.search.push((it.title + ' ' + it.rawName).toLowerCase())
+    this.kinds.push(KIND.indexOf(it.kind)); this.streamIds.push(it.streamId); this.years.push(it.year ?? 0); this.seasons.push(it.season ?? 0); this.episodes.push(it.episode ?? 0)
+    this.tmdbIds.push(it.tmdbId ?? 0); this.ratings.push(Math.min(255, Math.round((it.rating ?? 0) * 10))); this.added.push(it.added ?? 0); this.flags.push((it.isAdult ? 1 : 0) | (it.tvArchive ? 2 : 0))
+    const S = this.strs
+    S.rawNames.push(it.rawName); S.titles.push(it.title); S.searchTitles.push(it.searchTitle === it.title ? '' : it.searchTitle); S.langs.push(it.lang ?? ''); S.qualities.push(it.quality ?? '')
+    S.tags.push(it.tags.join(TAGSEP)); S.categoryIds.push(it.categoryId); S.posters.push(it.poster ?? ''); S.backdrops.push(it.backdrop ?? ''); S.exts.push(it.ext ?? '')
+    S.epg.push(it.epgChannelId ?? '')
+    const X = this.xs; X.plots.push(it.plot ?? ''); X.casts.push(it.cast ?? ''); X.directors.push(it.director ?? ''); X.genres.push(it.genre ?? '')
+    this.ids.push(KIND.indexOf(it.kind) * 4294967296 + it.streamId)
+    this.search.push((it.title + ' ' + it.rawName).toLowerCase() + '\n')
     this.n++
   }
   build(categories: Category[]): Columnar {
-    const N = this.num, C = this.cols, j = (k: string) => C[k].join(SEP)
-    const offsets = new Uint32Array(this.n + 1); let pos = 0
-    for (let i = 0; i < this.n; i++) { offsets[i] = pos; pos += this.search[i].length + 1 }
-    offsets[this.n] = pos
-    return { v: 1, n: this.n, generatedAt: Date.now(), kinds: Uint8Array.from(N.kinds), streamIds: Uint32Array.from(N.streamIds), years: Uint16Array.from(N.years), seasons: Uint8Array.from(N.seasons), episodes: Uint16Array.from(N.episodes), tmdbIds: Uint32Array.from(N.tmdbIds), ratings: Uint8Array.from(N.ratings), added: Uint32Array.from(N.added), flags: Uint8Array.from(N.flags),
-      rawNames: j('rawNames'), titles: j('titles'), searchTitles: j('searchTitles'), langs: j('langs'), qualities: j('qualities'), tags: j('tags'), categoryIds: j('categoryIds'), posters: j('posters'), backdrops: j('backdrops'), exts: j('exts'), plots: j('plots'), casts: j('casts'), directors: j('directors'), genres: j('genres'), epg: j('epg'), categories, searchText: this.search.join('\n'), searchOffsets: offsets }
+    return { v: 2, n: this.n, generatedAt: Date.now(), kinds: this.kinds.build(), streamIds: this.streamIds.build(), years: this.years.build(), seasons: this.seasons.build(), episodes: this.episodes.build(), tmdbIds: this.tmdbIds.build(), ratings: this.ratings.build(), added: this.added.build(), flags: this.flags.build(),
+      strs: Object.fromEntries(STRING_COLS.map((k) => [k, this.strs[k].build()])) as Record<StrName, StrCol>, search: this.search.build(), categories }
+  }
+  buildExtras(): Extras { return { v: 2, ids: Float64Array.from(this.ids), cols: Object.fromEntries(EXTRA_COLS.map((k) => [k, this.xs[k].build()])) as Record<ExtraName, StrCol> } }
+}
+/** one item's extras, by id (`kind*2^32+streamId`) */
+export class ExtrasReader {
+  private map?: Map<number, number>
+  private x: Extras
+  constructor(x: Extras) { this.x = x }
+  of(id: number): Extra {
+    if (!this.map) { this.map = new Map(); const ids = this.x.ids; for (let i = 0; i < ids.length; i++) this.map.set(ids[i], i) }
+    const i = this.map.get(id); if (i === undefined) return {}
+    const u = (k: ExtraName) => { const v = entry(this.x.cols[k], i); return v === '' ? undefined : v }
+    return { plot: u('plots'), cast: u('casts'), director: u('directors'), genre: u('genres') }
   }
 }
 
-/** Heavy, rarely-read columns (plot, cast, director, genre) are split lazily on first access. */
-export class ExtraColumns {
-  private cache: Partial<Record<'plots' | 'casts' | 'directors' | 'genres', string[]>> = {}
-  private col: Pick<Columnar, 'plots' | 'casts' | 'directors' | 'genres'>
-  constructor(col: Pick<Columnar, 'plots' | 'casts' | 'directors' | 'genres'>) { this.col = col }
-  private get(k: 'plots' | 'casts' | 'directors' | 'genres') { return (this.cache[k] ??= this.col[k].split(SEP)) }
-  of(i: number): { plot?: string; cast?: string; director?: string; genre?: string } {
-    const u = (x: string) => (x === '' ? undefined : x)
-    return { plot: u(this.get('plots')[i]), cast: u(this.get('casts')[i]), director: u(this.get('directors')[i]), genre: u(this.get('genres')[i]) }
-  }
+/** every ArrayBuffer of a catalogue, for postMessage transfer */
+export function buffersOf(col: Columnar): ArrayBuffer[] {
+  const out: ArrayBuffer[] = []
+  for (const k of NUM_COLS) out.push(col[k].buffer as ArrayBuffer)
+  for (const k of STRING_COLS) { const c = col.strs[k]; out.push(c.bytes.buffer as ArrayBuffer, c.offsets.buffer as ArrayBuffer); if (c.pre) out.push(c.pre.buffer as ArrayBuffer) }
+  out.push(col.search.bytes.buffer as ArrayBuffer, col.search.offsets.buffer as ArrayBuffer)
+  return [...new Set(out)]
+}
+/** deep copy (memcpy of the typed arrays) so one copy can be transferred while the other is persisted */
+export function cloneColumnar(col: Columnar): Columnar {
+  const c = { ...col, strs: {} as Record<StrName, StrCol>, search: { bytes: col.search.bytes.slice(), offsets: col.search.offsets.slice() } } as Columnar
+  for (const k of NUM_COLS) (c as unknown as Record<string, unknown>)[k] = col[k].slice()
+  for (const k of STRING_COLS) { const o = col.strs[k]; c.strs[k] = { bytes: o.bytes.slice(), offsets: o.offsets.slice(), pre: o.pre?.slice(), dict: o.dict?.slice() } }
+  return c
+}
+export function bytesOf(col: Columnar): number { return buffersOf(col).reduce((a, b) => a + b.byteLength, 0) }
+
+const dec = new TextDecoder()
+/** decode one entry */
+export function entry(c: StrCol, i: number): string { const a = c.offsets[i], b = c.offsets[i + 1]; const p = c.pre ? c.dict![c.pre[i]] : ''; return a === b ? p : p + dec.decode(c.bytes.subarray(a, b)) }
+/** decode a whole column into an array (used only for small, hot columns such as langs / categoryIds) */
+export function entries(c: StrCol): string[] {
+  const n = c.offsets.length - 1; const out: string[] = new Array(n)
+  let ascii = true; for (let i = 0; i < c.bytes.length; i++) if (c.bytes[i] & 0x80) { ascii = false; break }
+  if (ascii && !c.pre) { const s = dec.decode(c.bytes); for (let i = 0; i < n; i++) out[i] = s.slice(c.offsets[i], c.offsets[i + 1]) }
+  else for (let i = 0; i < n; i++) out[i] = entry(c, i)
+  return out
 }
 
-export function pack(c: Catalog): Columnar {
-  const n = c.items.length
-  const kinds = new Uint8Array(n), streamIds = new Uint32Array(n), years = new Uint16Array(n), seasons = new Uint8Array(n), episodes = new Uint16Array(n), tmdbIds = new Uint32Array(n), ratings = new Uint8Array(n), added = new Uint32Array(n), flags = new Uint8Array(n)
-  const cols: Record<string, string[]> = { rawNames: [], titles: [], searchTitles: [], langs: [], qualities: [], tags: [], categoryIds: [], posters: [], backdrops: [], exts: [], plots: [], casts: [], directors: [], genres: [], epg: [] }
-  c.items.forEach((it, i) => {
-    kinds[i] = KIND.indexOf(it.kind); streamIds[i] = it.streamId; years[i] = it.year ?? 0; seasons[i] = it.season ?? 0; episodes[i] = it.episode ?? 0
-    tmdbIds[i] = it.tmdbId ?? 0; ratings[i] = Math.min(255, Math.round((it.rating ?? 0) * 10)); added[i] = it.added ?? 0; flags[i] = (it.isAdult ? 1 : 0) | (it.tvArchive ? 2 : 0)
-    cols.rawNames.push(it.rawName); cols.titles.push(it.title); cols.searchTitles.push(it.searchTitle === it.title ? '' : it.searchTitle); cols.langs.push(it.lang ?? ''); cols.qualities.push(it.quality ?? '')
-    cols.tags.push(it.tags.join(TAGSEP)); cols.categoryIds.push(it.categoryId); cols.posters.push(it.poster ?? ''); cols.backdrops.push(it.backdrop ?? ''); cols.exts.push(it.ext ?? '')
-    cols.plots.push(it.plot ?? ''); cols.casts.push(it.cast ?? ''); cols.directors.push(it.director ?? ''); cols.genres.push(it.genre ?? ''); cols.epg.push(it.epgChannelId ?? '')
-  })
-  const j = (k: string) => cols[k].join(SEP)
-  return { v: 1, n, generatedAt: c.generatedAt, kinds, streamIds, years, seasons, episodes, tmdbIds, ratings, added, flags,
-    rawNames: j('rawNames'), titles: j('titles'), searchTitles: j('searchTitles'), langs: j('langs'), qualities: j('qualities'), tags: j('tags'), categoryIds: j('categoryIds'), posters: j('posters'), backdrops: j('backdrops'), exts: j('exts'), plots: j('plots'), casts: j('casts'), directors: j('directors'), genres: j('genres'), epg: j('epg'), categories: c.categories, ...(() => { const si = buildSearchIndex(c.items); return { searchText: si.text, searchOffsets: si.offsets } })() }
-}
-
-export function unpack(col: Columnar): Catalog {
-  const s = (k: keyof Columnar) => (col[k] as string).split(SEP)
-  const rawNames = s('rawNames'), titles = s('titles'), searchTitles = s('searchTitles'), langs = s('langs'), qualities = s('qualities'), tags = s('tags'), categoryIds = s('categoryIds'), posters = s('posters'), backdrops = s('backdrops'), exts = s('exts'), plots = s('plots'), casts = s('casts'), directors = s('directors'), genres = s('genres'), epg = s('epg')
-  const EMPTY: string[] = []
-  const items: MediaItem[] = new Array(col.n)
-  const byCategory: Record<string, number[]> = {}
-  const counts = { movie: 0, series: 0, live: 0 }
-  for (let i = 0; i < col.n; i++) {
-    const kind = KIND[col.kinds[i]]
-    const it: MediaItem = {
-      id: kind + ':' + col.streamIds[i],
-      kind, rawName: rawNames[i], title: titles[i], searchTitle: searchTitles[i] || titles[i], streamId: col.streamIds[i], categoryId: categoryIds[i],
-      tags: tags[i] ? tags[i].split(TAGSEP) : EMPTY, isAdult: !!(col.flags[i] & 1),
-    }
-    if (col.years[i]) it.year = col.years[i]
-    if (col.seasons[i]) it.season = col.seasons[i]
-    if (col.episodes[i]) it.episode = col.episodes[i]
-    if (col.tmdbIds[i]) it.tmdbId = col.tmdbIds[i]
-    if (col.ratings[i]) it.rating = col.ratings[i] / 10
-    if (col.added[i]) it.added = col.added[i]
-    if (langs[i]) it.lang = langs[i]
-    if (qualities[i]) it.quality = qualities[i]
-    if (posters[i]) it.poster = posters[i]
-    if (backdrops[i]) it.backdrop = backdrops[i]
-    if (exts[i]) it.ext = exts[i]
-    if (plots[i]) it.plot = plots[i]
-    if (casts[i]) it.cast = casts[i]
-    if (directors[i]) it.director = directors[i]
-    if (genres[i]) it.genre = genres[i]
-    if (epg[i]) it.epgChannelId = epg[i]
-    if (kind === 'live') it.tvArchive = !!(col.flags[i] & 2)
-    items[i] = it; counts[kind]++
-    ;(byCategory[kind + ':' + it.categoryId] ??= []).push(i)
-  }
-  return { items, categories: col.categories, byCategory, counts, generatedAt: col.generatedAt }
-}
-
-/** Same as unpack, but yields to the event loop every `step` items so a 300k restore never freezes the UI thread. */
-export async function unpackAsync(col: Columnar, step = 25_000, onProgress?: (done: number, total: number) => void): Promise<Catalog> {
-  const s = (k: keyof Columnar) => (col[k] as string).split(SEP)
-  const rawNames = s('rawNames'), titles = s('titles'), searchTitles = s('searchTitles'), langs = s('langs'), qualities = s('qualities'), tags = s('tags'), categoryIds = s('categoryIds'), posters = s('posters'), backdrops = s('backdrops'), exts = s('exts'), epg = s('epg')
-  const EMPTY: string[] = []
-  const items: MediaItem[] = new Array(col.n)
-  const byCategory: Record<string, number[]> = {}
-  const counts = { movie: 0, series: 0, live: 0 }
-  for (let i = 0; i < col.n; i++) {
-    if (i && i % step === 0) { onProgress?.(i, col.n); await new Promise<void>((r) => setTimeout(r, 0)) }
-    const kind = KIND[col.kinds[i]]
-    const it: MediaItem = { id: kind + ':' + col.streamIds[i], kind, rawName: rawNames[i], title: titles[i], searchTitle: searchTitles[i] || titles[i], streamId: col.streamIds[i], categoryId: categoryIds[i], tags: tags[i] ? tags[i].split(TAGSEP) : EMPTY, isAdult: !!(col.flags[i] & 1) }
-    if (col.years[i]) it.year = col.years[i]
-    if (col.seasons[i]) it.season = col.seasons[i]
-    if (col.episodes[i]) it.episode = col.episodes[i]
-    if (col.tmdbIds[i]) it.tmdbId = col.tmdbIds[i]
-    if (col.ratings[i]) it.rating = col.ratings[i] / 10
-    if (col.added[i]) it.added = col.added[i]
-    if (langs[i]) it.lang = langs[i]
-    if (qualities[i]) it.quality = qualities[i]
-    if (posters[i]) it.poster = posters[i]
-    if (backdrops[i]) it.backdrop = backdrops[i]
-    if (exts[i]) it.ext = exts[i]
-    if (epg[i]) it.epgChannelId = epg[i]
-    if (kind === 'live') it.tvArchive = !!(col.flags[i] & 2)
-    items[i] = it; counts[kind]++
-    ;(byCategory[kind + ':' + it.categoryId] ??= []).push(i)
-  }
-  return { items, categories: col.categories, byCategory, counts, generatedAt: col.generatedAt }
-}
-
-/** Case-folded search index: one big string with newline separators + offsets, so a search is one indexOf loop, no per-item work. */
-export interface SearchIndex { text: string; offsets: Uint32Array }
-export function buildSearchIndex(items: MediaItem[]): SearchIndex {
-  const parts: string[] = new Array(items.length); const offsets = new Uint32Array(items.length + 1); let pos = 0
-  for (let i = 0; i < items.length; i++) { const t = (items[i].title + ' ' + items[i].rawName).toLowerCase(); parts[i] = t; offsets[i] = pos; pos += t.length + 1 }
-  offsets[items.length] = pos
-  return { text: parts.join('\n'), offsets }
-}
-export function searchIndex(idx: SearchIndex, needle: string, limit = 200): number[] {
-  const out: number[] = []; const q = needle.toLowerCase(); if (!q) return out
+/** approximate byte frequency in lower-cased titles (space and vowels are common, digits and non-ASCII rare) */
+const FREQ = new Uint8Array(256).fill(1)
+for (const [ch, f] of Object.entries({ ' ': 9, e: 9, a: 8, i: 7, o: 7, n: 7, r: 7, t: 7, s: 7, l: 6, u: 5, d: 5, c: 5, m: 5, h: 4, p: 4, g: 4, b: 3, y: 3, f: 3, v: 3, k: 3, w: 3, '-': 3, '.': 3, ':': 3, '|': 3, '[': 2, ']': 2, '(': 2, ')': 2, '1': 3, '2': 3, '0': 3, x: 2, z: 2, q: 2, j: 2 })) FREQ[ch.charCodeAt(0)] = f
+for (let i = 0x80; i < 0xc0; i++) FREQ[i] = 4 // UTF-8 continuation bytes are shared by many characters
+/** Substring search straight in the case-folded UTF-8 bytes: no strings are created for non-matching entries. */
+export function searchBytes(c: StrCol, needle: string, limit = 200): number[] {
+  const out: number[] = []
+  const q = new TextEncoder().encode(needle.toLowerCase()); if (!q.length) return out
+  const b = c.bytes, L = q.length, end = b.length - L
+  // anchor on the rarest byte of the needle so indexOf (native, vectorised) does most of the work
+  let anchor = 0; for (let j = 1; j < L; j++) if (FREQ[q[j]] < FREQ[q[anchor]]) anchor = j
+  const ab = q[anchor]
   let from = 0
   while (out.length < limit) {
-    const at = idx.text.indexOf(q, from); if (at < 0) break
-    let lo = 0, hi = idx.offsets.length - 2
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (idx.offsets[mid] <= at) lo = mid; else hi = mid - 1 }
-    out.push(lo); from = idx.offsets[lo + 1]
+    const hit = b.indexOf(ab, from + anchor); if (hit < 0) break
+    const at = hit - anchor; if (at > end) break
+    let ok = true; for (let j = 0; j < L; j++) if (j !== anchor && b[at + j] !== q[j]) { ok = false; break }
+    if (!ok) { from = at + 1; continue }
+    let lo = 0, hi = c.offsets.length - 2
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (c.offsets[mid] <= at) lo = mid; else hi = mid - 1 }
+    out.push(lo); from = c.offsets[lo + 1]
   }
   return out
 }
@@ -171,27 +169,7 @@ export function searchIndex(idx: SearchIndex, needle: string, limit = 200): numb
 const DB = 'iptv-catalog', STORE = 'snap'
 function open(): Promise<IDBDatabase> { return new Promise((res, rej) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) }) }
 export async function saveSnapshot(key: string, col: Columnar): Promise<void> { const d = await open(); await new Promise<void>((res, rej) => { const t = d.transaction(STORE, 'readwrite'); t.objectStore(STORE).put(col, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error) }); d.close() }
-export async function loadSnapshot(key: string): Promise<Columnar | undefined> { try { const d = await open(); const v = await new Promise<Columnar | undefined>((res) => { const r = d.transaction(STORE).objectStore(STORE).get(key); r.onsuccess = () => res(r.result); r.onerror = () => res(undefined) }); d.close(); return v?.v === 1 ? v : undefined } catch { return undefined } }
+export async function loadSnapshot(key: string): Promise<Columnar | undefined> { try { const d = await open(); const v = await new Promise<Columnar | undefined>((res) => { const r = d.transaction(STORE).objectStore(STORE).get(key); r.onsuccess = () => res(r.result); r.onerror = () => res(undefined) }); d.close(); return v?.v === 2 ? v : undefined } catch { return undefined } }
+export async function saveExtras(key: string, x: Extras): Promise<void> { const d = await open(); await new Promise<void>((res, rej) => { const t = d.transaction(STORE, 'readwrite'); t.objectStore(STORE).put(x, key + '|x'); t.oncomplete = () => res(); t.onerror = () => rej(t.error) }); d.close() }
+export async function loadExtras(key: string): Promise<Extras | undefined> { try { const d = await open(); const v = await new Promise<Extras | undefined>((res) => { const r = d.transaction(STORE).objectStore(STORE).get(key + '|x'); r.onsuccess = () => res(r.result); r.onerror = () => res(undefined) }); d.close(); return v?.v === 2 ? v : undefined } catch { return undefined } }
 export async function clearSnapshots(): Promise<void> { try { const d = await open(); await new Promise<void>((res) => { const t = d.transaction(STORE, 'readwrite'); t.objectStore(STORE).clear(); t.oncomplete = () => res(); t.onerror = () => res() }); d.close() } catch { /* ignore */ } }
-
-/* ---- wire format: string columns as transferable UTF-8 buffers (zero-copy between worker and UI) ---- */
-const STRING_COLS = ['rawNames', 'titles', 'searchTitles', 'langs', 'qualities', 'tags', 'categoryIds', 'posters', 'backdrops', 'exts', 'plots', 'casts', 'directors', 'genres', 'epg', 'searchText'] as const
-export type Wire = Omit<Columnar, (typeof STRING_COLS)[number]> & { wire: true; bytes: Record<(typeof STRING_COLS)[number], Uint8Array> }
-export function toWire(col: Columnar): { wire: Wire; transfer: ArrayBuffer[] } {
-  const enc = new TextEncoder()
-  const bytes = {} as Wire['bytes']
-  const transfer: ArrayBuffer[] = []
-  for (const k of STRING_COLS) { const b = enc.encode((col[k] as string | undefined) ?? ''); bytes[k] = b; transfer.push(b.buffer as ArrayBuffer) }
-  const rest = { ...col } as Record<string, unknown>
-  for (const k of STRING_COLS) delete rest[k]
-  const wire = { ...(rest as Omit<Columnar, (typeof STRING_COLS)[number]>), wire: true as const, bytes }
-  for (const k of ['kinds', 'streamIds', 'years', 'seasons', 'episodes', 'tmdbIds', 'ratings', 'added', 'flags', 'searchOffsets'] as const) { const v = wire[k]; if (v) transfer.push(v.buffer as ArrayBuffer) }
-  return { wire, transfer }
-}
-export function fromWire(w: Wire): Columnar {
-  const dec = new TextDecoder()
-  const out = { ...w } as unknown as Record<string, unknown>
-  delete out.wire; delete out.bytes
-  for (const k of STRING_COLS) out[k] = dec.decode(w.bytes[k])
-  return out as unknown as Columnar
-}
