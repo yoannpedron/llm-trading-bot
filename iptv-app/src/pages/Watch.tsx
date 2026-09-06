@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useProgress } from '../store/progress'
+import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
 import { useSession } from '../store/session'
@@ -13,14 +15,22 @@ export default function Watch() {
   const client = useCatalog((s) => s.client)
   const mode = useSession((s) => s.mode)
   const setBackdrop = useUi((s) => s.setBackdrop)
+  const nav = useNavigate()
+  const progress = useProgress()
   useEffect(() => { setBackdrop(undefined) }, [setBackdrop])
+  const ep = params.get('ep') ?? undefined
+  const startAt = progress.map[id]?.ep === ep ? progress.map[id]?.t : undefined
+  const onProgress = useCallback((t: number, d: number) => progress.save(id, { t, d, ep, ext: params.get('ext') ?? undefined }), [id, ep, params, progress])
+  // next episode: series info gives the ordered episode list
+  const seriesInfo = useQuery<XtreamSeriesInfo | undefined>({ queryKey: ['series-info', id], queryFn: () => client!.seriesInfo(item!.streamId), enabled: !!client && item?.kind === 'series' && !!ep, staleTime: 10 * 60 * 1000 })
+  const nextEp = useMemo(() => { const all = Object.values(seriesInfo.data?.episodes ?? {}).flat(); const i = all.findIndex((e) => e.id === ep); return i >= 0 ? all[i + 1] : undefined }, [seriesInfo.data, ep])
+  const onEnded = useCallback(() => { progress.clear(id); if (nextEp) nav(`/watch/${id}?ep=${nextEp.id}&ext=${nextEp.container_extension}`, { replace: true }) }, [progress, id, nextEp, nav])
   const epg = useQuery({ queryKey: ['epg', id], queryFn: () => client!.shortEpg(item!.streamId), enabled: !!client && item?.kind === 'live', refetchInterval: 5 * 60 * 1000 })
 
   if (!item) return <p className="p-24">Introuvable.</p>
 
   let src: string | undefined
   if (client) {
-    const ep = params.get('ep')
     if (item.kind === 'live') src = client.liveUrl(item.streamId)
     else if (ep) src = client.episodeUrl(ep, params.get('ext') ?? 'mp4')
     else if (item.id.startsWith('movie:')) src = client.movieUrl(item.streamId, item.ext)
@@ -34,7 +44,7 @@ export default function Watch() {
         {item.kind !== 'live' && <Link to={`/details/${item.id}`} className="ml-auto text-sm text-white/60 hover:text-white">Détails →</Link>}
       </div>
       {src ? (
-        <Player src={src} title={item.title} />
+        <Player src={src} title={item.title} startAt={startAt} onProgress={item.kind === 'live' ? undefined : onProgress} onEnded={onEnded} />
       ) : (
         <div className="flex aspect-video items-center justify-center rounded-xl bg-white/5 text-center text-white/60">
           {mode === 'mock' ? (
@@ -44,6 +54,7 @@ export default function Watch() {
           )}
         </div>
       )}
+      {nextEp && <p className="mt-3 text-sm text-white/60">Épisode suivant : <Link to={`/watch/${id}?ep=${nextEp.id}&ext=${nextEp.container_extension}`} className="underline">{nextEp.title}</Link> (lecture automatique à la fin)</p>}
       {item.kind === 'live' && epg.data?.length ? (
         <section className="mt-5">
           <h3 className="mb-2 font-display text-base font-bold">Guide des programmes</h3>

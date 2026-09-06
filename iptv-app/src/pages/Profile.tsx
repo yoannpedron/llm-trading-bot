@@ -12,6 +12,7 @@ export default function Profile({ onboarding }: { onboarding?: boolean }) {
   const [uiLang, setUiLang] = useState<UiLang>(p.uiLang)
   const [langs, setLangs] = useState<string[]>(p.contentLangs)
   const [region, setRegion] = useState(p.region)
+  const [kids, setKids] = useState(p.kids)
 
   /** Provider prefixes actually present, with counts, so the choice reflects this server. */
   const available = useMemo(() => {
@@ -21,7 +22,7 @@ export default function Profile({ onboarding }: { onboarding?: boolean }) {
   }, [catalog])
 
   const toggle = (l: string) => setLangs((ls) => ls.includes(l) ? ls.filter((x) => x !== l) : [...ls, l])
-  const save = () => { p.set({ uiLang, contentLangs: langs.length ? langs : ['EN'], region, onboarded: true }); rebuild(langs.length ? langs : ['EN']); nav('/') }
+  const save = () => { p.set({ uiLang, contentLangs: langs.length ? langs : ['EN'], region, kids, onboarded: true }); rebuild(langs.length ? langs : ['EN']); nav('/') }
 
   return (
     <div className="mx-auto max-w-3xl px-6 pb-24 pt-24 md:px-12">
@@ -53,6 +54,9 @@ export default function Profile({ onboarding }: { onboarding?: boolean }) {
       <div className="flex flex-wrap gap-2">
         {REGIONS.map((r) => <button key={r} onClick={() => setRegion(r)} className={`h-9 rounded-full px-3.5 text-sm ${region === r ? 'bg-white text-black font-semibold' : 'bg-white/10 hover:bg-white/20'}`}>{r}</button>)}
       </div>
+
+      <h2 className="mb-3 mt-10 font-display text-lg font-bold">Mode enfant</h2>
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={kids} onChange={(e) => setKids(e.target.checked)} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Limiter l'accueil aux rangées animation, famille et anime. Le contenu adulte n'est jamais affiché, quel que soit le mode.</span></label>
 
       <div className="mt-12 flex gap-3">
         <button onClick={save} className="h-11 rounded-lg bg-white px-6 font-semibold text-black">Enregistrer</button>

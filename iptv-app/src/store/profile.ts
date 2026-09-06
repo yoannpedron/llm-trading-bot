@@ -35,11 +35,13 @@ interface Profile {
   contentLangs: string[]
   region: string
   onboarded: boolean
+  /** Kids mode: animation & family rows only, adult never shown */
+  kids: boolean
   set: (p: Partial<Profile>) => void
 }
 
 export const useProfile = create<Profile>()(persist((set) => ({
-  uiLang: 'fr', contentLangs: ['FR', 'EN', 'AR'], region: 'FR', onboarded: false,
+  uiLang: 'fr', contentLangs: ['FR', 'EN', 'AR'], region: 'FR', onboarded: false, kids: false,
   set: (p) => set(p),
 }), { name: 'iptv-profile' }))
 
