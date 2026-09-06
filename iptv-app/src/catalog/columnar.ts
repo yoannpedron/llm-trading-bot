@@ -18,9 +18,50 @@ export interface Columnar {
   rawNames: string; titles: string; searchTitles: string /* empty = same as title */; langs: string; qualities: string; tags: string
   categoryIds: string; posters: string; backdrops: string; exts: string; plots: string; casts: string; directors: string; genres: string; epg: string
   categories: Category[]
+  /** case-folded search text + offsets, built once, persisted with the snapshot */
+  searchText?: string
+  searchOffsets?: Uint32Array
 }
 export const SEP = '', TAGSEP = ''
 const KIND: Kind[] = ['movie', 'series', 'live']
+
+/** Builds the columnar form incrementally while lists stream in, so no 300k-object array and no final pack step. */
+export class ColumnarBuilder {
+  n = 0
+  private num: Record<string, number[]> = { kinds: [], streamIds: [], years: [], seasons: [], episodes: [], tmdbIds: [], ratings: [], added: [], flags: [] }
+  private cols: Record<string, string[]> = { rawNames: [], titles: [], searchTitles: [], langs: [], qualities: [], tags: [], categoryIds: [], posters: [], backdrops: [], exts: [], plots: [], casts: [], directors: [], genres: [], epg: [] }
+  private search: string[] = []
+  push(it: MediaItem) {
+    const N = this.num, C = this.cols
+    N.kinds.push(KIND.indexOf(it.kind)); N.streamIds.push(it.streamId); N.years.push(it.year ?? 0); N.seasons.push(it.season ?? 0); N.episodes.push(it.episode ?? 0)
+    N.tmdbIds.push(it.tmdbId ?? 0); N.ratings.push(Math.min(255, Math.round((it.rating ?? 0) * 10))); N.added.push(it.added ?? 0); N.flags.push((it.isAdult ? 1 : 0) | (it.tvArchive ? 2 : 0))
+    C.rawNames.push(it.rawName); C.titles.push(it.title); C.searchTitles.push(it.searchTitle === it.title ? '' : it.searchTitle); C.langs.push(it.lang ?? ''); C.qualities.push(it.quality ?? '')
+    C.tags.push(it.tags.join(TAGSEP)); C.categoryIds.push(it.categoryId); C.posters.push(it.poster ?? ''); C.backdrops.push(it.backdrop ?? ''); C.exts.push(it.ext ?? '')
+    C.plots.push(it.plot ?? ''); C.casts.push(it.cast ?? ''); C.directors.push(it.director ?? ''); C.genres.push(it.genre ?? ''); C.epg.push(it.epgChannelId ?? '')
+    this.search.push((it.title + ' ' + it.rawName).toLowerCase())
+    this.n++
+  }
+  build(categories: Category[]): Columnar {
+    const N = this.num, C = this.cols, j = (k: string) => C[k].join(SEP)
+    const offsets = new Uint32Array(this.n + 1); let pos = 0
+    for (let i = 0; i < this.n; i++) { offsets[i] = pos; pos += this.search[i].length + 1 }
+    offsets[this.n] = pos
+    return { v: 1, n: this.n, generatedAt: Date.now(), kinds: Uint8Array.from(N.kinds), streamIds: Uint32Array.from(N.streamIds), years: Uint16Array.from(N.years), seasons: Uint8Array.from(N.seasons), episodes: Uint16Array.from(N.episodes), tmdbIds: Uint32Array.from(N.tmdbIds), ratings: Uint8Array.from(N.ratings), added: Uint32Array.from(N.added), flags: Uint8Array.from(N.flags),
+      rawNames: j('rawNames'), titles: j('titles'), searchTitles: j('searchTitles'), langs: j('langs'), qualities: j('qualities'), tags: j('tags'), categoryIds: j('categoryIds'), posters: j('posters'), backdrops: j('backdrops'), exts: j('exts'), plots: j('plots'), casts: j('casts'), directors: j('directors'), genres: j('genres'), epg: j('epg'), categories, searchText: this.search.join('\n'), searchOffsets: offsets }
+  }
+}
+
+/** Heavy, rarely-read columns (plot, cast, director, genre) are split lazily on first access. */
+export class ExtraColumns {
+  private cache: Partial<Record<'plots' | 'casts' | 'directors' | 'genres', string[]>> = {}
+  private col: Pick<Columnar, 'plots' | 'casts' | 'directors' | 'genres'>
+  constructor(col: Pick<Columnar, 'plots' | 'casts' | 'directors' | 'genres'>) { this.col = col }
+  private get(k: 'plots' | 'casts' | 'directors' | 'genres') { return (this.cache[k] ??= this.col[k].split(SEP)) }
+  of(i: number): { plot?: string; cast?: string; director?: string; genre?: string } {
+    const u = (x: string) => (x === '' ? undefined : x)
+    return { plot: u(this.get('plots')[i]), cast: u(this.get('casts')[i]), director: u(this.get('directors')[i]), genre: u(this.get('genres')[i]) }
+  }
+}
 
 export function pack(c: Catalog): Columnar {
   const n = c.items.length
@@ -35,7 +76,7 @@ export function pack(c: Catalog): Columnar {
   })
   const j = (k: string) => cols[k].join(SEP)
   return { v: 1, n, generatedAt: c.generatedAt, kinds, streamIds, years, seasons, episodes, tmdbIds, ratings, added, flags,
-    rawNames: j('rawNames'), titles: j('titles'), searchTitles: j('searchTitles'), langs: j('langs'), qualities: j('qualities'), tags: j('tags'), categoryIds: j('categoryIds'), posters: j('posters'), backdrops: j('backdrops'), exts: j('exts'), plots: j('plots'), casts: j('casts'), directors: j('directors'), genres: j('genres'), epg: j('epg'), categories: c.categories }
+    rawNames: j('rawNames'), titles: j('titles'), searchTitles: j('searchTitles'), langs: j('langs'), qualities: j('qualities'), tags: j('tags'), categoryIds: j('categoryIds'), posters: j('posters'), backdrops: j('backdrops'), exts: j('exts'), plots: j('plots'), casts: j('casts'), directors: j('directors'), genres: j('genres'), epg: j('epg'), categories: c.categories, ...(() => { const si = buildSearchIndex(c.items); return { searchText: si.text, searchOffsets: si.offsets } })() }
 }
 
 export function unpack(col: Columnar): Catalog {
@@ -78,7 +119,7 @@ export function unpack(col: Columnar): Catalog {
 /** Same as unpack, but yields to the event loop every `step` items so a 300k restore never freezes the UI thread. */
 export async function unpackAsync(col: Columnar, step = 25_000, onProgress?: (done: number, total: number) => void): Promise<Catalog> {
   const s = (k: keyof Columnar) => (col[k] as string).split(SEP)
-  const rawNames = s('rawNames'), titles = s('titles'), searchTitles = s('searchTitles'), langs = s('langs'), qualities = s('qualities'), tags = s('tags'), categoryIds = s('categoryIds'), posters = s('posters'), backdrops = s('backdrops'), exts = s('exts'), plots = s('plots'), casts = s('casts'), directors = s('directors'), genres = s('genres'), epg = s('epg')
+  const rawNames = s('rawNames'), titles = s('titles'), searchTitles = s('searchTitles'), langs = s('langs'), qualities = s('qualities'), tags = s('tags'), categoryIds = s('categoryIds'), posters = s('posters'), backdrops = s('backdrops'), exts = s('exts'), epg = s('epg')
   const EMPTY: string[] = []
   const items: MediaItem[] = new Array(col.n)
   const byCategory: Record<string, number[]> = {}
@@ -98,10 +139,6 @@ export async function unpackAsync(col: Columnar, step = 25_000, onProgress?: (do
     if (posters[i]) it.poster = posters[i]
     if (backdrops[i]) it.backdrop = backdrops[i]
     if (exts[i]) it.ext = exts[i]
-    if (plots[i]) it.plot = plots[i]
-    if (casts[i]) it.cast = casts[i]
-    if (directors[i]) it.director = directors[i]
-    if (genres[i]) it.genre = genres[i]
     if (epg[i]) it.epgChannelId = epg[i]
     if (kind === 'live') it.tvArchive = !!(col.flags[i] & 2)
     items[i] = it; counts[kind]++
@@ -136,3 +173,25 @@ function open(): Promise<IDBDatabase> { return new Promise((res, rej) => { const
 export async function saveSnapshot(key: string, col: Columnar): Promise<void> { const d = await open(); await new Promise<void>((res, rej) => { const t = d.transaction(STORE, 'readwrite'); t.objectStore(STORE).put(col, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error) }); d.close() }
 export async function loadSnapshot(key: string): Promise<Columnar | undefined> { try { const d = await open(); const v = await new Promise<Columnar | undefined>((res) => { const r = d.transaction(STORE).objectStore(STORE).get(key); r.onsuccess = () => res(r.result); r.onerror = () => res(undefined) }); d.close(); return v?.v === 1 ? v : undefined } catch { return undefined } }
 export async function clearSnapshots(): Promise<void> { try { const d = await open(); await new Promise<void>((res) => { const t = d.transaction(STORE, 'readwrite'); t.objectStore(STORE).clear(); t.oncomplete = () => res(); t.onerror = () => res() }); d.close() } catch { /* ignore */ } }
+
+/* ---- wire format: string columns as transferable UTF-8 buffers (zero-copy between worker and UI) ---- */
+const STRING_COLS = ['rawNames', 'titles', 'searchTitles', 'langs', 'qualities', 'tags', 'categoryIds', 'posters', 'backdrops', 'exts', 'plots', 'casts', 'directors', 'genres', 'epg', 'searchText'] as const
+export type Wire = Omit<Columnar, (typeof STRING_COLS)[number]> & { wire: true; bytes: Record<(typeof STRING_COLS)[number], Uint8Array> }
+export function toWire(col: Columnar): { wire: Wire; transfer: ArrayBuffer[] } {
+  const enc = new TextEncoder()
+  const bytes = {} as Wire['bytes']
+  const transfer: ArrayBuffer[] = []
+  for (const k of STRING_COLS) { const b = enc.encode((col[k] as string | undefined) ?? ''); bytes[k] = b; transfer.push(b.buffer as ArrayBuffer) }
+  const rest = { ...col } as Record<string, unknown>
+  for (const k of STRING_COLS) delete rest[k]
+  const wire = { ...(rest as Omit<Columnar, (typeof STRING_COLS)[number]>), wire: true as const, bytes }
+  for (const k of ['kinds', 'streamIds', 'years', 'seasons', 'episodes', 'tmdbIds', 'ratings', 'added', 'flags', 'searchOffsets'] as const) { const v = wire[k]; if (v) transfer.push(v.buffer as ArrayBuffer) }
+  return { wire, transfer }
+}
+export function fromWire(w: Wire): Columnar {
+  const dec = new TextDecoder()
+  const out = { ...w } as unknown as Record<string, unknown>
+  delete out.wire; delete out.bytes
+  for (const k of STRING_COLS) out[k] = dec.decode(w.bytes[k])
+  return out as unknown as Columnar
+}

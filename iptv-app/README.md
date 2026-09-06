@@ -69,6 +69,18 @@ Le routage utilise en priorité les trois endpoints Xtream (`get_vod_streams`, `
 Priorité au `tmdb` fourni par le provider (85 % des films, 88 % des séries du provider testé), sinon recherche `searchTitle + year`. Une seule requête par titre :
 `/movie/{id}?append_to_response=credits,images,similar,videos&include_image_language=fr,en,null` → jaquette, backdrop, logo détouré (fr > en > neutre), synopsis, casting, réalisateur, genres, similaires, bande-annonce. Les « similaires » sont remappés vers les titres présents dans le catalogue du provider.
 
+## Performance mesurée (catalogue réel de 296 000 entrées, build de production, Chromium)
+
+| Phase | Mesure |
+|---|---|
+| Premier démarrage, interface utilisable (chaînes + séries) | 7,6 s |
+| Premier démarrage, catalogue complet | 20 à 25 s, borné par le serveur qui met 13 à 20 s à envoyer 86 Mo de films non compressés |
+| Redémarrage depuis l'instantané local | 2,6 s |
+| Recherche sur 296 000 titres | 8 ms de calcul, 140 ms affichés |
+| Mise à jour du catalogue | en arrière-plan, interface utilisable pendant toute la durée |
+
+Mécanismes : instantané colonnaire dans IndexedDB (typed arrays + colonnes texte), transfert worker → interface en tampons UTF-8 sans copie, parsing JSON incrémental pendant le téléchargement, catalogues partiels au premier démarrage, restauration par tranches sans bloquer l'interface, index de recherche persistant, index TMDB différé après le premier rendu, polices auto-hébergées (aucune requête bloquante vers un tiers).
+
 ## Performance
 
 - Parsing des 300k entrées dans un Web Worker (UI jamais bloquée).

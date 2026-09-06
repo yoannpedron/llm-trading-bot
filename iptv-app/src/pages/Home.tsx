@@ -12,6 +12,15 @@ import type { ListRow } from '../api/tmdbLists'
 import type { Kind } from '../types'
 
 const KIDS = /Animation|Familial|Anime|Enfant|Kids/i
+/** Top-n by score in one pass (no full sort of 190k items). Items scoring < 0 are skipped. */
+function topN<T>(items: T[], n: number, score: (x: T) => number): T[] {
+  const best: { s: number; x: T }[] = []
+  let min = -1
+  for (const x of items) { const s = score(x); if (s < 0 || (best.length >= n && s <= min)) continue; best.push({ s, x }); best.sort((a, b) => b.s - a.s); if (best.length > n) best.pop(); min = best[best.length - 1].s }
+  return best.map((b) => b.x)
+}
+const eventCache = new Map<string, ReturnType<typeof parseEvent>>()
+const cachedEvent = (raw: string, now: Date) => { let e = eventCache.get(raw); if (e === undefined && !eventCache.has(raw)) { e = parseEvent(raw, now); eventCache.set(raw, e) } return e }
 
 export default function Home() {
   const catalog = useCatalog((s) => s.catalog)!
@@ -23,7 +32,7 @@ export default function Home() {
 
   /** Fallback rows straight from the provider (no TMDB key, or TMDB down). */
   const providerRows = useMemo<ListRow[]>(() => {
-    const recent = (kind: Kind, n: number) => catalog.items.filter((i) => i.kind === kind && i.poster).sort((a, b) => (b.added ?? 0) - (a.added ?? 0)).slice(0, n)
+    const recent = (kind: Kind, n: number) => topN(catalog.items, n, (i) => (i.kind === kind && i.poster ? i.added ?? 0 : -1))
     const top = (kind: Kind) => catalog.categories.filter((c) => c.kind === kind).map((c) => ({ c, idx: catalog.byCategory[kind + ':' + c.id] ?? [] })).sort((a, b) => b.idx.length - a.idx.length).slice(0, 4)
       .map(({ c, idx }) => ({ key: c.id, kind, type: 'row' as const, name: c.name, items: idx.slice(0, 40).map((i) => catalog.items[i]) }))
     const rows: ListRow[] = [
@@ -38,8 +47,8 @@ export default function Home() {
   const { hiddenRows, pinnedRows, rowOrder, renamedRows } = useSettings()
   const matches = useMemo<ListRow | undefined>(() => {
     const now = new Date(); const soon = now.getTime() + 60 * 60000
-    const items = catalog.items.filter((i) => { if (i.kind !== 'live') return false; const e = parseEvent(i.rawName, now); return !!e && !!e.start && (e.status === 'live' || (e.status === 'next' && e.start.getTime() <= soon)) })
-      .sort((a, b) => (parseEvent(a.rawName, now)!.start!.getTime()) - (parseEvent(b.rawName, now)!.start!.getTime())).slice(0, 30)
+    const items = catalog.items.filter((i) => { if (i.kind !== 'live' || !/^\s*(next|live)\s*\|/i.test(i.rawName)) return false; const e = cachedEvent(i.rawName, now); return !!e && !!e.start && (e.status === 'live' || (e.status === 'next' && e.start.getTime() <= soon)) })
+      .sort((a, b) => (cachedEvent(a.rawName, now)!.start!.getTime()) - (cachedEvent(b.rawName, now)!.start!.getTime())).slice(0, 30)
     return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs', sub: 'En direct et dans l’heure', items } : undefined
   }, [catalog])
   const list = useMemo(() => {

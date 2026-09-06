@@ -5,7 +5,7 @@ import type { WorkerIn, WorkerOut } from '../workers/catalog.worker'
 import CatalogWorker from '../workers/catalog.worker?worker'
 import { buildTmdbIndex, type TmdbIndex } from '../api/tmdbLists'
 import { useSettings } from './settings'
-import { searchIndex, unpackAsync, type SearchIndex } from '../catalog/columnar'
+import { ExtraColumns, fromWire, searchIndex, unpackAsync, type SearchIndex } from '../catalog/columnar'
 
 type Status = 'idle' | 'loading' | 'parsing' | 'ready' | 'error'
 
@@ -22,6 +22,8 @@ interface CatalogState {
   byId: Map<string, number>
   tmdbIndex: TmdbIndex
   searchIdx?: SearchIndex
+  /** plot / cast / director / genre, restored on demand */
+  extra: (item: MediaItem) => { plot?: string; cast?: string; director?: string; genre?: string }
   load: (mode: 'mock' | 'live', creds?: XtreamCredentials, includeAdult?: boolean, forceRefresh?: boolean) => Promise<void>
   rebuildIndex: (contentLangs: string[]) => void
   item: (id: string) => MediaItem | undefined
@@ -31,12 +33,14 @@ interface CatalogState {
 
 let worker: Worker | undefined
 let applying = 0
+let extraCols: ExtraColumns | undefined
 
 export const useCatalog = create<CatalogState>()((set, get) => ({
   status: 'idle',
   progress: '',
   refreshing: false,
   byId: new Map(),
+  extra: (item) => { const i = get().byId.get(item.id); return i === undefined ? {} : extraCols?.of(i) ?? {} },
   tmdbIndex: { best: new Map(), versions: new Map(), fourK: new Set(), added: new Map(), all: new Map() },
 
   async load(mode, creds, includeAdult, forceRefresh) {
@@ -49,15 +53,23 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
       const msg = e.data
       if (msg.type === 'progress') { set({ progress: msg.text }); return }
       if (msg.type === 'error') { set(get().catalog ? { refreshing: false, progress: '' } : { status: 'error', error: msg.message, refreshing: false }); return }
-      if (msg.type === 'refreshed') { set({ refreshing: false, progress: '' }); return }
+      if (msg.type === 'refreshed') { set({ refreshing: false, progress: '', lastDiff: msg.diff ? { ...msg.diff, at: Date.now() } : get().lastDiff }); return }
       // catalogue: restore objects in slices so the UI thread never freezes
       const gen = ++applying
+      const t0 = performance.now()
+      console.info(`[catalog] ${msg.source} received at ${(t0 / 1000).toFixed(2)}s since page start`)
       if (!get().catalog) set({ status: 'parsing', progress: msg.source === 'snapshot' ? 'Restauration du catalogue…' : 'Préparation…' })
-      const catalog = await unpackAsync(msg.col, 30_000)
+      const col = fromWire(msg.col)
+      const catalog = await unpackAsync(col, 30_000)
       if (gen !== applying) return
       const byId = new Map<string, number>()
       catalog.items.forEach((it, i) => byId.set(it.id, i))
-      set({ status: 'ready', catalog, source: msg.source, byId, searchIdx: msg.search, tmdbIndex: buildTmdbIndex(visibleItems(catalog.items)), progress: msg.source === 'partial' ? 'Téléchargement des films en cours…' : get().progress, lastDiff: msg.diff ? { ...msg.diff, at: Date.now() } : get().lastDiff })
+      extraCols = new ExtraColumns(col)
+      console.info(`[catalog] ${msg.source}: unpack ${(performance.now() - t0).toFixed(0)} ms, ${catalog.items.length} items, ready at ${(performance.now() / 1000).toFixed(2)}s`)
+      requestAnimationFrame(() => console.info(`[catalog] first frame after ready at ${(performance.now() / 1000).toFixed(2)}s`))
+      // ready now; the TMDB index (0.5 s on 300k) is built right after the first paint
+      set({ status: 'ready', catalog, source: msg.source, byId, searchIdx: col.searchText && col.searchOffsets ? { text: col.searchText, offsets: col.searchOffsets } : undefined, progress: msg.source === 'partial' ? 'Téléchargement des films en cours…' : get().progress, lastDiff: msg.diff ? { ...msg.diff, at: Date.now() } : get().lastDiff })
+      setTimeout(() => { if (gen !== applying) return; const t1 = performance.now(); set({ tmdbIndex: buildTmdbIndex(visibleItems(catalog.items)) }); console.info(`[catalog] tmdb index ${(performance.now() - t1).toFixed(0)} ms`) }, 0)
     }
     const base = creds ? proxied(creds.url) : undefined
     worker.postMessage({ type: 'load', mode, base, username: creds?.username, password: creds?.password, includeAdult, key, forceRefresh } satisfies WorkerIn)

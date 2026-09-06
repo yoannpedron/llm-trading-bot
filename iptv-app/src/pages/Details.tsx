@@ -17,6 +17,8 @@ export default function Details() {
   const client = useCatalog((s) => s.client)
   const catalog = useCatalog((s) => s.catalog)!
   const idx = useCatalog((s) => s.tmdbIndex)
+  const extraOf = useCatalog((s) => s.extra)
+  const ex = item ? extraOf(item) : {}
   const tkey = item ? item.kind + ':' + item.tmdbId : ''
   const versions = idx.versions.get(tkey) ?? (item?.lang ? [item.lang] : [])
   const is4k = idx.fourK.has(tkey)
@@ -125,9 +127,9 @@ export default function Details() {
         </div>
         <aside className="space-y-3 text-sm">
           <Row k="Titre original" v={data?.originalTitle} />
-          <Row k="Réalisateur" v={data?.director ?? item.director} />
+          <Row k="Réalisateur" v={data?.director ?? ex.director} />
           <Row k="Créateurs" v={data?.creators?.join(', ')} />
-          <Row k="Genres" v={data?.genres.join(', ') ?? item.genre} />
+          <Row k="Genres" v={data?.genres.join(', ') ?? ex.genre} />
           <Row k="Année" v={data?.year ?? item.year} />
           <Row k="Note TMDB" v={data?.rating ? `${data.rating.toFixed(1)} / 10 (${data.votes} votes)` : undefined} />
           <Row k="Statut" v={data?.status} />

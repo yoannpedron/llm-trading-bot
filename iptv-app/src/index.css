@@ -1,8 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+@import "@fontsource-variable/outfit";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit Variable", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 }
 @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }

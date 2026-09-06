@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
 import { useEnrich } from '../hooks/useEnrich'
 import { useUi } from '../store/ui'
+import { useCatalog } from '../store/catalog'
 
 interface Props { item?: MediaItem; compact?: boolean }
 
@@ -14,6 +15,8 @@ interface Props { item?: MediaItem; compact?: boolean }
 export default function Hero({ item, compact }: Props) {
   const { data } = useEnrich(item)
   const setBackdrop = useUi((s) => s.setBackdrop)
+  const extra = useCatalog((s) => s.extra)
+  const ex = item ? extra(item) : {}
 
   useEffect(() => {
     if (!item) return
@@ -31,7 +34,7 @@ export default function Hero({ item, compact }: Props) {
     data?.rating ? `★ ${data.rating.toFixed(1)}` : item.rating ? `★ ${item.rating.toFixed(1)}` : undefined,
     item.lang, item.quality,
   ].filter(Boolean)
-  const genres = data?.genres.length ? data.genres : item.genre?.split(/\s*[/,]\s*/) ?? []
+  const genres = data?.genres.length ? data.genres : ex.genre?.split(/\s*[/,]\s*/) ?? []
 
   return (
     <div className={`relative flex flex-col justify-end px-8 ${compact ? 'h-72 pt-20' : 'h-[62vh] pt-24 pb-8'}`}>
@@ -55,7 +58,7 @@ export default function Hero({ item, compact }: Props) {
             {genres.length > 0 && <span className="ml-3 text-white/50">{genres.slice(0, 4).join(', ')}</span>}
           </p>
           {!compact && (
-            <p className="text-shadow line-clamp-3 text-sm leading-relaxed text-white/85">{data?.overview ?? item.plot}</p>
+            <p className="text-shadow line-clamp-3 text-sm leading-relaxed text-white/85">{data?.overview ?? ex.plot}</p>
           )}
           {!compact && (
             <div className="mt-5 flex gap-3">
