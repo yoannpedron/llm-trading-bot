@@ -14,6 +14,8 @@ import Search from './pages/Search'
 import MyList from './pages/MyList'
 import Collection from './pages/Collection'
 import Profile from './pages/Profile'
+import Live from './pages/Live'
+import Sport from './pages/Sport'
 import { UI_LANGS, useProfile } from './store/profile'
 
 export default function App() {
@@ -37,7 +39,8 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/movies" element={<Browse kind="movie" />} />
             <Route path="/series" element={<Browse kind="series" />} />
-            <Route path="/live" element={<Browse kind="live" />} />
+            <Route path="/live" element={<Live />} />
+            <Route path="/sport" element={<Sport />} />
             <Route path="/search" element={<Search />} />
             <Route path="/list" element={<MyList />} />
             <Route path="/collection/:id" element={<Collection />} />

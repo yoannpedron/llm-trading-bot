@@ -22,6 +22,9 @@ export interface XtreamVodInfo {
   movie_data: { stream_id: number; name: string; container_extension: string }
 }
 
+export interface EpgEntry { title: string; description: string; start: Date; end: Date }
+function b64(s: string) { try { return decodeURIComponent(escape(atob(s))) } catch { return s } }
+
 /** In dev everything goes through the Vite proxy (see vite.config.ts). */
 export function proxied(base: string): string {
   if (import.meta.env.VITE_XTREAM_DIRECT === '1' || !import.meta.env.DEV) return base.replace(/\/+$/, '')
@@ -61,6 +64,15 @@ export class XtreamClient {
     return { vodCategories, seriesCategories, liveCategories, vod, series, live }
   }
 
+  /** Short EPG: now + next programmes. Titles/descriptions are base64 in Xtream. */
+  async shortEpg(streamId: number, limit = 6): Promise<EpgEntry[]> {
+    const r = await this.get<{ epg_listings?: { title: string; description: string; start: string; end: string; start_timestamp?: string; stop_timestamp?: string }[] }>({ action: 'get_short_epg', stream_id: streamId, limit })
+    return (r.epg_listings ?? []).map((e) => ({
+      title: b64(e.title), description: b64(e.description),
+      start: e.start_timestamp ? new Date(+e.start_timestamp * 1000) : new Date(e.start.replace(' ', 'T')),
+      end: e.stop_timestamp ? new Date(+e.stop_timestamp * 1000) : new Date(e.end.replace(' ', 'T')),
+    }))
+  }
   vodInfo(vodId: number) { return this.get<XtreamVodInfo>({ action: 'get_vod_info', vod_id: vodId }) }
   seriesInfo(seriesId: number) { return this.get<XtreamSeriesInfo>({ action: 'get_series_info', series_id: seriesId }) }
 

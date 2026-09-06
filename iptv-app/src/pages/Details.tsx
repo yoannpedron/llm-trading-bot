@@ -18,6 +18,7 @@ export default function Details() {
   const tkey = item ? item.kind + ':' + item.tmdbId : ''
   const versions = idx.versions.get(tkey) ?? (item?.lang ? [item.lang] : [])
   const is4k = idx.fourK.has(tkey)
+  const editions = (idx.all.get(tkey) ?? (item ? [item] : [])).filter((e) => e.id.startsWith(item?.kind === 'series' ? 'series:' : 'movie:'))
   const setFocused = useUi((s) => s.setFocused)
   const { data, isLoading } = useEnrich(item)
   const list = useMyList()
@@ -118,7 +119,7 @@ export default function Details() {
           <Row k="Année" v={data?.year ?? item.year} />
           <Row k="Note TMDB" v={data?.rating ? `${data.rating.toFixed(1)} / 10 (${data.votes} votes)` : undefined} />
           <Row k="Statut" v={data?.status} />
-          <div><p className="text-[11px] uppercase tracking-wide text-white/40">Versions sur le serveur</p><div className="mt-1 flex flex-wrap gap-1.5">{versions.map((v) => <span key={v} className="rounded bg-white/10 px-2 py-0.5 text-xs font-semibold">{v}</span>)}{is4k && <span className="rounded border border-amber-400 px-2 py-0.5 text-xs font-bold text-amber-400">4K / UHD</span>}</div></div>
+          <div><p className="text-[11px] uppercase tracking-wide text-white/40">Regarder en</p><div className="mt-1 flex flex-wrap gap-1.5">{editions.map((e) => <Link key={e.id} to={`/watch/${e.id}`} title={e.rawName} className={`rounded px-2 py-1 text-xs font-semibold ${e.id === item.id ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20'}`}>{e.lang ?? 'VO'}{e.quality ? ` · ${e.quality}` : ''}{e.tags.some((t) => /SUB|VOST/.test(t)) ? ' · ST' : ''}</Link>)}{is4k && <span className="rounded border border-amber-400 px-2 py-1 text-xs font-bold text-amber-400">4K</span>}</div>{versions.length > editions.length && <p className="mt-1 text-[11px] text-white/40">{versions.length} versions au total</p>}</div>
           <Row k="Qualité" v={item.quality} />
           <Row k="Tags" v={item.tags.join(', ')} />
           <Row k="Nom brut" v={item.rawName} mono />

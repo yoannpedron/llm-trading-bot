@@ -17,6 +17,7 @@ export interface TmdbIndex {
   versions: Map<string, string[]>         // all language versions on the server
   fourK: Set<string>                      // keys available in 4K/UHD
   added: Map<string, number>              // latest `added` timestamp per key
+  all: Map<string, MediaItem[]>           // every provider entry per key (one per language version)
 }
 
 /** Preference order = the profile's content languages, then multi-language packs, then anything. */
@@ -29,7 +30,7 @@ function prefOf(contentLangs: string[]): Record<string, number> {
 
 export function buildTmdbIndex(items: MediaItem[], contentLangs = useProfile.getState().contentLangs): TmdbIndex {
   const PREF = prefOf(contentLangs)
-  const best = new Map<string, MediaItem>(), versions = new Map<string, string[]>(), fourK = new Set<string>(), added = new Map<string, number>()
+  const best = new Map<string, MediaItem>(), versions = new Map<string, string[]>(), fourK = new Set<string>(), added = new Map<string, number>(), all = new Map<string, MediaItem[]>()
   for (const it of items) {
     if (!it.tmdbId || it.kind === 'live') continue
     const k = it.kind + ':' + it.tmdbId
@@ -38,8 +39,9 @@ export function buildTmdbIndex(items: MediaItem[], contentLangs = useProfile.get
     if (it.lang) { const v = versions.get(k) ?? []; if (!v.includes(it.lang)) v.push(it.lang); versions.set(k, v) }
     if (it.lang === '4K' || /^(4K|UHD|2160P)$/.test(it.quality ?? '')) fourK.add(k)
     if (it.added) added.set(k, Math.max(added.get(k) ?? 0, it.added))
+    all.set(k, [...(all.get(k) ?? []), it])
   }
-  return { best, versions, fourK, added }
+  return { best, versions, fourK, added, all }
 }
 
 interface R { id: number; release_date?: string; vote_count?: number; job?: string }

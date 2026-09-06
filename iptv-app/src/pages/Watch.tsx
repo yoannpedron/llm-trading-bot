@@ -4,6 +4,7 @@ import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
 import { useSession } from '../store/session'
 import Player from '../components/Player'
+import { useQuery } from '@tanstack/react-query'
 
 export default function Watch() {
   const { id = '' } = useParams()
@@ -13,6 +14,7 @@ export default function Watch() {
   const mode = useSession((s) => s.mode)
   const setBackdrop = useUi((s) => s.setBackdrop)
   useEffect(() => { setBackdrop(undefined) }, [setBackdrop])
+  const epg = useQuery({ queryKey: ['epg', id], queryFn: () => client!.shortEpg(item!.streamId), enabled: !!client && item?.kind === 'live', refetchInterval: 5 * 60 * 1000 })
 
   if (!item) return <p className="p-24">Introuvable.</p>
 
@@ -42,6 +44,18 @@ export default function Watch() {
           )}
         </div>
       )}
+      {item.kind === 'live' && epg.data?.length ? (
+        <section className="mt-5">
+          <h3 className="mb-2 font-display text-base font-bold">Guide des programmes</h3>
+          <ol className="divide-y divide-white/10">
+            {epg.data.map((e, i) => { const on = e.start <= new Date() && e.end > new Date(); return (
+              <li key={i} className={`flex gap-4 py-2.5 ${on ? '' : 'opacity-60'}`}>
+                <span className="w-24 shrink-0 text-sm tabular-nums text-white/60">{e.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} – {e.end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="min-w-0 flex-1"><span className="block font-medium">{on && <span className="mr-2 rounded bg-red-600 px-1.5 text-[10px] font-bold">EN COURS</span>}{e.title}</span>{e.description && <span className="line-clamp-2 text-xs text-white/50">{e.description}</span>}</span>
+              </li>) })}
+          </ol>
+        </section>
+      ) : null}
       <p className="mt-3 break-all font-mono text-[11px] text-white/30">{src}</p>
     </div>
   )
