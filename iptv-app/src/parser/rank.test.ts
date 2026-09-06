@@ -8,8 +8,9 @@ describe('importance', () => {
     expect(importance(m('UEFA Champions League', 'Villarreal', 'Dortmund'), o)).toBeGreaterThan(importance(m('English Premier League', 'Everton', 'Man United'), o))
     expect(importance(m('French Ligue 1', 'Troyes', 'Strasbourg'), o)).toBeGreaterThan(importance(m('English Premier League', 'Everton', 'Man United'), o))
   })
-  it('favourite team beats everything of the same day, live beats scheduled', () => {
+  it('favourite team beats a scheduled match, a live match beats a scheduled favourite', () => {
     expect(importance(m('French Ligue 1', 'Marseille', 'Paris FC'), o)).toBeGreaterThan(importance(m('UEFA Champions League', 'Villarreal', 'Dortmund'), o))
+    expect(importance(m('Dutch Eredivisie', 'Groningen', 'Twente', 'in'), o)).toBeGreaterThan(importance(m('French Ligue 1', 'Marseille', 'Paris FC'), o))
     expect(importance(m('MLS', 'Orlando', 'Atlanta', 'in'), o)).toBeGreaterThan(importance(m('MLS', 'Orlando', 'Atlanta'), o))
   })
 })
