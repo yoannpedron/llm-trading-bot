@@ -40,7 +40,7 @@ export default function Home() {
     const now = new Date(); const soon = now.getTime() + 60 * 60000
     const items = catalog.items.filter((i) => { if (i.kind !== 'live') return false; const e = parseEvent(i.rawName, now); return !!e && !!e.start && (e.status === 'live' || (e.status === 'next' && e.start.getTime() <= soon)) })
       .sort((a, b) => (parseEvent(a.rawName, now)!.start!.getTime()) - (parseEvent(b.rawName, now)!.start!.getTime())).slice(0, 30)
-    return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs en direct et dans l’heure', sub: 'Événements détectés dans les flux du serveur', items } : undefined
+    return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs en direct et dans l’heure', sub: 'Scores et sources dans le Match Center', items } : undefined
   }, [catalog])
   const list = useMemo(() => {
     const base = [...(rows?.length ? rows : providerRows)]
@@ -60,7 +60,7 @@ export default function Home() {
         {error ? <p className="px-6 text-sm text-red-300 md:px-12">TMDB indisponible ({String(error)}), affichage des catégories serveur.</p> : null}
         {resume && !kids && <Row row={resume} />}
         {kids && <p className="mx-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 md:mx-12">Mode enfant actif : animation et famille uniquement. Désactivable dans le profil.</p>}
-        {list.map((r) => <Row key={r.key} row={r} to={r.kind === 'live' ? '/live' : undefined} />)}
+        {list.map((r) => <Row key={r.key} row={r} to={r.key === 'matches' ? '/sport' : r.kind === 'live' ? '/live' : undefined} />)}
       </div>
     </div>
   )

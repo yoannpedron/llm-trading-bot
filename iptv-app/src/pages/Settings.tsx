@@ -142,7 +142,7 @@ function Categories() {
   const [kind, setKind] = useState<'movie' | 'series' | 'live'>('movie')
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<string>()
-  const langs = useMemo(() => { const c = new Map<string, number>(); for (const it of catalog?.items ?? []) if (it.lang) c.set(it.lang, (c.get(it.lang) ?? 0) + 1); return [...c.entries()].sort((a, b) => b[1] - a[1]) }, [catalog])
+  const langs = useMemo(() => { const c = new Map<string, number>(); for (const it of catalog?.items ?? []) if (it.lang && it.kind !== 'live' && PREFIX_INFO[it.lang]) c.set(it.lang, (c.get(it.lang) ?? 0) + 1); return [...c.entries()].sort((a, b) => b[1] - a[1]) }, [catalog])
   const cats = useMemo(() => (catalog?.categories ?? []).filter((c) => c.kind === kind && (!q || c.rawName.toLowerCase().includes(q.toLowerCase()))).map((c) => ({ c, n: catalog?.byCategory[kind + ':' + c.id]?.length ?? 0, country: countryOf(c.rawName) })), [catalog, kind, q])
   const ordered = useMemo(() => { const pos = (k: string) => { const i = s.rowOrder.indexOf(k); return i < 0 ? 1e6 : i }; return [...(rows ?? [])].sort((a, b) => pos(a.key) - pos(b.key)) }, [rows, s.rowOrder])
   const moveRow = (k: string, d: -1 | 1) => { const keys = ordered.map((r) => r.key); const i = keys.indexOf(k); const j = i + d; if (j < 0 || j >= keys.length) return; [keys[i], keys[j]] = [keys[j], keys[i]]; s.setRowOrder(keys) }

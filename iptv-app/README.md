@@ -24,6 +24,9 @@ npm run lint
 - **Profil international** : langue d'interface (FR, EN, AR avec RTL, DE, ES, PL, TR), langues de contenu par ordre de préférence (détermine la version audio par défaut et fusionne les doublons inter-langues), pays pour les sorties cinéma, hubs par cinématographie (Bollywood, Dizi, K-Drama, Anime, arabe, latino…). Métadonnées TMDB dans la langue de l'interface.
 - **Fiche unique par film** avec sélecteur de version (FR, EN, AR, 4K, sous-titré…).
 - **Live TV par pays et thème**, guide des programmes (EPG Xtream) sur le lecteur, **agenda sport** construit en parsant les flux événementiels datés (`NEXT | ROMA - ATALANTA | Sat 05 Sep 18:35 GMT`).
+- **Match Center** : calendriers et scores en direct ESPN + TheSportsDB (sans clé), rapprochement flou de chaque flux PPV du serveur avec son match, carte par match avec logos, score, minute, meilleur flux selon le profil et bascule automatique en cas d'échec, favoris équipes et compétitions, rappels, multi-match jusqu'à 4 flux, chaînes sport du pays avec EPG. Direct et à venir uniquement.
+- **Accueil dynamique** : rangées du jour (tendances, sorties, ajouts, épisodes), rotation quotidienne (genre, décennie, pays, saga), personnalisation depuis l'historique (parce que tu as regardé, suite de saga, acteurs et réalisateurs, tes séries). Aucune rangée statique.
+- **Paramètres** : comptes Xtream multiples avec état du créneau, langues, rangées masquées/épinglées/renommées/réordonnées, masquage par langue ou catégorie, catalogue, cache, export/import.
 - **Hero avec bande-annonce YouTube** muette, Ma liste, reprise de lecture, "Continuer à regarder", épisode suivant automatique, mode enfant.
 
 ## Architecture
