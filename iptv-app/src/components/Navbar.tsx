@@ -1,7 +1,10 @@
+import { useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useSession } from '../store/session'
 import { useCatalog } from '../store/catalog'
+import { useSettings } from '../store/settings'
+import { useProfile } from '../store/profile'
 import { useT } from '../i18n'
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -11,7 +14,12 @@ export default function Navbar() {
   const nav = useNavigate()
   const [q, setQ] = useState('')
   const mode = useSession((s) => s.mode)
-  const counts = useCatalog((s) => s.catalog?.counts)
+  const catalog = useCatalog((s) => s.catalog)
+  const indicesOf = useCatalog((s) => s.indicesOf)
+  const contentLangs = useProfile((s) => s.contentLangs)
+  const showUnknown = useSettings((s) => s.showUnknownLang)
+  // the viewer's counts (profile languages), not the provider's
+  const counts = useMemo(() => catalog ? { movie: indicesOf('movie').length, series: indicesOf('series').length, live: catalog.counts.live } : undefined, [catalog, indicesOf, contentLangs, showUnknown])
   const refreshing = useCatalog((s) => s.refreshing)
   const source = useCatalog((s) => s.source)
   const t = useT()

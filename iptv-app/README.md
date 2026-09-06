@@ -88,9 +88,17 @@ Les données ne résident pas sous forme d'objets : le catalogue est un jeu de c
 
 Détection automatique (RAM ≤ 2 Go, ≤ 2 cœurs, économiseur de données, réseau 2G, animations réduites) avec réglage manuel dans Paramètres › Données › Affichage. Le palier léger coupe les bandes-annonces, le flou, le zoom du fond et les transitions, charge des affiches TMDB en w342 et des fonds en w780, et réduit le sur-rendu des grilles.
 
-## Pages dynamiques par catégorie
+## Un catalogue par personne : pays → langues
 
-Chaque catégorie serveur (et chaque type entier) a sa propre page construite depuis les données du provider : ajouts récents, mieux notés (top 10), sorties de l'année et de l'année précédente, décennies réellement couvertes, 4K, versions par langue. Une rangée n'existe que si le provider a au moins 8 titres pour elle, et la page passe en simple grille sous 24 titres : le même code produit deux rangées chez un petit provider et douze chez un gros. Les rangées de l'accueil obéissent à la même règle (5 titres minimum pour un top 10, 6 pour une rangée TMDB).
+Au premier lancement l'application demande le pays (40 marchés). Le pays règle la langue de l'interface, les langues du contenu dans l'ordre de préférence (Suisse → DE, FR, IT ; Belgique → FR, NL ; Canada → EN, QFR, FR ; Inde → HI, EN, TA, TE, ML…) et la région des sorties cinéma. Les langues proposées sont celles que le serveur possède réellement, avec le nombre de titres ; l'utilisateur en ajoute ou en retire. Tout est modifiable dans Paramètres › Langues.
+
+Détection de la langue d'un titre, en cascade : préfixe du titre (`FR|`, `[DE]`…) → préfixe de la catégorie serveur (`|TR| DIZI`) → non identifiée. Une soixantaine de codes et alias sont reconnus (`ENG`, `EXYU`, `SCA`, `IND`, `LAT`…) ; les préfixes de plateforme (`NF|`, `4K|`) deviennent des tags, jamais une langue. Sur le provider testé : 87 % des films portent un préfixe de langue sur le titre, la catégorie en résout une partie du reste, les titres restants sont affichables ou non par un réglage.
+
+Navigation Films / Séries : genres TMDB uniquement, sur le catalogue du spectateur. Les catégories du provider ne sont plus dans la navigation ; elles s'activent ou se désactivent dans Paramètres › Catégories. Une entrée « Autres titres » regroupe les titres sans fiche TMDB (réglage). La recherche présente d'abord les résultats dans les langues du profil, les autres langues repliées dessous.
+
+## Pages dynamiques par genre et par catégorie
+
+Chaque page (Tout, genre TMDB, autres titres, catégorie serveur sans clé TMDB) est construite depuis les données du provider : ajouts récents, mieux notés (top 10), sorties de l'année et de l'année précédente, décennies réellement couvertes, 4K, versions par langue. Une rangée n'existe que si le provider a au moins 8 titres pour elle, et la page passe en simple grille sous 24 titres : le même code produit deux rangées chez un petit provider et douze chez un gros. Les rangées de l'accueil obéissent à la même règle (5 titres minimum pour un top 10, 6 pour une rangée TMDB).
 
 ## Proxy
 

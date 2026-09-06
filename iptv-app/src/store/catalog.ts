@@ -5,6 +5,8 @@ import type { WorkerIn, WorkerOut } from '../workers/catalog.worker'
 import CatalogWorker from '../workers/catalog.worker?worker'
 import { buildTmdbIndex, type TmdbIndex } from '../api/tmdbLists'
 import { useSettings } from './settings'
+import { useProfile } from './profile'
+import { LANGS } from '../parser/langs'
 import { searchBytes, type Extra } from '../catalog/columnar'
 import { CatalogView, type ItemList } from '../catalog/view'
 
@@ -32,6 +34,8 @@ interface CatalogState {
   listOf: (kind: Kind, categoryId?: string) => ItemList
   itemsOf: (kind: Kind, categoryId?: string) => MediaItem[]
   search: (q: string, kind?: Kind, limit?: number) => MediaItem[]
+  /** same, split: `mine` in the profile languages, `other` everything else (collapsed in the UI) */
+  searchSplit: (q: string, kind: Kind, limit?: number) => { mine: MediaItem[]; other: MediaItem[] }
   isVisible: (i: number) => boolean
 }
 
@@ -79,20 +83,24 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
     return new Promise<Extra>((res) => { pending.set(req, res); setTimeout(() => { if (pending.delete(req)) res({}) }, 5000); worker!.postMessage({ type: 'extra', req, id: c.kinds[i] * 4294967296 + c.streamIds[i] } satisfies WorkerIn) })
   },
 
+  /** the viewer's catalogue: films/series in the profile languages (+ unidentified if allowed), minus hidden categories; live is per country and never language-filtered */
   isVisible(i) {
     const c = get().catalog; if (!c) return false
-    const { hiddenLangs, hiddenCategories, hidePpv } = useSettings.getState()
-    if (!hiddenLangs.length && !hiddenCategories.length && !hidePpv) return true
-    const lang = c.langOf(i); if (lang && hiddenLangs.includes(lang)) return false
-    if (hiddenCategories.length && hiddenCategories.includes(c.kindOf(i) + ':' + c.column('categoryIds')[i])) return false
-    if (hidePpv && c.kindOf(i) === 'live' && /^\s*(NEXT|ENDED|LIVE|END)\s*\|/i.test(c.rawNameOf(i))) return false
+    const { hiddenCategories, hidePpv, showUnknownLang } = useSettings.getState()
+    const kind = c.kindOf(i)
+    if (kind !== 'live') {
+      const lang = c.langOf(i)
+      if (lang && LANGS[lang]) { if (!useProfile.getState().contentLangs.includes(lang)) return false }
+      else if (!showUnknownLang) return false
+    }
+    if (hiddenCategories.length && hiddenCategories.includes(kind + ':' + c.column('categoryIds')[i])) return false
+    if (hidePpv && kind === 'live' && /^\s*(NEXT|ENDED|LIVE|END)\s*\|/i.test(c.rawNameOf(i))) return false
     return true
   },
   indicesOf(kind, categoryId) {
     const c = get().catalog; if (!c) return []
     const base = categoryId ? (c.byCategory[kind + ':' + categoryId] ?? []) : c.indicesOf(kind)
-    const { hiddenLangs, hiddenCategories, hidePpv } = useSettings.getState()
-    return hiddenLangs.length || hiddenCategories.length || hidePpv ? base.filter(get().isVisible) : base
+    return base.filter(get().isVisible)
   },
   listOf(kind, categoryId) { const c = get().catalog; return c ? c.list(get().indicesOf(kind, categoryId)) : { length: 0, at: () => undefined } },
   itemsOf(kind, categoryId) { const c = get().catalog; return c ? c.materialize(get().indicesOf(kind, categoryId)) : [] },
@@ -109,5 +117,19 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
       const it = c.at(i); if (it) out.push(it); if (out.length >= limit) break
     }
     return out
+  },
+  searchSplit(q, kind, limit = 100) {
+    const c = get().catalog
+    const needle = q.trim().toLowerCase()
+    if (!c || needle.length < 2) return { mine: [], other: [] }
+    const vis = get().isVisible
+    const mine: MediaItem[] = [], other: MediaItem[] = []
+    for (const i of searchBytes(c.search, needle, limit * 8)) {
+      if (c.kindOf(i) !== kind) continue
+      const it = c.at(i); if (!it) continue
+      if (vis(i)) { if (mine.length < limit) mine.push(it) } else if (other.length < limit) other.push(it)
+      if (mine.length >= limit && other.length >= limit) break
+    }
+    return { mine, other }
   },
 }))

@@ -1,110 +1,91 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Kind } from '../types'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
-import { useGenre, useHomeRows } from '../hooks/useHomeRows'
+import { useSettings } from '../store/settings'
+import { useGenre } from '../hooks/useHomeRows'
 import { MOVIE_GENRES, TV_GENRES } from '../api/tmdbLists'
 import { hasTmdbKey } from '../api/tmdb'
 import VirtualGrid from '../components/VirtualGrid'
 import Hero from '../components/Hero'
 import Row from '../components/Row'
-import { hubRows } from '../catalog/hub'
+import { MIN_ROW, hubRows } from '../catalog/hub'
 
 const LABEL: Record<Kind, string> = { movie: 'Films', series: 'Séries', live: 'Live TV' }
 
 /**
- * Two browsing modes: TMDB genres (official taxonomy, sorted by popularity, filtered to the
- * catalogue) and the provider's own categories (everything, incl. titles TMDB doesn't know).
+ * Films / Séries: TMDB genres only, on the viewer's catalogue (profile languages). Every page is
+ * dynamic: rows built from the provider data of that genre, then the full grid.
+ * Provider categories never appear here; they live in Settings › Catégories (enable / disable).
+ * Without a TMDB key the page falls back to the provider categories.
  */
 export default function Browse({ kind }: { kind: Kind }) {
   const catalog = useCatalog((s) => s.catalog)!
-  const listOf = useCatalog((s) => s.listOf)
   const indicesOf = useCatalog((s) => s.indicesOf)
   const item = useCatalog((s) => s.item)
   const focusedId = useUi((s) => s.focusedId)
+  const showUntagged = useSettings((s) => s.showUntagged)
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = useState('')
-  const cat = params.get('cat') ?? ''
+  const tmdb = hasTmdbKey()
   const genreName = params.get('genre') ?? ''
-  const tmdbMode = kind !== 'live' && hasTmdbKey() && !cat && (params.get('mode') ?? 'tmdb') === 'tmdb'
+  const cat = params.get('cat') ?? ''
+  const page: 'all' | 'genre' | 'other' | 'cat' = genreName === '_other' ? 'other' : genreName ? 'genre' : cat ? 'cat' : 'all'
   const GEN = kind === 'series' ? TV_GENRES : MOVIE_GENRES
-  const genre = useGenre(kind, tmdbMode && genreName ? GEN[genreName] : undefined)
-  const home = useHomeRows()
+  const genre = useGenre(kind, page === 'genre' ? GEN[genreName] : undefined)
 
+  /** the viewer's catalogue for this kind (profile languages, hidden categories removed) */
+  const all = useMemo(() => indicesOf(kind), [indicesOf, kind, catalog])
+  const untagged = useMemo(() => all.filter((i) => !catalog.tmdbIds[i]), [all, catalog])
   const cats = useMemo(() => {
     const f = filter.trim().toLowerCase()
-    // polymorphic: categories with fewer than 4 titles are not worth a page
-    return catalog.categories.filter((c) => c.kind === kind && (catalog.byCategory[kind + ':' + c.id]?.length ?? 0) >= 4 && (!f || c.rawName.toLowerCase().includes(f)))
-  }, [catalog, kind, filter])
+    return catalog.categories.filter((c) => c.kind === kind && (indicesOf(kind, c.id).length) >= 4 && (!f || c.rawName.toLowerCase().includes(f)))
+  }, [catalog, kind, filter, indicesOf])
 
-  const items = useMemo(() => {
-    if (tmdbMode) {
-      if (genreName) return genre.data ?? []
-      const seen = new Set<string>(); const out = []
-      for (const r of home.data ?? []) if (r.kind === kind && r.type !== 'collection') for (const i of r.items) if (!seen.has(i.id)) { seen.add(i.id); out.push(i) }
-      return out
-    }
-    return listOf(kind, cat || undefined)
-  }, [tmdbMode, genreName, genre.data, home.data, kind, listOf, cat])
+  const indices = useMemo(() => {
+    if (page === 'genre') return (genre.data ?? []).map((it) => catalog.indexOf(it.id)).filter((i): i is number => i !== undefined)
+    if (page === 'other') return untagged
+    if (page === 'cat') return indicesOf(kind, cat)
+    return all
+  }, [page, genre.data, catalog, untagged, all, indicesOf, kind, cat])
+  const hub = useMemo(() => hubRows(catalog, indices, kind, `${kind}:${page}:${genreName}${cat}:`), [catalog, indices, kind, page, genreName, cat])
+  const items = useMemo(() => (page === 'genre' ? genre.data ?? [] : catalog.list(indices)), [page, genre.data, catalog, indices])
 
-  /** dynamic page for the selected server category (or the whole kind): rows appear only when the data supports them */
-  const hub = useMemo(() => (tmdbMode ? [] : hubRows(catalog, indicesOf(kind, cat || undefined), kind, `${kind}:${cat}:`)), [tmdbMode, catalog, indicesOf, kind, cat])
-  const current = catalog.categories.find((c) => c.kind === kind && c.id === cat)
+  const heading = page === 'genre' ? genreName : page === 'other' ? 'Autres titres' : page === 'cat' ? (catalog.categories.find((c) => c.kind === kind && c.id === cat)?.name ?? cat) : 'Tout'
   const focused = (focusedId ? item(focusedId) : undefined) ?? hub[0]?.items[0] ?? items.at(0)
-  const sideRef = useRef<HTMLDivElement>(null)
-  const sv = useVirtualizer({ count: cats.length, getScrollElement: () => sideRef.current, estimateSize: () => 36, overscan: 10 })
-  useEffect(() => { const i = cats.findIndex((c) => c.id === cat); if (i >= 0) sv.scrollToIndex(i, { align: 'center' }) }, [cat, cats, sv])
-
-  const heading = tmdbMode ? (genreName || 'Sélection TMDB') : current ? current.name : 'Tout'
-  const loading = tmdbMode && (genreName ? genre.isLoading : home.isLoading)
+  const loading = page === 'genre' && genre.isLoading
+  const side = `block w-full px-4 py-2 text-left text-sm`
 
   return (
     <div className="flex h-screen flex-col">
       <Hero item={focused && focused.kind === kind ? focused : undefined} compact />
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-black/40 backdrop-blur">
-          {kind !== 'live' && hasTmdbKey() && (
-            <div className="m-3 grid grid-cols-2 rounded-lg bg-white/10 p-0.5 text-xs">
-              <button onClick={() => setParams({})} className={`rounded-md py-1.5 ${tmdbMode ? 'bg-white text-black font-semibold' : ''}`}>Genres TMDB</button>
-              <button onClick={() => setParams({ mode: 'server' })} className={`rounded-md py-1.5 ${!tmdbMode ? 'bg-white text-black font-semibold' : ''}`}>Catégories serveur</button>
-            </div>
-          )}
-          {tmdbMode ? (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <button onClick={() => setParams({})} className={`block w-full px-4 py-2 text-left text-sm ${!genreName ? 'bg-white/15' : 'hover:bg-white/5'}`}>Sélection de la semaine</button>
-              {Object.keys(GEN).map((g) => (
-                <button key={g} onClick={() => setParams({ genre: g })} className={`block w-full px-4 py-2 text-left text-sm ${genreName === g ? 'bg-white/15' : 'hover:bg-white/5'}`}>{g}</button>
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="px-3 pb-3">
-                <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={`Filtrer ${cats.length} catégories`} className="w-full rounded bg-white/10 px-3 py-1.5 text-sm outline-none" />
-              </div>
-              <button onClick={() => setParams({ mode: 'server' })} className={`px-4 py-2 text-left text-sm ${!cat ? 'bg-white/15' : 'hover:bg-white/5'}`}>Tout · {catalog.counts[kind]}</button>
-              <div ref={sideRef} className="min-h-0 flex-1 overflow-y-auto">
-                <div className="relative" style={{ height: sv.getTotalSize() }}>
-                  {sv.getVirtualItems().map((vi) => {
-                    const c = cats[vi.index]
-                    const n = catalog.byCategory[kind + ':' + c.id]?.length ?? 0
-                    return (
-                      <button key={c.id} onClick={() => setParams({ mode: 'server', cat: c.id })} className={`absolute left-0 flex w-full items-center gap-2 px-4 text-left text-sm ${c.id === cat ? 'bg-white/15' : 'hover:bg-white/5'}`} style={{ top: vi.start, height: 36 }}>
-                        {c.lang && <span className="rounded bg-white/10 px-1 text-[10px] text-white/70">{c.lang}</span>}
-                        <span className="truncate">{c.name}</span>
-                        <span className="ml-auto text-xs text-white/40">{n}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </>
-          )}
+        <aside className="flex w-64 shrink-0 flex-col border-r border-white/10 bg-black/40 backdrop-blur">
+          <div className="min-h-0 flex-1 overflow-y-auto py-2">
+            <button onClick={() => setParams({})} className={`${side} ${page === 'all' ? 'bg-white/15' : 'hover:bg-white/5'}`}>Tout <span className="text-xs text-white/40">{all.length.toLocaleString('fr-FR')}</span></button>
+            {tmdb ? (
+              <>
+                <p className="px-4 pb-1 pt-3 text-[10.5px] uppercase tracking-[.12em] text-white/35">Genres</p>
+                {Object.keys(GEN).map((g) => (
+                  <button key={g} onClick={() => setParams({ genre: g })} className={`${side} ${genreName === g ? 'bg-white/15' : 'hover:bg-white/5'}`}>{g}</button>
+                ))}
+                {showUntagged && untagged.length >= MIN_ROW && (
+                  <button onClick={() => setParams({ genre: '_other' })} className={`${side} mt-3 border-t border-white/[.06] pt-3 ${page === 'other' ? 'bg-white/15' : 'hover:bg-white/5'}`}>Autres titres <span className="text-xs text-white/40">{untagged.length.toLocaleString('fr-FR')}</span><span className="block text-[11px] text-white/40">Sans fiche TMDB</span></button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="px-4 pb-1 pt-3 text-[10.5px] uppercase tracking-[.12em] text-white/35">Catégories du serveur (pas de clé TMDB)</p>
+                <div className="px-3 pb-2"><input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={`Filtrer ${cats.length}`} className="w-full rounded bg-white/10 px-3 py-1.5 text-sm outline-none" /></div>
+                {cats.map((c) => <button key={c.id} onClick={() => setParams({ cat: c.id })} className={`${side} truncate ${c.id === cat ? 'bg-white/15' : 'hover:bg-white/5'}`}>{c.name}</button>)}
+              </>
+            )}
+          </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="px-8 pt-3 font-display text-xl font-bold">
-            {LABEL[kind]} › {heading} <span className="text-sm font-normal text-white/40">{loading ? '…' : items.length}</span>
+            {LABEL[kind]} › {heading} <span className="text-sm font-normal text-white/40">{loading ? '…' : items.length.toLocaleString('fr-FR')}</span>
             {hub.length > 0 && <span className="ml-2 align-middle text-[10.5px] font-normal uppercase tracking-[.08em] text-white/35">· {hub.length} sélections</span>}
           </h2>
           <div className="min-h-0 flex-1">

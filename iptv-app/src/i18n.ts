@@ -24,6 +24,6 @@ const T: Record<string, Partial<Record<UiLang, string>>> = {
 }
 
 export function t(key: string, lang: UiLang = useProfile.getState().uiLang): string {
-  return T[key]?.[lang] ?? T[key]?.fr ?? key
+  return T[key]?.[lang] ?? (lang === 'fr' ? undefined : T[key]?.en) ?? T[key]?.fr ?? key
 }
 export function useT() { const lang = useProfile((s) => s.uiLang); return (k: string) => t(k, lang) }

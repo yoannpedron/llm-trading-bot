@@ -1,6 +1,15 @@
 import type { Category, Kind, MediaItem, XtreamCategory, XtreamLive, XtreamSeries, XtreamVod } from '../types'
 import { cleanCategory, cleanTitle, toNumber } from './regex'
 import { classify } from './classify'
+import { TAG_PREFIXES, resolveLang } from './langs'
+
+/** language cascade: title prefix → category prefix → unidentified; platform prefixes (NF, 4K…) become tags */
+function withLang<T extends { lang?: string; tags: string[] }>(p: T, catName: string): T {
+  const raw = p.lang
+  const lang = resolveLang(raw, cleanCategory(catName).lang)
+  const tags = raw && TAG_PREFIXES.has(raw.toUpperCase()) && !p.tags.includes(raw) ? [...p.tags, raw] : p.tags
+  return { ...p, lang, tags }
+}
 
 export function normalizeCategory(c: XtreamCategory, kind: Kind): Category {
   const { name, lang } = cleanCategory(c.category_name)
@@ -14,7 +23,7 @@ function firstImage(v?: string[] | string): string | undefined {
 }
 
 export function normalizeVod(x: XtreamVod, catName: string): MediaItem {
-  const p = cleanTitle(x.name)
+  const p = withLang(cleanTitle(x.name), catName)
   const kind = classify('movie', p, catName)
   return {
     ...p,
@@ -33,7 +42,7 @@ export function normalizeVod(x: XtreamVod, catName: string): MediaItem {
 }
 
 export function normalizeSeries(x: XtreamSeries, catName: string): MediaItem {
-  const p = cleanTitle(x.name)
+  const p = withLang(cleanTitle(x.name), catName)
   const date = x.releaseDate || x.release_date
   const year = p.year ?? toNumber(date?.slice(0, 4))
   return {

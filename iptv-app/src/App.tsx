@@ -14,6 +14,7 @@ import Search from './pages/Search'
 import MyList from './pages/MyList'
 import Collection from './pages/Collection'
 import Settings from './pages/Settings'
+import Welcome from './pages/Welcome'
 import Live from './pages/Live'
 import Sport from './pages/Sport'
 import Multi from './pages/Multi'
@@ -43,7 +44,7 @@ export default function App() {
       ) : (
         <main className="relative z-10">
           <Routes>
-            <Route path="/" element={onboarded ? <Home /> : <Settings onboarding />} />
+            <Route path="/" element={onboarded ? <Home /> : <Welcome />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
             <Route path="/movies" element={<Browse kind="movie" />} />

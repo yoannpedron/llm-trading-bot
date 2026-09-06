@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { PREFIX_INFO, REGIONS, UI_LANGS, useProfile, type UiLang } from '../store/profile'
+import { useProfile } from '../store/profile'
 import { useSettings } from '../store/settings'
 import { DETECTED } from '../store/device'
 import { useSession } from '../store/session'
@@ -9,7 +9,9 @@ import { useCatalog } from '../store/catalog'
 import { useHomeRows } from '../hooks/useHomeRows'
 import { XtreamClient, type XtreamUserInfo } from '../api/xtream'
 import { countryOf } from '../parser/live'
+import { LANGS } from '../parser/langs'
 import { probeProvider } from '../download/profile'
+import LangSetup from '../components/LangSetup'
 
 type Tab = 'accounts' | 'languages' | 'categories' | 'data'
 const TABS: [Tab, string][] = [['accounts', 'Comptes'], ['languages', 'Langues'], ['categories', 'Catégories'], ['data', 'Données']]
@@ -109,43 +111,7 @@ function Accounts() {
 }
 
 /* ---------------- Languages ---------------- */
-function Languages({ onboarding }: { onboarding?: boolean }) {
-  const nav = useNavigate()
-  const p = useProfile()
-  const catalog = useCatalog((s) => s.catalog)
-  const rebuild = useCatalog((s) => s.rebuildIndex)
-  const [uiLang, setUiLang] = useState<UiLang>(p.uiLang)
-  const [langs, setLangs] = useState<string[]>(p.contentLangs)
-  const [region, setRegion] = useState(p.region)
-  const [kids, setKids] = useState(p.kids)
-  const available = useMemo(() => {
-    const c = new Map<string, number>()
-    if (catalog) { const langs = catalog.column('langs'); for (let i = 0; i < catalog.n; i++) { const l = langs[i]; if (l && catalog.kinds[i] !== 2 && PREFIX_INFO[l]) c.set(l, (c.get(l) ?? 0) + 1) } }
-    return [...c.entries()].sort((a, b) => b[1] - a[1])
-  }, [catalog])
-  const toggle = (l: string) => setLangs((ls) => ls.includes(l) ? ls.filter((x) => x !== l) : [...ls, l])
-  const move = (l: string, d: -1 | 1) => setLangs((ls) => { const i = ls.indexOf(l); const j = i + d; if (j < 0 || j >= ls.length) return ls; const c = [...ls]; [c[i], c[j]] = [c[j], c[i]]; return c })
-  const save = () => { const cl = langs.length ? langs : ['EN']; p.set({ uiLang, contentLangs: cl, region, kids, onboarded: true }); rebuild(cl); nav('/') }
-  return (
-    <div>
-      <H>Langue de l'interface et des fiches</H>
-      <div className="flex flex-wrap gap-2">{(Object.keys(UI_LANGS) as UiLang[]).map((l) => <button key={l} onClick={() => setUiLang(l)} className={`h-10 rounded-full px-4 text-sm font-medium ${uiLang === l ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20'}`}>{UI_LANGS[l].name}</button>)}</div>
-      <H>Langues de contenu, par ordre de préférence</H>
-      <p className="mb-3 text-sm text-white/50">La première est la version audio proposée par défaut. Les chiffres sont les titres disponibles sur ce serveur.</p>
-      <ol className="mb-3 flex flex-col gap-1.5">
-        {langs.map((l, i) => <li key={l} className="flex items-center gap-2 rounded-lg bg-amber-400/10 px-3 py-1.5 text-sm ring-1 ring-amber-400/30"><span className="w-5 text-xs text-white/50">{i + 1}</span><span className="text-lg">{PREFIX_INFO[l]?.flag}</span><span className="flex-1">{PREFIX_INFO[l]?.name ?? l}</span><button onClick={() => move(l, -1)} className="px-2 text-white/60">↑</button><button onClick={() => move(l, 1)} className="px-2 text-white/60">↓</button><button onClick={() => toggle(l)} className="px-2 text-white/60">✕</button></li>)}
-      </ol>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {available.filter(([l]) => !langs.includes(l)).map(([l, n]) => <button key={l} onClick={() => toggle(l)} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-left text-sm hover:bg-white/10"><span className="text-lg">{PREFIX_INFO[l].flag}</span><span className="flex-1 truncate">{PREFIX_INFO[l].name}</span><span className="text-xs text-white/40 tabular-nums">{n.toLocaleString('fr-FR')}</span></button>)}
-      </div>
-      <H>Pays pour les sorties cinéma</H>
-      <div className="flex flex-wrap gap-2">{REGIONS.map((r) => <button key={r} onClick={() => setRegion(r)} className={`h-9 rounded-full px-3.5 text-sm ${region === r ? 'bg-white font-semibold text-black' : 'bg-white/10 hover:bg-white/20'}`}>{r}</button>)}</div>
-      <H>Mode enfant</H>
-      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={kids} onChange={(e) => setKids(e.target.checked)} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Limiter l'accueil aux rangées animation, famille et anime.</span></label>
-      <div className="mt-10 flex gap-3"><button onClick={save} className="h-11 rounded-lg bg-white px-6 font-semibold text-black">Enregistrer</button>{!onboarding && <button onClick={() => nav(-1)} className="h-11 rounded-lg bg-white/10 px-6">Annuler</button>}</div>
-    </div>
-  )
-}
+function Languages({ onboarding }: { onboarding?: boolean }) { return <LangSetup onboarding={onboarding} /> }
 
 /* ---------------- Categories ---------------- */
 function Categories() {
@@ -157,7 +123,7 @@ function Categories() {
   const [kind, setKind] = useState<'movie' | 'series' | 'live'>('movie')
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<string>()
-  const langs = useMemo(() => { const c = new Map<string, number>(); if (catalog) { const L = catalog.column('langs'); for (let i = 0; i < catalog.n; i++) { const l = L[i]; if (l && catalog.kinds[i] !== 2 && PREFIX_INFO[l]) c.set(l, (c.get(l) ?? 0) + 1) } } return [...c.entries()].sort((a, b) => b[1] - a[1]) }, [catalog])
+  const unknown = useMemo(() => { let n = 0; if (catalog) { const L = catalog.column('langs'); for (let i = 0; i < catalog.n; i++) if (catalog.kinds[i] !== 2 && !LANGS[L[i]]) n++ } return n }, [catalog])
   const cats = useMemo(() => (catalog?.categories ?? []).filter((c) => c.kind === kind && (!q || c.rawName.toLowerCase().includes(q.toLowerCase()))).map((c) => ({ c, n: catalog?.byCategory[kind + ':' + c.id]?.length ?? 0, country: countryOf(c.rawName) })), [catalog, kind, q])
   const ordered = useMemo(() => { const pos = (k: string) => { const i = s.rowOrder.indexOf(k); return i < 0 ? 1e6 : i }; return [...(rows ?? [])].sort((a, b) => pos(a.key) - pos(b.key)) }, [rows, s.rowOrder])
   const moveRow = (k: string, d: -1 | 1) => { const keys = ordered.map((r) => r.key); const i = keys.indexOf(k); const j = i + d; if (j < 0 || j >= keys.length) return; [keys[i], keys[j]] = [keys[j], keys[i]]; s.setRowOrder(keys) }
@@ -180,10 +146,11 @@ function Categories() {
           )
         })}
       </ul>
-      <H>Masquer par langue</H>
-      <p className="mb-3 text-sm text-white/50">Retire d'un geste tout le contenu d'une langue du catalogue, de l'accueil et de la recherche.</p>
-      <div className="flex flex-wrap gap-2">{langs.map(([l, n]) => { const off = s.hiddenLangs.includes(l); return <button key={l} onClick={() => { s.toggleLang(l); setTimeout(apply) }} className={`h-9 rounded-full px-3 text-sm ${off ? 'bg-red-500/20 text-red-200 line-through' : 'bg-white/10 hover:bg-white/20'}`}>{PREFIX_INFO[l]?.flag ?? ''} {PREFIX_INFO[l]?.name ?? l} <span className="opacity-50 tabular-nums">{n.toLocaleString('fr-FR')}</span></button> })}</div>
-      <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={s.hidePpv} onChange={(e) => { s.set({ hidePpv: e.target.checked }); setTimeout(apply) }} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Masquer les flux événementiels PPV dans le live (l'agenda sport reste disponible)</span></label>
+      <H>Contenu hors de tes langues</H>
+      <p className="mb-3 text-sm text-white/50">Ton catalogue ne contient que les langues choisies dans l'onglet Langues. Deux exceptions se règlent ici.</p>
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={s.showUnknownLang} onChange={(e) => { s.set({ showUnknownLang: e.target.checked }); setTimeout(apply) }} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Afficher les titres dont la langue n'a pas pu être identifiée (ni préfixe sur le titre, ni sur la catégorie serveur) · {unknown.toLocaleString('fr-FR')} titres</span></label>
+      <label className="mt-2 flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={s.showUntagged} onChange={(e) => s.set({ showUntagged: e.target.checked })} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Afficher une rangée « Autres » pour les titres sans fiche TMDB (pas de genre connu)</span></label>
+      <label className="mt-2 flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 p-3"><input type="checkbox" checked={s.hidePpv} onChange={(e) => { s.set({ hidePpv: e.target.checked }); setTimeout(apply) }} className="h-5 w-5 accent-amber-400" /><span className="text-sm">Masquer les flux événementiels (NEXT | / LIVE |) de la liste des chaînes</span></label>
       <H>Catégories du serveur</H>
       <div className="mb-3 flex gap-2">{(['movie', 'series', 'live'] as const).map((k) => <button key={k} onClick={() => setKind(k)} className={`h-8 rounded-full px-3 text-xs ${kind === k ? 'bg-white font-semibold text-black' : 'bg-white/10'}`}>{{ movie: 'Films', series: 'Séries', live: 'Live' }[k]}</button>)}<Input placeholder="Filtrer" value={q} onChange={(e) => setQ(e.target.value)} className="!w-48" /></div>
       <ul className="max-h-[50vh] overflow-y-auto rounded-lg bg-white/5">
