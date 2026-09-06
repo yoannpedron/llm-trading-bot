@@ -4,7 +4,7 @@ import type { Match } from '../api/sports'
 import type { MediaItem } from '../types'
 import { parseEvent } from './live'
 
-const m = (id: string, home: string, away: string, start: string): Match => ({ id, sport: 'football', competition: 'Test', home, away, start: new Date(start), state: 'pre', source: 'espn' })
+const m = (id: string, home: string, away: string, start: string): Match => ({ id, kind: 'team', sport: 'football', competition: 'Test', home, away, start: new Date(start), state: 'pre', source: 'espn' })
 const item = (rawName: string): MediaItem => ({ id: 'live:' + rawName.length + Math.random(), kind: 'live', rawName, title: rawName, searchTitle: rawName, tags: [], isAdult: false, streamId: 1, categoryId: '1' })
 
 describe('team matching', () => {

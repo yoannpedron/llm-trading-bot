@@ -4,6 +4,8 @@ import { useProgress } from '../store/progress'
 import { useHistory } from '../store/history'
 import { useMatches, teamKey } from '../hooks/useMatches'
 import { useSportPrefs } from '../store/sportPrefs'
+import { useBadge } from '../hooks/useBadge'
+import { parseEvent } from '../parser/live'
 import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
@@ -70,6 +72,10 @@ export default function Watch() {
           )}
         </div>
       )}
+      {!card && item.kind === 'live' && (() => { const e = parseEvent(item.rawName); const t = e?.title.split(/\s+(?:vs?\.?|-|–|@)\s+/i); return e && t?.length === 2 ? (
+        <section className="mt-5">
+          <div className="flex items-center justify-between"><TeamBlock name={t[0]} /><div className="text-center"><b className="font-display text-2xl font-black text-red-500">{e.status === 'live' ? 'DIRECT' : e.start ? e.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}</b>{e.competition && <span className="mt-0.5 block text-xs text-white/50">{e.competition}</span>}</div><TeamBlock name={t[1]} /></div>
+        </section>) : null })()}
       {card && (
         <section className="mt-5">
           <div className="flex items-center justify-between">
@@ -109,6 +115,8 @@ export default function Watch() {
 function TeamBlock({ name, logo }: { name: string; logo?: string }) {
   const prefs = useSportPrefs()
   const on = prefs.teams.includes(teamKey(name))
+  const badge = useBadge(logo ? undefined : name)
+  logo = logo ?? badge
   return (
     <button onClick={() => prefs.toggleTeam(teamKey(name))} className="flex w-[110px] flex-col items-center gap-2" title={on ? 'Ne plus suivre' : 'Suivre'}>
       {logo ? <img src={logo} alt="" className="h-14 w-14 object-contain" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-white/10 text-lg font-semibold text-white/70">{name.split(' ').slice(0, 2).map((w) => w[0]).join('')}</span>}

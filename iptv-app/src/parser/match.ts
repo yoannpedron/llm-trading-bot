@@ -31,6 +31,21 @@ export function splitTeams(title: string): [string, string] | undefined {
   return a && b && a.length < 60 && b.length < 60 ? [a, b] : undefined
 }
 
+const EVENT_STOP = new Set(['grand', 'prix', 'gp', 'race', 'day', 'stage', 'round', 'night', 'fight', 'the', 'of', 'de', 'la', 'a', 'championship', 'open', 'cup', 'tour', 'series', 'live', 'all', 'and'])
+/** Overlap of significant tokens between a stream title and an event name, plus session keywords (race, qualifying, stage n). */
+export function eventSimilarity(a: string, b: string): number {
+  const tok = (s: string) => new Set(norm(s).split(' ').filter((t) => t.length > 2 && !EVENT_STOP.has(t)))
+  const A = tok(a), B = tok(b)
+  if (!A.size || !B.size) return 0
+  let inter = 0
+  for (const t of A) if (B.has(t) || [...B].some((u) => (t.length >= 5 && u.includes(t)) || (u.length >= 5 && t.includes(u)))) inter++
+  let s = inter / Math.min(A.size, B.size)
+  const sess = /\b(race|qualif|sprint|fp\d|practice|stage \d+|etape \d+|main card|prelims)\b/i
+  const sa = sess.exec(a)?.[0].toLowerCase(), sb = sess.exec(b)?.[0].toLowerCase()
+  if (sa && sb) s += sa[0] === sb[0] ? 0.2 : -0.3
+  return Math.max(0, Math.min(1, s))
+}
+
 export interface Linked { match: Match; streams: MediaItem[]; score: number }
 export interface LinkResult { linked: Map<string, Linked>; unmatched: { item: MediaItem; event: LiveEvent }[] }
 
@@ -41,9 +56,16 @@ export function linkStreams(events: { item: MediaItem; event: LiveEvent }[], mat
   for (const e of events) {
     const teams = splitTeams(e.event.title)
     let best: { m: Match; s: number } | undefined
-    if (teams && e.event.start) {
+    if (e.event.start) {
       for (const m of matches) {
-        if (Math.abs(m.start.getTime() - e.event.start.getTime()) > windowMs) continue
+        if (Math.abs(m.start.getTime() - e.event.start.getTime()) > (m.kind === 'team' || m.kind === 'players' ? windowMs : 6 * 3600e3)) continue
+        if (m.kind === 'session' || m.kind === 'event') {
+          // "Monza - Race" / "UFC Fight Night" / "La Vuelta: Stage 15" vs event + session names
+          const s = eventSimilarity(e.event.title + ' ' + (e.event.competition ?? ''), (m.event ?? '') + ' ' + m.home + ' ' + m.away)
+          if (s >= 0.5 && (!best || s > best.s)) best = { m, s }
+          continue
+        }
+        if (!teams) continue
         const s1 = (teamSimilarity(teams[0], m.home) + teamSimilarity(teams[1], m.away)) / 2
         const s2 = (teamSimilarity(teams[0], m.away) + teamSimilarity(teams[1], m.home)) / 2
         const s = Math.max(s1, s2)

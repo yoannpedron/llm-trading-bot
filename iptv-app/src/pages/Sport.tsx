@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMatches, teamKey, type MatchCard } from '../hooks/useMatches'
+import { SPORT_ICON, SPORT_LABEL, type Sport as SportKind } from '../api/sports'
+import { useBadge } from '../hooks/useBadge'
 import { importance, competitionCountry } from '../parser/rank'
 import { useSportPrefs } from '../store/sportPrefs'
 import { useProfile } from '../store/profile'
@@ -16,17 +18,22 @@ export default function Sport() {
   const prefs = useSportPrefs()
   const region = useProfile((s) => s.region)
   const [view, setView] = useState<View>('today')
+  const [sport, setSport] = useState<SportKind | ''>('')
   const [, tick] = useState(0)
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(t) }, [])
   useReminders(cards)
 
   const ranked = useMemo(() => cards.filter((c) => c.sources.length).map((c) => ({ ...c, rank: importance(c.match, { region, favTeams: prefs.teams, favCompetitions: prefs.competitions, streams: c.sources.length }) })).sort((a, b) => b.rank - a.rank), [cards, region, prefs.teams, prefs.competitions])
   const isMine = (c: MatchCard) => prefs.teams.includes(teamKey(c.match.home)) || prefs.teams.includes(teamKey(c.match.away)) || prefs.competitions.includes(c.match.competition)
-  const shown = view === 'mine' ? ranked.filter(isMine) : ranked
-  const hero = shown[0]
-  const live = shown.filter((c) => c !== hero && c.match.state === 'in')
+  const sports = useMemo(() => { const m = new Map<SportKind, number>(); for (const c of ranked) m.set(c.match.sport, (m.get(c.match.sport) ?? 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]) }, [ranked])
+  const bySport = sport ? ranked.filter((c) => c.match.sport === sport) : ranked
+  const shown = view === 'mine' ? bySport.filter(isMine) : bySport
+  /** One entry per favourite team: its next match (live first), always on top. */
+  const favBlock = useMemo(() => prefs.teams.map((t) => ranked.find((c) => teamKey(c.match.home) === t || teamKey(c.match.away) === t)).filter((c): c is NonNullable<typeof c> => !!c).filter((c, i, a) => a.indexOf(c) === i), [prefs.teams, ranked])
+  const hero = shown.find((c) => !favBlock.includes(c)) ?? shown[0]
+  const live = shown.filter((c) => c !== hero && !favBlock.includes(c) && c.match.state === 'in')
   const liveUnmatched = unmatched.filter((u) => u.event.status === 'live').slice(0, 12)
-  const upcoming = shown.filter((c) => c !== hero && c.match.state !== 'in')
+  const upcoming = shown.filter((c) => c !== hero && !favBlock.includes(c) && c.match.state !== 'in')
   const groups = useMemo(() => {
     const m = new Map<string, typeof upcoming>()
     for (const c of upcoming) m.set(c.match.competition, [...(m.get(c.match.competition) ?? []), c])
@@ -48,7 +55,19 @@ export default function Sport() {
         {([['today', 'Aujourd’hui'], ['mine', 'Mes équipes'], ['country', 'Par pays']] as [View, string][]).map(([k, l]) => <button key={k} onClick={() => setView(k)} className={`flex-1 rounded-lg py-1.5 font-medium ${view === k ? 'bg-white/20 text-white' : 'text-white/50'}`}>{l}</button>)}
       </div>
       {isLoading && !cards.length && <p className="py-10 text-center text-sm text-white/40">Chargement des matchs…</p>}
+      {sports.length > 1 && (
+        <div className="no-scrollbar -mx-5 mb-5 flex gap-2 overflow-x-auto px-5">
+          <button onClick={() => setSport('')} className={`h-8 shrink-0 rounded-full px-3 text-[13px] ${!sport ? 'bg-white font-semibold text-black' : 'bg-white/10'}`}>Tous</button>
+          {sports.map(([k, n]) => <button key={k} onClick={() => setSport(k)} className={`h-8 shrink-0 rounded-full px-3 text-[13px] ${sport === k ? 'bg-white font-semibold text-black' : 'bg-white/10'}`}>{SPORT_ICON[k]} {SPORT_LABEL[k]} <span className="opacity-50 tabular-nums">{n}</span></button>)}
+        </div>
+      )}
       {view === 'mine' && !prefs.teams.length && !prefs.competitions.length && <p className="rounded-xl bg-white/5 p-4 text-sm text-white/60">Ouvre un match et appuie sur ★ à côté d’une équipe pour la suivre.</p>}
+      {favBlock.length > 0 && view !== 'mine' && (
+        <section className="mb-6">
+          <h2 className="mb-2 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-amber-400"><span>★</span>Mes équipes</h2>
+          <div className="overflow-hidden rounded-2xl bg-amber-400/[.08] ring-1 ring-amber-400/30">{favBlock.map((c) => <Row key={c.match.id} c={c} />)}</div>
+        </section>
+      )}
       {hero && <Hero c={hero} />}
       {(live.length > 0 || liveUnmatched.length > 0) && (
         <section className="mb-6">
@@ -113,6 +132,7 @@ function Initials({ name, size }: { name: string; size: number }) {
 }
 function Row({ c }: { c: MatchCard }) {
   const m = c.match; const live = m.state === 'in'
+  if (m.kind === 'session' || (m.kind === 'event' && !m.awayLogo && m.away === m.competition)) return <EventRow c={c} />
   const fav = useSportPrefs((s) => s.teams)
   const star = (n: string) => fav.includes(teamKey(n)) ? <span className="mr-1 text-[11px] text-amber-400">★</span> : null
   return (
@@ -123,15 +143,27 @@ function Row({ c }: { c: MatchCard }) {
     </Link>
   )
 }
-/** A live stream the score sources don't track: still watchable, shown as DIRECT without a score. */
+/** Grand Prix session, cycling stage, motorsport race: one line, name + session + time. */
+function EventRow({ c }: { c: MatchCard }) {
+  const m = c.match; const live = m.state === 'in'
+  return (
+    <Link to={watchUrl(c)} className="flex min-h-[60px] items-center gap-3 border-b border-white/[.08] px-3.5 py-2.5 last:border-b-0 hover:bg-white/5">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-base">{SPORT_ICON[m.sport]}</span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] font-medium">{m.kind === 'session' ? m.home : m.home}</span><span className="block truncate text-xs text-white/50">{m.kind === 'session' ? m.away : m.competition}</span></span>
+      <span className="text-sm font-semibold tabular-nums">{live ? <span className="text-red-500">DIRECT</span> : isToday(m.start) ? time(m.start) : m.start.toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
+    </Link>
+  )
+}
+/** A live stream the score sources don't track: still watchable, shown as DIRECT without a score. Badges come from TheSportsDB. */
 function PlainRow({ item, event }: { item: MediaItem; event: LiveEvent }) {
   const t = event.title.split(/\s+(?:vs?\.?|-|–)\s+/i)
   const [a, b] = t.length === 2 ? t : [event.title, '']
+  const ba = useBadge(a), bb = useBadge(b || undefined)
   return (
     <Link to={`/watch/${item.id}`} className="grid min-h-[60px] grid-cols-[1fr_64px_1fr] items-center border-b border-white/[.08] px-3.5 py-2.5 last:border-b-0 hover:bg-white/5">
-      <span className="flex min-w-0 items-center gap-2.5 text-[14.5px] font-medium"><Initials name={a} size={28} /><span className="truncate">{titleCase(a)}</span></span>
+      <span className="flex min-w-0 items-center gap-2.5 text-[14.5px] font-medium">{ba ? <img src={ba} alt="" className="h-7 w-7 shrink-0 object-contain" /> : <Initials name={a} size={28} />}<span className="truncate">{titleCase(a)}</span></span>
       <span className="text-center text-sm font-bold text-red-500">DIRECT</span>
-      <span className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right text-[14.5px] font-medium">{b && <Initials name={b} size={28} />}<span className="truncate">{titleCase(b) || event.competition || ''}</span></span>
+      <span className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right text-[14.5px] font-medium">{b && (bb ? <img src={bb} alt="" className="h-7 w-7 shrink-0 object-contain" /> : <Initials name={b} size={28} />)}<span className="truncate">{titleCase(b) || event.competition || ''}</span></span>
     </Link>
   )
 }

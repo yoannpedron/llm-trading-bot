@@ -49,6 +49,8 @@ const RE_ISO = /\((\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::\d{2})?\)/
 // "Next | OM vs. Paris FC sur Ligue 1+ | Ligue 1+ | 2026-09-06 | 18:45 (GMT) | 8K EXCLUSIVE | FR: DAZN PPV 63"
 // "Next | Marseille vs. Paris FC | all | 06-09-2026 | 20:15 (GMT) | ... | BR: SOCCER PPV 119"
 const RE_FIELDS = /^\s*(next|ended|end|live)\s*\|\s*(.+?)\s*\|\s*([^|]*?)\s*\|\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{2})-(\d{2})-(\d{4}))\s*\|\s*(\d{1,2}):(\d{2})\s*(?:\(([A-Z+\-\d:]{2,6})\))?/i
+// "Live | Capitals @ Penguins | NHL.TV | 8K EXCLUSIVE | MA: DAZN PPV 11" (no date: live now)
+const RE_NODATE = /^\s*(live|next|ended|end)\s*\|\s*(.+?)\s*\|\s*([^|]*?)\s*\|\s*(?:8K|4K|HD|FHD|UHD)/i
 const RE_BROADCAST = /\s+(?:sur|on|en|auf)\s+[A-Za-z0-9+ .]+$/i
 
 export function parseEvent(name: string, now = new Date()): LiveEvent | undefined {
@@ -89,6 +91,14 @@ export function parseEvent(name: string, now = new Date()): LiveEvent | undefine
     const title = name.replace(RE_ISO, '').replace(/^\s*\([^)]*\)\s*\|?\s*/, '').replace(/\s*_\s*/g, ' · ').trim()
     const age = now.getTime() - start.getTime()
     return { status: age < 0 ? 'next' : age < 3 * 3600e3 ? 'live' : 'ended', title, start, raw: name }
+  }
+  const nd = RE_NODATE.exec(name)
+  if (nd) {
+    const [, st, rawTitle, comp] = nd
+    const s = st.toLowerCase()
+    const status: LiveEvent['status'] = s.startsWith('end') ? 'ended' : s === 'live' ? 'live' : 'next'
+    const provider = name.split('|').pop()?.trim()
+    return { status, title: rawTitle.replace(RE_BROADCAST, '').trim(), start: status === 'live' ? now : undefined, country: /^([A-Z]{2,3}):/.exec(provider ?? '')?.[1], provider, competition: comp && comp.toLowerCase() !== 'all' ? comp : undefined, raw: name }
   }
   return undefined
 }

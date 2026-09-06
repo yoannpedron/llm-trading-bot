@@ -26,7 +26,8 @@ export function importance(m: Match, opts: { region: string; favTeams: string[];
   if (h >= 0 && h <= 2) s += 15
   if (BIG.has(norm(m.home))) s += 10
   if (BIG.has(norm(m.away))) s += 10
-  if (opts.favTeams.includes(norm(m.home)) || opts.favTeams.includes(norm(m.away))) s += 60
+  // favourites are a hard tier above everything, live favourites above scheduled ones
+  if (opts.favTeams.includes(norm(m.home)) || opts.favTeams.includes(norm(m.away))) s += 2000
   if (opts.favCompetitions.includes(m.competition)) s += 25
   return s + Math.min(20, opts.streams * 3)
 }

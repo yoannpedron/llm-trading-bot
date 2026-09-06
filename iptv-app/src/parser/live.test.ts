@@ -43,6 +43,12 @@ describe('live helpers', () => {
     const c = parseEvent('End | Monaco vs. Marseille | all | 05-09-2026 | 19:00 (GMT) | 8K EXCLUSIVE | BR: SOCCER PPV 56', now)!
     expect(c.status).toBe('ended')
   })
+  it('parses the dateless live format', () => {
+    const now = new Date('2026-09-06T10:00:00Z')
+    const e = parseEvent('Live | Capitals @ Penguins | NHL.TV | 8K EXCLUSIVE | MA: DAZN PPV 11', now)!
+    expect(e).toMatchObject({ status: 'live', title: 'Capitals @ Penguins', competition: 'NHL.TV', country: 'MA' })
+    expect(e.start).toEqual(now)
+  })
   it('ignores regular channels', () => {
     expect(parseEvent('FR| TF1 FHD')).toBeUndefined()
   })
