@@ -83,6 +83,25 @@ nav.tabs button.on{color:var(--fg)}
 .live .tt{padding:6px 10px 9px;font-size:11.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:1px solid var(--line)}
 .live .on-air{position:absolute;top:8px;left:8px;font-size:9px;letter-spacing:.08em;font-weight:600;color:#fff;background:var(--red);border-radius:3px;padding:1px 5px}
 
+/* collections */
+.card.col{width:230px}.card.col .bd{width:100%;aspect-ratio:16/9;object-fit:cover}
+.card.col .ci{position:absolute;left:10px;right:10px;bottom:10px;z-index:2}
+.card.col .cn{font-family:var(--display);font-weight:800;font-size:15px;line-height:1.1;text-shadow:0 2px 10px rgba(0,0,0,.9)}
+.card.col .cc{font-size:11px;color:var(--fg2);margin-top:2px}
+.card.col .cc b{color:var(--amber);font-weight:600}
+.card.col::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85),transparent 60%);pointer-events:none}
+.row-h .sub{display:block;width:100%;font-size:12px;color:var(--fg3);margin-top:-4px}
+.row-h{flex-wrap:wrap}
+.parts{display:flex;flex-direction:column;gap:8px}
+.part{display:flex;align-items:center;gap:12px;padding:8px;border-radius:8px;background:var(--bg2);text-align:left;width:100%}
+.part img{width:40px;aspect-ratio:2/3;object-fit:cover;border-radius:4px;flex:0 0 auto}
+.part .pt{flex:1;min-width:0}.part .pt b{display:block;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.part .pt span{font-size:12px;color:var(--fg3)}
+.part .st{font-size:11px;font-weight:600;letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--fg2)}
+.part .st.ok{background:rgba(240,182,74,.15);color:var(--amber)}
+.part.off{opacity:.5}
+.tag4k{display:inline-block;border:1px solid var(--amber);color:var(--amber);border-radius:3px;padding:0 5px;font-size:10.5px;font-weight:700;letter-spacing:.04em}
+.vers{display:flex;flex-wrap:wrap;gap:6px}.vers span{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.1)}
+.card .k4{position:absolute;top:8px;right:8px;z-index:2;font-size:9.5px;font-weight:700;letter-spacing:.05em;padding:2px 5px;border-radius:3px;background:rgba(0,0,0,.65);color:var(--amber);backdrop-filter:blur(6px)}
 /* browse */
 .browse{padding:70px 0 0}
 .browse h1{font-family:var(--display);font-weight:800;font-size:30px;margin:0;padding:0 var(--pad);letter-spacing:-.02em}
@@ -197,9 +216,10 @@ function chips(i, withGenres = true) {
   if (i.runtime) p.push(`<span>${Math.floor(i.runtime / 60) ? Math.floor(i.runtime / 60) + ' h ' : ''}${i.runtime % 60 ? (i.runtime % 60) + ' min' : ''}</span>`);
   if (i.seasons) p.push(`<span>${i.seasons} saison${i.seasons > 1 ? 's' : ''}</span>`);
   if (i.rating) p.push(`<span class="star">★ ${i.rating.toFixed(1)}</span>`);
-  let s = p.join('<i class="dot"></i>');
-  if (withGenres && i.genres?.length) s += `<i class="dot"></i><span class="g">${esc(i.genres.slice(0, 3).join(' · '))}</span>`;
-  return s;
+  if (i.is4k) p.push('<span class="tag4k">4K</span>');
+  let out = p.join('<i class="dot"></i>');
+  if (withGenres && i.genres?.length) out += `<span class="g" style="flex-basis:100%">${esc(i.genres.slice(0, 3).join(' · '))}</span>`;
+  return out;
 }
 
 /* ---- hero slideshow ---- */
@@ -231,16 +251,25 @@ function stopHero() { clearTimeout(heroTimer); clearInterval(stillTimer); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopHero(); else if (tab === 'home' && document.getElementById('hero')) startHero(); });
 
 /* ---- cards ---- */
-function cardP(i) { return `<button class="card p" data-open="${i.id}" title="${esc(i.rawName)}">${isNew(i) ? '<span class="badge">NOUVEAU</span>' : ''}<img src="${i.poster}" alt="${esc(i.title)}" loading="lazy"></button>`; }
+function cardP(i) { return `<button class="card p" data-open="${i.id}" title="${esc(i.rawName)}">${isNew(i) ? '<span class="badge">NOUVEAU</span>' : ''}${i.is4k ? '<span class="k4">4K</span>' : ''}<img src="${i.poster}" alt="${esc(i.title)}" loading="lazy"></button>`; }
 function cardW(i) { return `<button class="card w" data-open="${i.id}" title="${esc(i.rawName)}">${isNew(i) ? '<span class="badge">NOUVEAU</span>' : ''}${i.rating ? `<span class="rt">★ ${i.rating.toFixed(1)}</span>` : ''}<img class="bd" src="${i.backdrop || i.poster}" alt="" loading="lazy">${i.logo ? `<img class="lg" src="${i.logo}" alt="${esc(i.title)}">` : `<span class="tt">${esc(i.title)}</span>`}</button>`; }
 function cardTop(i, n) { return `<div class="top"><span class="num">${n}</span>${cardP(i)}</div>`; }
 function cardLive(i) { return `<button class="card live" data-open="${i.id}" title="${esc(i.rawName)}"><span class="on-air">DIRECT</span><div class="ic">${i.icon ? `<img src="${i.icon}" alt="" loading="lazy">` : `<span class="h" style="font-weight:800;font-size:15px;letter-spacing:.02em;text-align:center;line-height:1.15">${esc(i.title)}</span>`}</div><div class="tt">${esc(i.title)}</div></button>`; }
-function rowHTML(r, k) {
-  if (!r.items.length) return '';
-  const wide = r.type === 'row' && k < 3 && r.kind === 'movie';
-  const src = r.kind === 'live' ? 'Serveur' : 'TMDB';
-  const body = r.type === 'top10' ? r.items.map((i, n) => cardTop(i, n + 1)).join('') : r.kind === 'live' ? r.items.map(cardLive).join('') : wide ? r.items.map(cardW).join('') : r.items.map(cardP).join('');
-  return `<section class="row"><div class="row-h"><h2 class="h">${esc(r.name)}</h2><span class="src">${src}</span></div><div class="strip">${body}</div></section>`;
+function cardCol(c) { return `<button class="card col" data-col="${c.id}"><img class="bd" src="${c.backdrop || c.poster}" alt="" loading="lazy"><div class="ci"><div class="cn">${esc(c.name)}</div><div class="cc">${c.complete ? `<b>Saga complète</b> · ${c.total} films` : `<b>${c.have}</b> / ${c.total} films disponibles`}</div></div></button>`; }
+function rowHTML(r) {
+  const body = r.type === 'collection' ? D.collections.map(cardCol).join('') : r.type === 'top10' ? r.items.map((i, n) => cardTop(i, n + 1)).join('') : r.kind === 'live' ? r.items.map(cardLive).join('') : r.type === 'wide' ? r.items.map(cardW).join('') : r.items.map(cardP).join('');
+  if (!body) return '';
+  const src = r.kind === 'live' ? 'Serveur' : r.type === 'collection' || /serveur|4K/i.test(r.name) ? 'Serveur × TMDB' : 'TMDB';
+  return `<section class="row"><div class="row-h"><h2 class="h">${esc(r.name)}</h2><span class="src">${src}</span>${r.sub ? `<span class="sub">${esc(r.sub)}</span>` : ''}</div><div class="strip">${body}</div></section>`;
+}
+function openCollection(id) {
+  const c = D.collections.find(x => String(x.id) === String(id)); if (!c) return; stopHero();
+  sheet.innerHTML = `<div class="sh-bd"><div class="bg" style="background-image:url('${c.backdrop || c.poster}')"></div><button class="sh-close" data-close aria-label="Fermer">✕</button></div>
+    <div class="sh-body"><h1 class="h">${esc(c.name)}</h1>
+      <div class="chips"><span>${c.total} films</span><i class="dot"></i><span class="${c.complete ? 'star' : ''}">${c.complete ? 'Saga complète sur le serveur' : `${c.have} disponibles sur le serveur`}</span></div>
+      <div class="sec"><h3 class="h">Dans l'ordre de sortie</h3><div class="parts">${c.films.map(f => { const loc = byT.get('movie:' + f.tmdbId); return `<button class="part${f.onServer ? '' : ' off'}" ${loc ? `data-open="${loc.id}"` : ''}><img src="${f.poster || ''}" alt=""><div class="pt"><b>${esc(f.title)}</b><span>${f.year}${f.rating ? ` · ★ ${f.rating.toFixed(1)}` : ''}</span></div><span class="st${f.onServer ? ' ok' : ''}">${f.onServer ? 'Disponible' : 'Absent'}</span></button>`; }).join('')}</div></div>
+    </div>`;
+  sheet.classList.add('open'); sheet.scrollTop = 0; document.body.style.overflow = 'hidden';
 }
 
 /* ---- render ---- */
@@ -251,7 +280,7 @@ function render() {
   if (q.length >= 2) {
     const hits = ALL.filter(i => [i.title, i.original, i.rawName, ...(i.genres || []), ...(i.cast || []).map(c => c.name), i.director].filter(Boolean).join(' ').toLowerCase().includes(q));
     const g = [['movie', 'Films'], ['series', 'Séries'], ['live', 'Chaînes']].map(([k, n]) => ({ kind: k, type: 'row', name: n, items: hits.filter(i => i.kind === k) })).filter(r => r.items.length);
-    view.innerHTML = `<section class="browse"><h1 class="h">« ${esc(q)} »</h1><div class="sub">${hits.length} résultat${hits.length > 1 ? 's' : ''}</div></section><div class="rows">${g.map((r) => rowHTML(r, 9)).join('') || '<p class="empty">Aucun résultat.</p>'}</div>`;
+    view.innerHTML = `<section class="browse"><h1 class="h">« ${esc(q)} »</h1><div class="sub">${hits.length} résultat${hits.length > 1 ? 's' : ''}</div></section><div class="rows">${g.map(rowHTML).join('') || '<p class="empty">Aucun résultat.</p>'}</div>`;
     return;
   }
   if (tab === 'home') {
@@ -263,7 +292,7 @@ function render() {
     view.innerHTML = `<section class="browse"><h1 class="h">Ma liste</h1><div class="sub">${items.length} titre${items.length > 1 ? 's' : ''} · enregistrés sur cet appareil</div>${items.length ? `<div class="grid">${items.map(i => i.kind === 'live' ? cardLive(i) : cardP(i)).join('')}</div>` : `<div class="mylist-empty"><b>Rien pour l'instant</b>Appuie sur + sur un film ou une série pour le retrouver ici.</div>`}</section>`;
     return;
   }
-  const rows = ROWS.filter(r => r.kind === tab);
+  const rows = ROWS.filter(r => r.kind === tab && r.type !== 'collection');
   const label = { movie: 'Films', series: 'Séries', live: 'Live TV' }[tab];
   const cur = filterRow ? rows.filter(r => r.name === filterRow) : rows;
   const items = []; const s = new Set();
@@ -280,7 +309,8 @@ function openSheet(id, playing) {
   const live = i.kind === 'live';
   const sid = i.id.split(':')[1];
   const url = live ? `http://mag.marsweb.co/live/5e43d416a4/•••/${sid}.m3u8` : i.kind === 'series' ? `http://mag.marsweb.co/series/5e43d416a4/•••/{episode}.mp4` : `http://mag.marsweb.co/movie/5e43d416a4/•••/${sid}.mp4`;
-  const facts = live ? [['Nom brut Xtream', i.rawName]] : [['Titre original', i.original !== i.title ? i.original : null], ['Réalisateur', i.director], ['Créateurs', i.creators?.join(', ')], ['Genres', i.genres?.join(', ')], ['Sortie', i.date], ['Note TMDB', i.rating ? `${i.rating.toFixed(1)} / 10 · ${i.votes.toLocaleString('fr-FR')} votes` : null], ['Statut', i.status], ['Épisodes', i.episodes], ['Version du flux', i.lang]].filter(([, v]) => v);
+  const facts = live ? [['Nom brut Xtream', i.rawName]] : [['Titre original', i.original !== i.title ? i.original : null], ['Réalisateur', i.director], ['Créateurs', i.creators?.join(', ')], ['Genres', i.genres?.join(', ')], ['Sortie', i.date], ['Note TMDB', i.rating ? `${i.rating.toFixed(1)} / 10 · ${i.votes.toLocaleString('fr-FR')} votes` : null], ['Statut', i.status], ['Épisodes', i.episodes], ['Ajouté sur le serveur', i.added ? new Date(i.added * 1000).toLocaleDateString('fr-FR') : null]].filter(([, v]) => v);
+  const col = i.collection ? D.collections.find(c => c.id === i.collection) : null;
   const player = `<div class="player"><div>${live ? 'Flux HLS en direct' : 'Fichier vidéo'} du serveur de test : image noire, lecture désactivée dans cette démo hébergée. Dans l'application, ce bouton lance le flux.<code>${esc(url)}</code></div><div class="bar"><i></i></div></div>`;
   sheet.innerHTML = `
     <div class="sh-bd"><div class="bg" style="background-image:url('${i.backdrop || i.poster || i.icon}')"></div><button class="sh-close" data-close aria-label="Fermer">✕</button></div>
@@ -293,6 +323,8 @@ function openSheet(id, playing) {
       <div id="pslot">${playing ? player : ''}</div>
       ${i.cast?.length ? `<div class="sec"><h3 class="h">Casting</h3><div class="cast">${i.cast.map(c => `<div><div class="ph">${c.photo ? `<img src="${c.photo}" alt="">` : ''}</div><div class="nm">${esc(c.name)}</div><div class="ch">${esc(c.character)}</div></div>`).join('')}</div></div>` : ''}
       ${i.similar?.length ? `<div class="sec"><h3 class="h">${i.kind === 'series' ? 'Séries similaires' : 'Titres similaires'}</h3><div class="sim">${i.similar.map(s => { const loc = byT.get(i.kind + ':' + s.tmdbId); return `<button class="${loc ? '' : 'off'}" ${loc ? `data-open="${loc.id}"` : ''} title="${loc ? esc(s.title) : 'Absent de cette démo'}"><img src="${s.poster}" alt=""><span>${esc(s.title)}</span></button>`; }).join('')}</div></div>` : ''}
+      ${live ? '' : `<div class="sec"><h3 class="h">Versions sur le serveur</h3><div class="vers">${(i.versions?.length ? i.versions : [i.lang]).map(v => `<span>${esc(v)}</span>`).join('')}${i.is4k ? '<span class="tag4k" style="padding:2px 7px">4K / UHD</span>' : ''}</div></div>`}
+      ${col ? `<div class="sec"><h3 class="h">Fait partie d'une saga</h3><div class="strip" style="padding:0">${cardCol(col)}</div></div>` : ''}
       <div class="sec"><h3 class="h">Fiche</h3><dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}${live ? '' : `<div class="wide"><dt>Nom brut Xtream</dt><dd class="mono">${esc(i.rawName)}</dd></div>`}</dl></div>
     </div>`;
   sheet._player = player;
@@ -303,7 +335,8 @@ function play(id) { if (!sheet.classList.contains('open') || !sheet.querySelecto
 function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800); }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-play],[data-close],[data-cat],[data-list]'); if (!t) return;
+  const t = e.target.closest('[data-open],[data-play],[data-close],[data-cat],[data-list],[data-col]'); if (!t) return;
+  if (t.hasAttribute('data-col')) return openCollection(t.dataset.col);
   if (t.hasAttribute('data-close')) return closeSheet();
   if (t.hasAttribute('data-list')) return toggleList(t.dataset.list);
   if (t.hasAttribute('data-play')) return play(t.dataset.play);
