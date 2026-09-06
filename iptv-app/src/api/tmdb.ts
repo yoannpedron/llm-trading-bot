@@ -6,7 +6,7 @@
 const KEY = import.meta.env.VITE_TMDB_API_KEY as string | undefined
 const API = 'https://api.themoviedb.org/3'
 const IMG = 'https://image.tmdb.org/t/p'
-const LANG = 'fr-FR'
+import { tmdbLocale } from '../store/profile'
 
 export type ImgSize = 'w185' | 'w342' | 'w500' | 'w780' | 'w1280' | 'original'
 export const img = (path?: string | null, size: ImgSize = 'w500') => (path ? `${IMG}/${size}${path}` : undefined)
@@ -52,7 +52,7 @@ export async function tmdb<T>(path: string, params: Record<string, string> = {})
   if (!KEY) throw new Error('VITE_TMDB_API_KEY missing')
   await slot()
   try {
-    const q = new URLSearchParams({ api_key: KEY, language: LANG, ...params })
+    const q = new URLSearchParams({ api_key: KEY, language: tmdbLocale(), ...params })
     const r = await fetch(`${API}${path}?${q}`)
     if (r.status === 429) { await new Promise((r) => setTimeout(r, 1500)); return tmdb<T>(path, params) }
     if (!r.ok) throw new Error(`TMDB ${r.status}`)
@@ -98,7 +98,7 @@ export interface RawDetails {
 
 function pickLogo(imgs?: RawImages) {
   const logos = imgs?.logos ?? []
-  const pref = ['fr', 'en', null]
+  const pref = [tmdbLocale().slice(0, 2), 'en', null]
   const sorted = [...logos].sort((a, b) => pref.indexOf(a.iso_639_1) - pref.indexOf(b.iso_639_1) || b.vote_average - a.vote_average)
   const l = sorted.find((x) => pref.includes(x.iso_639_1)) ?? sorted[0]
   return l ? img(l.file_path, 'w500') : undefined
@@ -135,7 +135,7 @@ export function mapDetails(media: 'movie' | 'tv', d: RawDetails): Enriched {
 const APPEND = { append_to_response: 'credits,images,similar,videos', include_image_language: 'fr,en,null' }
 
 export async function details(media: 'movie' | 'tv', id: number): Promise<Enriched> {
-  const k = `${media}:${id}`
+  const k = `${tmdbLocale()}:${media}:${id}`
   const c = await cacheGet<Enriched>(k)
   if (c) return c
   const d = await tmdb<RawDetails>(`/${media}/${id}`, APPEND)

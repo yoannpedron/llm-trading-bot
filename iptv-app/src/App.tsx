@@ -13,10 +13,14 @@ import Login from './pages/Login'
 import Search from './pages/Search'
 import MyList from './pages/MyList'
 import Collection from './pages/Collection'
+import Profile from './pages/Profile'
+import { UI_LANGS, useProfile } from './store/profile'
 
 export default function App() {
   const { mode, creds, includeAdult } = useSession()
   const { status, load } = useCatalog()
+  const { uiLang, onboarded } = useProfile()
+  useEffect(() => { document.documentElement.lang = uiLang; document.documentElement.dir = UI_LANGS[uiLang].dir }, [uiLang])
 
   useEffect(() => { void load(mode, creds, includeAdult) }, [mode, creds, includeAdult, load])
 
@@ -29,7 +33,8 @@ export default function App() {
       ) : (
         <main className="relative z-10">
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={onboarded ? <Home /> : <Profile onboarding />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/movies" element={<Browse kind="movie" />} />
             <Route path="/series" element={<Browse kind="series" />} />
             <Route path="/live" element={<Browse kind="live" />} />

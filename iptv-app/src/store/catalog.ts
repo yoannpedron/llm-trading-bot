@@ -16,6 +16,7 @@ interface CatalogState {
   byId: Map<string, number>
   tmdbIndex: TmdbIndex
   load: (mode: 'mock' | 'live', creds?: XtreamCredentials, includeAdult?: boolean) => Promise<void>
+  rebuildIndex: (contentLangs: string[]) => void
   item: (id: string) => MediaItem | undefined
   itemsOf: (kind: Kind, categoryId?: string) => MediaItem[]
   search: (q: string, kind?: Kind, limit?: number) => MediaItem[]
@@ -57,6 +58,11 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
       if (signal.aborted) return
       set({ status: 'error', error: e instanceof Error ? e.message : String(e) })
     }
+  },
+
+  rebuildIndex(contentLangs) {
+    const c = get().catalog
+    if (c) set({ tmdbIndex: buildTmdbIndex(c.items, contentLangs), catalog: { ...c, generatedAt: Date.now() } })
   },
 
   item(id) {
