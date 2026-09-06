@@ -21,7 +21,7 @@ export function importance(m: Match, opts: { region: string; favTeams: string[];
   let s = competitionTier(m.competition)
   const region = REGION_ALIAS[opts.region] ?? opts.region
   if (competitionCountry(m.competition) === region) s += 35
-  if (m.state === 'in') s += 70
+  if (m.state === 'in') s += 120
   const h = (m.start.getTime() - now.getTime()) / 3600e3
   if (h >= 0 && h <= 2) s += 15
   if (BIG.has(norm(m.home))) s += 10
