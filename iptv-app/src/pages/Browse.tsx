@@ -39,7 +39,7 @@ export default function Browse({ kind }: { kind: Kind }) {
     if (tmdbMode) {
       if (genreName) return genre.data ?? []
       const seen = new Set<string>(); const out = []
-      for (const r of home.data ?? []) if (r.kind === kind) for (const i of r.items) if (!seen.has(i.id)) { seen.add(i.id); out.push(i) }
+      for (const r of home.data ?? []) if (r.kind === kind && r.type !== 'collection') for (const i of r.items) if (!seen.has(i.id)) { seen.add(i.id); out.push(i) }
       return out
     }
     return itemsOf(kind, cat || undefined)

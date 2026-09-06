@@ -12,6 +12,7 @@ import Watch from './pages/Watch'
 import Login from './pages/Login'
 import Search from './pages/Search'
 import MyList from './pages/MyList'
+import Collection from './pages/Collection'
 
 export default function App() {
   const { mode, creds, includeAdult } = useSession()
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/live" element={<Browse kind="live" />} />
             <Route path="/search" element={<Search />} />
             <Route path="/list" element={<MyList />} />
+            <Route path="/collection/:id" element={<Collection />} />
             <Route path="/details/:id" element={<Details />} />
             <Route path="/watch/:id" element={<Watch />} />
             <Route path="/login" element={<Login />} />

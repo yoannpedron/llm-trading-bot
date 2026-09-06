@@ -27,7 +27,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
   status: 'idle',
   progress: '',
   byId: new Map(),
-  tmdbIndex: new Map(),
+  tmdbIndex: { best: new Map(), versions: new Map(), fourK: new Set(), added: new Map() },
 
   async load(mode, creds, includeAdult) {
     abort?.abort()

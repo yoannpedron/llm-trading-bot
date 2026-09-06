@@ -14,6 +14,10 @@ export default function Details() {
   const item = useCatalog((s) => s.item(id))
   const client = useCatalog((s) => s.client)
   const catalog = useCatalog((s) => s.catalog)!
+  const idx = useCatalog((s) => s.tmdbIndex)
+  const tkey = item ? item.kind + ':' + item.tmdbId : ''
+  const versions = idx.versions.get(tkey) ?? (item?.lang ? [item.lang] : [])
+  const is4k = idx.fourK.has(tkey)
   const setFocused = useUi((s) => s.setFocused)
   const { data, isLoading } = useEnrich(item)
   const list = useMyList()
@@ -114,7 +118,7 @@ export default function Details() {
           <Row k="Année" v={data?.year ?? item.year} />
           <Row k="Note TMDB" v={data?.rating ? `${data.rating.toFixed(1)} / 10 (${data.votes} votes)` : undefined} />
           <Row k="Statut" v={data?.status} />
-          <Row k="Langue flux" v={item.lang} />
+          <div><p className="text-[11px] uppercase tracking-wide text-white/40">Versions sur le serveur</p><div className="mt-1 flex flex-wrap gap-1.5">{versions.map((v) => <span key={v} className="rounded bg-white/10 px-2 py-0.5 text-xs font-semibold">{v}</span>)}{is4k && <span className="rounded border border-amber-400 px-2 py-0.5 text-xs font-bold text-amber-400">4K / UHD</span>}</div></div>
           <Row k="Qualité" v={item.quality} />
           <Row k="Tags" v={item.tags.join(', ')} />
           <Row k="Nom brut" v={item.rawName} mono />
