@@ -17,6 +17,7 @@ import Settings from './pages/Settings'
 import Live from './pages/Live'
 import Sport from './pages/Sport'
 import Multi from './pages/Multi'
+import Downloads from './pages/Downloads'
 import { UI_LANGS, useProfile } from './store/profile'
 import { useSettings } from './store/settings'
 
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/sport/multi" element={<Multi />} />
             <Route path="/search" element={<Search />} />
             <Route path="/list" element={<MyList />} />
+            <Route path="/downloads" element={<Downloads />} />
             <Route path="/collection/:id" element={<Collection />} />
             <Route path="/details/:id" element={<Details />} />
             <Route path="/watch/:id" element={<Watch />} />

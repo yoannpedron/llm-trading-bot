@@ -6,6 +6,8 @@ import { useUi } from '../store/ui'
 import { useEnrich } from '../hooks/useEnrich'
 import Hero from '../components/Hero'
 import { useMyList } from '../store/mylist'
+import { useDownloads } from '../download/store'
+import { opfsAvailable } from '../download/opfs'
 import type { XtreamSeriesInfo } from '../api/xtream'
 
 export default function Details() {
@@ -22,6 +24,9 @@ export default function Details() {
   const setFocused = useUi((s) => s.setFocused)
   const { data, isLoading } = useEnrich(item)
   const list = useMyList()
+  const dl = useDownloads()
+  const canDl = !!client && opfsAvailable()
+  const dlState = (id: string) => dl.items[id]?.status
   useEffect(() => { if (item) setFocused(item.id) }, [item, setFocused])
   useEffect(() => window.scrollTo({ top: 0 }), [id])
 
@@ -51,7 +56,13 @@ export default function Details() {
       <div className="grid grid-cols-1 gap-10 px-8 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-8">
           {isLoading && <p className="text-white/40">Chargement TMDB…</p>}
-          <button onClick={() => list.toggle(item.id)} className={`-mt-2 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold ${list.ids.includes(item.id) ? 'bg-amber-400 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{list.ids.includes(item.id) ? '✓ Dans ma liste' : '+ Ma liste'}</button>
+          <div className="-mt-2 flex flex-wrap gap-2">
+            <button onClick={() => list.toggle(item.id)} className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold ${list.ids.includes(item.id) ? 'bg-amber-400 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{list.ids.includes(item.id) ? '✓ Dans ma liste' : '+ Ma liste'}</button>
+            {canDl && item.kind === 'movie' && item.id.startsWith('movie:') && (
+              dlState(item.id) === 'done' ? <Link to={`/watch/${item.id}?local=${encodeURIComponent(item.id)}`} className="inline-flex h-10 items-center rounded-lg bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-200">⤓ Hors ligne · Lire</Link>
+              : dlState(item.id) ? <Link to="/downloads" className="inline-flex h-10 items-center rounded-lg bg-white/10 px-4 text-sm font-semibold">⤓ {dlState(item.id) === 'waiting-slot' ? 'Attente du créneau' : 'Téléchargement…'}</Link>
+              : <button onClick={() => dl.add({ id: item.id, title: data?.title ?? item.title, url: client!.movieUrl(item.streamId, item.ext), ext: item.ext ?? 'mp4' })} className="inline-flex h-10 items-center rounded-lg bg-white/10 px-4 text-sm font-semibold hover:bg-white/20">⤓ Télécharger</button>)}
+          </div>
           {data?.cast.length ? (
             <section>
               <h3 className="mb-3 text-lg font-semibold">Casting</h3>
@@ -78,6 +89,7 @@ export default function Details() {
                 {(seriesInfo.data?.episodes[currentSeason] ?? []).map((ep) => (
                   <li key={ep.id}>
                     <button onClick={() => nav(`/watch/${item.id}?ep=${ep.id}&ext=${ep.container_extension}`)} className="flex w-full gap-4 py-3 text-left hover:bg-white/5">
+                      {canDl && <span onClick={(e) => { e.stopPropagation(); const id = `${item.id}#${ep.id}`; if (dl.items[id]?.status === 'done') nav(`/watch/${item.id}?ep=${ep.id}&ext=${ep.container_extension}&local=${encodeURIComponent(id)}`); else if (!dl.items[id]) dl.add({ id, title: `${data?.title ?? item.title} · ${ep.title}`, url: client!.episodeUrl(ep.id, ep.container_extension), ext: ep.container_extension || 'mp4' }) }} className={`grid h-8 w-8 shrink-0 place-items-center self-center rounded-full text-sm ${dl.items[`${item.id}#${ep.id}`]?.status === 'done' ? 'bg-emerald-500/20 text-emerald-200' : dl.items[`${item.id}#${ep.id}`] ? 'bg-white/10 text-white/50' : 'bg-white/10'}`} title="Télécharger">⤓</span>}
                       <span className="w-8 text-right text-white/40">{ep.episode_num}</span>
                       <span className="flex-1">
                         <span className="block font-medium">{ep.title}</span>

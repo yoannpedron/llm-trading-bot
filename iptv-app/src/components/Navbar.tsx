@@ -25,6 +25,7 @@ export default function Navbar() {
         <NavLink to="/live" className={link}>{t('live')}{counts ? ` · ${fmt(counts.live)}` : ''}</NavLink>
         <NavLink to="/sport" className={link}>Matchs</NavLink>
         <NavLink to="/list" className={link}>{t('mylist')}</NavLink>
+        <NavLink to="/downloads" className={link}>Hors ligne</NavLink>
       </nav>
       <form
         className="ml-auto"

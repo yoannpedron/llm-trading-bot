@@ -6,6 +6,8 @@ import { useMatches, teamKey } from '../hooks/useMatches'
 import { useSportPrefs } from '../store/sportPrefs'
 import { useBadge } from '../hooks/useBadge'
 import { parseEvent } from '../parser/live'
+import { useDownloads } from '../download/store'
+import { fileOf } from '../download/opfs'
 import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
@@ -26,6 +28,10 @@ export default function Watch() {
   useEffect(() => { if (item) record(item.id) }, [item, record])
   useEffect(() => { setBackdrop(undefined) }, [setBackdrop])
   const ep = params.get('ep') ?? undefined
+  const localId = params.get('local') ?? undefined
+  const dlItem = useDownloads((s) => localId ? s.items[localId] : undefined)
+  const [localUrl, setLocalUrl] = useState<string>()
+  useEffect(() => { let u: string | undefined; if (dlItem?.status === 'done') void fileOf(dlItem.file).then((f) => { if (f) { u = URL.createObjectURL(f); setLocalUrl(u) } }); return () => { if (u) URL.revokeObjectURL(u) } }, [dlItem])
   const alts = useMemo(() => (params.get('alts') ?? '').split(',').filter(Boolean), [params])
   const { cards } = useMatches()
   const sportPrefs = useSportPrefs()
@@ -47,8 +53,8 @@ export default function Watch() {
 
   if (!item) return <p className="p-24">Introuvable.</p>
 
-  let src: string | undefined
-  if (client) {
+  let src: string | undefined = localUrl
+  if (!src && client) {
     if (item.kind === 'live') src = client.liveUrl(item.streamId)
     else if (ep) src = client.episodeUrl(ep, params.get('ext') ?? 'mp4')
     else if (item.id.startsWith('movie:')) src = client.movieUrl(item.streamId, item.ext)
@@ -61,6 +67,7 @@ export default function Watch() {
         <span className="text-sm text-white/50">{[item.year, item.lang, item.quality].filter(Boolean).join(' · ')}</span>
         {item.kind !== 'live' && <Link to={`/details/${item.id}`} className="ml-auto text-sm text-white/60 hover:text-white">Détails →</Link>}
       </div>
+      {localUrl && <p className="mb-2 text-xs text-emerald-300">Lecture hors ligne depuis l'appareil. Le créneau du serveur reste libre.</p>}
       {src ? (
         <Player src={src} title={item.title} startAt={startAt} onProgress={item.kind === 'live' ? undefined : onProgress} onEnded={onEnded} onError={onError} />
       ) : (
