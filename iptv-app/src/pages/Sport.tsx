@@ -54,15 +54,14 @@ export default function Sport() {
 
 function Section({ title, items, now, live, dim }: { title: string; items: (LiveEvent & { item: MediaItem; flag: string })[]; now: Date; live?: boolean; dim?: boolean }) {
   if (!items.length) return null
-  let lastDay = ''
+  const days = items.map((e) => e.start!.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))
   return (
     <section className={`mt-8 ${dim ? 'opacity-60' : ''}`}>
       <h2 className="mb-3 font-display text-lg font-bold">{live && <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-red-500 align-middle" />}{title} <span className="text-sm font-normal text-white/40">{items.length}</span></h2>
       <ol className="flex flex-col gap-1.5">
-        {items.map((e) => {
-          const day = e.start!.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-          const head = day !== lastDay ? <li key={'d' + day} className="mt-2 text-[11px] uppercase tracking-[.08em] text-white/40">{day}</li> : null
-          lastDay = day
+        {items.map((e, i) => {
+          const day = days[i]
+          const head = day !== days[i - 1] ? <li key={'d' + day} className="mt-2 text-[11px] uppercase tracking-[.08em] text-white/40">{day}</li> : null
           return (
             <>{head}
               <li key={e.item.id}>

@@ -18,7 +18,7 @@ describe('live helpers', () => {
     const e = parseEvent('NEXT | ROMA - ATALANTA | Sat 05 Sep 18:35 GMT (IS) | 8K EXCLUSIVE | IS: LIVEY PPV 29', now)!
     expect(e.title).toBe('ROMA - ATALANTA')
     expect(e.start?.toISOString()).toBe('2026-09-05T18:35:00.000Z')
-    expect(e.status).toBe('ended' === 'ended' ? e.status : e.status) // status derives from prefix + time
+    expect(e.status).toBe('next') // prefix says NEXT and start is > 3 h ago: kept as announced
     const f = parseEvent('ENDED | AL NASSR FC VS. AL HILAL FC | Sat 05 Sep 17:45 +03 (SA) | 8K EXCLUSIVE | SA: SHAHID PPV 9', now)!
     expect(f.start?.toISOString()).toBe('2026-09-05T14:45:00.000Z')
     expect(f.status).toBe('ended')

@@ -11,6 +11,8 @@ import Row from '../components/Row'
 import type { ListRow } from '../api/tmdbLists'
 import type { Kind } from '../types'
 
+const KIDS = /Animation|Familial|Anime|Enfant|Kids/i
+
 export default function Home() {
   const catalog = useCatalog((s) => s.catalog)!
   const { data: rows, isLoading, error } = useHomeRows()
@@ -33,7 +35,6 @@ export default function Home() {
     return rows.filter((r) => r.items.length)
   }, [catalog])
 
-  const KIDS = /Animation|Familial|Anime|Enfant|Kids/i
   const { hiddenRows, pinnedRows, rowOrder, renamedRows } = useSettings()
   const matches = useMemo<ListRow | undefined>(() => {
     const now = new Date(); const soon = now.getTime() + 60 * 60000
