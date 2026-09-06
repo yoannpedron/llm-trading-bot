@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useCatalog } from '../store/catalog'
 import { useProgress } from '../store/progress'
 import { useProfile } from '../store/profile'
+import { useSettings } from '../store/settings'
+import { parseEvent } from '../parser/live'
 import { useHomeRows } from '../hooks/useHomeRows'
 import { hasTmdbKey } from '../api/tmdb'
 import HeroShow from '../components/HeroShow'
@@ -32,9 +34,21 @@ export default function Home() {
   }, [catalog])
 
   const KIDS = /Animation|Familial|Anime|Enfant|Kids/i
-  const list = (rows?.length ? rows : providerRows).filter((r) => !kids || KIDS.test(r.name))
-  const hero = rows?.[0]?.items.slice(0, 6) ?? providerRows[0]?.items.slice(0, 6) ?? []
-  const liveRow = rows?.length ? providerRows.find((r) => r.kind === 'live') : undefined
+  const { hiddenRows, pinnedRows, rowOrder, renamedRows } = useSettings()
+  const matches = useMemo<ListRow | undefined>(() => {
+    const now = new Date(); const soon = now.getTime() + 60 * 60000
+    const items = catalog.items.filter((i) => { if (i.kind !== 'live') return false; const e = parseEvent(i.rawName, now); return !!e && !!e.start && (e.status === 'live' || (e.status === 'next' && e.start.getTime() <= soon)) })
+      .sort((a, b) => (parseEvent(a.rawName, now)!.start!.getTime()) - (parseEvent(b.rawName, now)!.start!.getTime())).slice(0, 30)
+    return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs en direct et dans l’heure', sub: 'Événements détectés dans les flux du serveur', items } : undefined
+  }, [catalog])
+  const list = useMemo(() => {
+    const base = [...(rows?.length ? rows : providerRows)]
+    if (matches) base.splice(Math.min(2, base.length), 0, matches)
+    const withPrefs = base.filter((r) => !hiddenRows.includes(r.key) && (!kids || KIDS.test(r.name))).map((r) => renamedRows[r.key] ? { ...r, name: renamedRows[r.key] } : r)
+    const pos = (k: string) => { const i = rowOrder.indexOf(k); return i < 0 ? 1e6 : i }
+    return withPrefs.sort((a, b) => Number(pinnedRows.includes(b.key)) - Number(pinnedRows.includes(a.key)) || pos(a.key) - pos(b.key))
+  }, [rows, providerRows, matches, hiddenRows, pinnedRows, rowOrder, renamedRows, kids])
+  const hero = (list.find((r) => r.kind !== 'live' && r.items.length) ?? providerRows[0])?.items.slice(0, 6) ?? []
 
   return (
     <div>
@@ -46,7 +60,6 @@ export default function Home() {
         {resume && !kids && <Row row={resume} />}
         {kids && <p className="mx-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 md:mx-12">Mode enfant actif : animation et famille uniquement. Désactivable dans le profil.</p>}
         {list.map((r) => <Row key={r.key} row={r} to={r.kind === 'live' ? '/live' : undefined} />)}
-        {liveRow && <Row row={liveRow} to="/live" />}
       </div>
     </div>
   )

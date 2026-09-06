@@ -3,7 +3,7 @@
  * concurrency limiter (TMDB tolerates ~50 req/s; we stay well under),
  * and an IndexedDB cache so a title is never fetched twice.
  */
-const KEY = import.meta.env.VITE_TMDB_API_KEY as string | undefined
+const KEY = (() => { try { const o = JSON.parse(localStorage.getItem('iptv-settings') ?? '{}')?.state?.tmdbKeyOverride; if (o) return o as string } catch { /* ignore */ } return import.meta.env.VITE_TMDB_API_KEY as string | undefined })()
 const API = 'https://api.themoviedb.org/3'
 const IMG = 'https://image.tmdb.org/t/p'
 import { tmdbLocale } from '../store/profile'
@@ -37,6 +37,10 @@ export interface Enriched {
   seasons?: number
   episodes?: number
   status?: string
+  collection?: { id: number; name: string }
+  genreIds?: number[]
+  castIds?: number[]
+  directorId?: number
 }
 
 /* ---------- concurrency limiter ---------- */
@@ -90,8 +94,9 @@ interface RawVideos { results?: { site: string; type: string; key: string; offic
 export interface RawDetails {
   id: number; title?: string; name?: string; original_title?: string; original_name?: string; tagline?: string; overview?: string
   release_date?: string; first_air_date?: string; runtime?: number; episode_run_time?: number[]; vote_average?: number; vote_count?: number
-  genres?: { name: string }[]; poster_path?: string | null; backdrop_path?: string | null; status?: string
+  genres?: { id?: number; name: string }[]; poster_path?: string | null; backdrop_path?: string | null; status?: string
   number_of_seasons?: number; number_of_episodes?: number; created_by?: { name: string }[]
+  belongs_to_collection?: { id: number; name: string } | null
   last_episode_to_air?: { runtime?: number | null } | null
   images?: RawImages; credits?: RawCredits; similar?: RawSimilar; videos?: RawVideos
 }
@@ -129,6 +134,10 @@ export function mapDetails(media: 'movie' | 'tv', d: RawDetails): Enriched {
     })),
     trailer: trailer?.key,
     seasons: d.number_of_seasons, episodes: d.number_of_episodes, status: d.status,
+    collection: d.belongs_to_collection ? { id: d.belongs_to_collection.id, name: d.belongs_to_collection.name } : undefined,
+    genreIds: d.genres?.map((g) => g.id).filter((x): x is number => typeof x === 'number'),
+    castIds: (d.credits?.cast ?? []).slice(0, 5).map((c) => c.id),
+    directorId: d.credits?.crew?.find((c) => c.job === 'Director')?.id,
   }
 }
 

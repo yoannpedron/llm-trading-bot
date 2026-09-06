@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useProgress } from '../store/progress'
+import { useHistory } from '../store/history'
 import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
@@ -17,6 +18,8 @@ export default function Watch() {
   const setBackdrop = useUi((s) => s.setBackdrop)
   const nav = useNavigate()
   const progress = useProgress()
+  const record = useHistory((s) => s.record)
+  useEffect(() => { if (item) record(item.id) }, [item, record])
   useEffect(() => { setBackdrop(undefined) }, [setBackdrop])
   const ep = params.get('ep') ?? undefined
   const startAt = progress.map[id]?.ep === ep ? progress.map[id]?.t : undefined

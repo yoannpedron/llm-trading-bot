@@ -3,7 +3,7 @@
  * plus cross-referenced rows (server × TMDB). Strict dedup: a title appears in one row only.
  * ~60 requests for the whole home page whatever the catalogue size.
  */
-import { tmdb, img } from './tmdb'
+import { tmdb, img, details } from './tmdb'
 import type { Kind, MediaItem } from '../types'
 import { PREFIX_INFO, useProfile } from '../store/profile'
 import { t } from '../i18n'
@@ -59,10 +59,8 @@ export const TV_GENRES: Record<string, number> = {
   'Action & Aventure': 10759, Animation: 16, Comédie: 35, Crime: 80, Documentaire: 99, Drame: 18, Familial: 10751, Mystère: 9648,
   'Science-Fiction & Fantastique': 10765, 'Guerre & Politique': 10768, Western: 37,
 }
-const DIRECTORS: Record<string, number> = { 'Christopher Nolan': 525, 'Denis Villeneuve': 137427, 'Quentin Tarantino': 138, 'Martin Scorsese': 1032 }
-const SAGAS = [10, 1241, 86311, 9485, 263, 2344, 119, 87359, 645, 528, 8945, 748, 328, 31562, 1575]
 
-/** Cinematography hubs: TMDB original language ∩ catalogue. Shown for the profile's languages first. */
+/** Cinematography hubs: TMDB original language ∩ catalogue. */
 const HUBS: { key: string; name: string; iso: string; kind: Kind; genre?: number }[] = [
   { key: 'fr', name: 'Cinéma français', iso: 'fr', kind: 'movie' }, { key: 'ar', name: 'السينما العربية · Cinéma arabe', iso: 'ar', kind: 'movie' },
   { key: 'hi', name: 'Bollywood', iso: 'hi', kind: 'movie' }, { key: 'tr', name: 'Dizi · Séries turques', iso: 'tr', kind: 'series' },
@@ -70,12 +68,25 @@ const HUBS: { key: string; name: string; iso: string; kind: Kind; genre?: number
   { key: 'es', name: 'Cine español y latino', iso: 'es', kind: 'movie' }, { key: 'de', name: 'Deutsches Kino', iso: 'de', kind: 'movie' },
   { key: 'pl', name: 'Kino polskie', iso: 'pl', kind: 'movie' }, { key: 'it', name: 'Cinema italiano', iso: 'it', kind: 'movie' },
   { key: 'sv', name: 'Nordic noir', iso: 'sv|da|no', kind: 'series' }, { key: 'ta', name: 'Kollywood · Tamil', iso: 'ta', kind: 'movie' },
+  { key: 'pt', name: 'Cinema brasileiro e português', iso: 'pt', kind: 'movie' }, { key: 'zh', name: 'Cinéma chinois et HK', iso: 'zh', kind: 'movie' },
 ]
+const SAGA_POOL = [10, 1241, 86311, 9485, 263, 2344, 119, 87359, 645, 528, 8945, 748, 328, 31562, 1575, 2980, 8091, 9735, 1570, 84, 91361, 131295, 86066, 8650, 264]
+const DECADES = [1970, 1980, 1990, 2000, 2010, 2020]
 
-export async function homeRows(idx: TmdbIndex): Promise<ListRow[]> {
+/** Deterministic daily seed so rotating rows change once a day, not on every reload. */
+function daySeed() { const d = new Date(); return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5) }
+function pickDaily<T>(arr: T[], salt: number): T { return arr[(daySeed() * 7 + salt * 13) % arr.length] }
+
+export interface Personal { lastWatched: MediaItem[]; seriesIds: number[] }
+
+export async function homeRows(idx: TmdbIndex, personal?: Personal): Promise<ListRow[]> {
   const { contentLangs, region } = useProfile.getState()
   const isos = new Set(contentLangs.map((l) => PREFIX_INFO[l]?.iso).filter(Boolean))
-  const hubs = [...HUBS.filter((h) => h.iso.split('|').some((i) => isos.has(i))), ...HUBS.filter((h) => !h.iso.split('|').some((i) => isos.has(i)))].slice(0, 6)
+  const myHubs = HUBS.filter((h) => h.iso.split('|').some((i) => isos.has(i)))
+  const otherHubs = HUBS.filter((h) => !myHubs.includes(h))
+  const hubOfDay = otherHubs.length ? pickDaily(otherHubs, 1) : undefined
+  const genreOfDay = pickDaily(Object.entries(MOVIE_GENRES), 2)
+  const decadeOfDay = pickDaily(DECADES, 3)
   const used = new Set<string>()
   const take = (kind: Kind, ids: number[], n: number): MediaItem[] => {
     const out: MediaItem[] = []
@@ -83,37 +94,66 @@ export async function homeRows(idx: TmdbIndex): Promise<ListRow[]> {
     return out
   }
   const ids = (r: R[]) => r.map((x) => x.id)
-  const recentKeys = new Set([...idx.added.entries()].sort((a, b) => b[1] - a[1]).slice(0, 1500).map(([k]) => k))
+  const dayAgo = Date.now() / 1000 - 86400, weekAgo = Date.now() / 1000 - 7 * 86400
+  const addedSince = (t: number) => [...idx.added.entries()].filter(([, a]) => a >= t).sort((a, b) => b[1] - a[1]).map(([k]) => k)
 
-  const [trM, now, popM, topM, masters, gems, , trT, air, topT, popT, ...rest] = await Promise.all([
-    list('/trending/movie/week', 3), list('/movie/now_playing', 6, { region }), list('/movie/popular', 10), list('/movie/top_rated', 5),
-    list('/discover/movie', 4, { sort_by: 'vote_average.desc', 'vote_count.gte': '8000' }),
-    list('/discover/movie', 4, { sort_by: 'vote_average.desc', 'vote_count.gte': '400', 'vote_count.lte': '2500', 'primary_release_date.gte': '2015-01-01' }),
-    Promise.resolve([] as R[]),
-    list('/trending/tv/week', 3), list('/tv/on_the_air', 5), list('/tv/top_rated', 3), list('/tv/popular', 4),
-    ...Object.values(DIRECTORS).map((pid) => tmdb<{ crew: R[] }>(`/person/${pid}/movie_credits`).then((c) => c.crew.filter((x) => x.job === 'Director').sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0))).catch(() => [] as R[])),
-    ...Object.values(MOVIE_GENRES).slice(0, 12).map((g) => list('/discover/movie', 5, { with_genres: String(g), sort_by: 'popularity.desc', 'vote_count.gte': '300' })),
-    ...Object.values(TV_GENRES).slice(0, 6).map((g) => list('/discover/tv', 4, { with_genres: String(g), sort_by: 'popularity.desc', 'vote_count.gte': '200' })),
-    ...hubs.map((h) => list(h.kind === 'movie' ? '/discover/movie' : '/discover/tv', 5, { with_original_language: h.iso, sort_by: 'popularity.desc', 'vote_count.gte': '50', ...(h.genre ? { with_genres: String(h.genre) } : {}) })),
+  /* ---- personalised sources (from history) ---- */
+  const last = personal?.lastWatched.filter((i) => i.tmdbId).slice(0, 3) ?? []
+  const lastDetails = await Promise.all(last.map((i) => details(i.kind === 'series' ? 'tv' : 'movie', i.tmdbId!).catch(() => undefined)))
+  const seed = lastDetails.find(Boolean)
+  const seedItem = last[lastDetails.findIndex(Boolean)]
+  const personIds = [...new Set(lastDetails.flatMap((d) => d ? [d.directorId, ...(d.castIds ?? []).slice(0, 2)] : []).filter((x): x is number => !!x))].slice(0, 3)
+
+  const [trDay, now, airing, trT, popM, popT, genreRow, decadeRow, hubRows, hubDay, sagaDay, people, seriesAir] = await Promise.all([
+    list('/trending/movie/day', 3), list('/movie/now_playing', 6, { region }), list('/tv/airing_today', 4), list('/trending/tv/day', 3),
+    list('/movie/popular', 6), list('/tv/popular', 3),
+    list('/discover/movie', 4, { with_genres: String(genreOfDay[1]), sort_by: 'popularity.desc', 'vote_count.gte': '300' }),
+    list('/discover/movie', 4, { 'primary_release_date.gte': `${decadeOfDay}-01-01`, 'primary_release_date.lte': `${decadeOfDay + 9}-12-31`, sort_by: 'vote_count.desc' }),
+    Promise.all(myHubs.map((h) => list(h.kind === 'movie' ? '/discover/movie' : '/discover/tv', 4, { with_original_language: h.iso, sort_by: 'popularity.desc', 'vote_count.gte': '50', ...(h.genre ? { with_genres: String(h.genre) } : {}) }))),
+    hubOfDay ? list(hubOfDay.kind === 'movie' ? '/discover/movie' : '/discover/tv', 4, { with_original_language: hubOfDay.iso, sort_by: 'popularity.desc', 'vote_count.gte': '50', ...(hubOfDay.genre ? { with_genres: String(hubOfDay.genre) } : {}) }) : Promise.resolve([] as R[]),
+    collection(pickDaily(SAGA_POOL, 4), idx),
+    Promise.all(personIds.map((pid) => tmdb<{ id: number; name: string; cast: R[]; crew: R[] }>(`/person/${pid}/combined_credits`).then((c) => ({ pid, credits: c })).catch(() => undefined))),
+    list('/tv/on_the_air', 5),
   ])
-  const dirs = rest.slice(0, 4), mg = rest.slice(4, 16), tg = rest.slice(16, 22), hb = rest.slice(22)
 
   const rows: ListRow[] = []
-  rows.push({ key: 'top-m', kind: 'movie', type: 'top10', name: t('top10movies'), sub: 'Tendances TMDB croisées avec le catalogue', items: take('movie', ids(trM), 10) })
-  rows.push({ key: 'now', kind: 'movie', type: 'wide', name: t('nowplaying'), sub: 'Sorties récentes en salle déjà sur le serveur', items: take('movie', ids([...now].sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))), 16) })
-  rows.push({ key: 'fresh', kind: 'movie', type: 'wide', name: t('fresh'), sub: 'Derniers ajouts du provider, classés par popularité TMDB', items: take('movie', ids(popM).filter((i) => recentKeys.has('movie:' + i)), 16) })
-  rows.push({ key: '4k', kind: 'movie', type: 'row', name: t('fourk'), sub: 'Versions 4K/UHD du serveur, triées par popularité', items: take('movie', ids([...popM, ...topM]).filter((i) => idx.fourK.has('movie:' + i)), 16) })
-  rows.push({ key: 'sagas', kind: 'movie', type: 'collection', name: t('sagas'), sub: 'Franchises dont tous les films sont disponibles', items: [], collections: await collections(idx) })
-  rows.push({ key: 'masters', kind: 'movie', type: 'row', name: t('masters'), sub: 'Note ≥ 8 avec plus de 8 000 votes', items: take('movie', ids(masters), 16) })
-  rows.push({ key: 'gems', kind: 'movie', type: 'row', name: t('gems'), sub: 'Très bien notés, peu vus : 400 à 2 500 votes depuis 2015', items: take('movie', ids(gems), 16) })
-  Object.keys(DIRECTORS).forEach((name, i) => { const items = take('movie', ids(dirs[i]), 12); if (items.length >= 4) rows.push({ key: 'dir-' + name, kind: 'movie', type: 'row', name: `${t('directedby')} ${name}`, sub: `${items.length} films du réalisateur sur le serveur`, items }) })
-  hubs.forEach((h, i) => { const items = take(h.kind, ids(hb[i]), 16); if (items.length >= 4) rows.push({ key: 'hub-' + h.key, kind: h.kind, type: 'row', name: h.name, sub: isos.has(h.iso.split('|')[0]) ? t('inyourlang') : undefined, items }) })
-  rows.push({ key: 'top-t', kind: 'series', type: 'top10', name: t('top10series'), items: take('series', ids(trT), 10) })
-  rows.push({ key: 'air', kind: 'series', type: 'wide', name: t('onair'), sub: 'Séries en cours de diffusion, présentes sur le serveur', items: take('series', ids(air), 16) })
-  Object.keys(MOVIE_GENRES).slice(0, 12).forEach((g, i) => rows.push({ key: 'g-' + g, kind: 'movie', type: 'row', name: g, items: take('movie', ids(mg[i]), 14) }))
-  rows.push({ key: 'rated-t', kind: 'series', type: 'row', name: 'Séries les mieux notées', items: take('series', ids(topT), 16) })
-  rows.push({ key: 'pop-t', kind: 'series', type: 'row', name: 'Séries populaires', items: take('series', ids(popT), 16) })
-  Object.keys(TV_GENRES).slice(0, 6).forEach((g, i) => rows.push({ key: 'tg-' + g, kind: 'series', type: 'row', name: `Séries · ${g}`, items: take('series', ids(tg[i]), 14) }))
+  // 1. temporal
+  rows.push({ key: 'trend-day', kind: 'movie', type: 'top10', name: 'Tendances aujourd’hui', sub: 'Classement TMDB du jour, titres présents sur le serveur', items: take('movie', ids(trDay), 10) })
+  rows.push({ key: 'now', kind: 'movie', type: 'wide', name: t('nowplaying'), sub: 'En salle cette semaine dans ton pays, déjà sur le serveur', items: take('movie', ids([...now].sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))), 16) })
+  rows.push({ key: 'added-today', kind: 'movie', type: 'wide', name: 'Ajoutés aujourd’hui sur le serveur', sub: 'Les dernières 24 h, classés par popularité TMDB', items: take('movie', ids(popM).filter((i) => addedSince(dayAgo).includes('movie:' + i)).concat(addedSince(dayAgo).filter((k) => k.startsWith('movie:')).map((k) => +k.split(':')[1])), 16) })
+  rows.push({ key: 'airing', kind: 'series', type: 'wide', name: 'Nouveaux épisodes aujourd’hui', sub: 'Séries diffusées aujourd’hui, présentes sur le serveur', items: take('series', ids(airing), 16) })
+  // 2. personalised
+  if (seed && seedItem) {
+    const sim = seed.similar.map((s) => s.id)
+    rows.push({ key: 'because', kind: seedItem.kind, type: 'row', name: `Parce que tu as regardé ${seed.title}`, sub: 'Titres similaires selon TMDB', items: take(seedItem.kind, sim, 16) })
+    if (seed.collection && seedItem.kind === 'movie') {
+      const c = await collection(seed.collection.id, idx)
+      const rest = c?.parts.filter((p) => p.item && !personal?.lastWatched.some((w) => w.id === p.item!.id)).map((p) => p.tmdbId) ?? []
+      if (rest.length) rows.push({ key: 'saga-next', kind: 'movie', type: 'row', name: `La suite de ${seed.collection.name}`, sub: 'Films de la saga que tu n’as pas encore vus', items: take('movie', rest, 12) })
+    }
+  }
+  for (const p of people) {
+    if (!p) continue
+    const name = p.credits.cast.concat(p.credits.crew).length ? (await tmdb<{ name: string }>(`/person/${p.pid}`).catch(() => ({ name: '' }))).name : ''
+    const cr = [...p.credits.crew.filter((c) => c.job === 'Director'), ...p.credits.cast].sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0))
+    const items = take('movie', ids(cr), 12)
+    if (items.length >= 4 && name) rows.push({ key: 'person-' + p.pid, kind: 'movie', type: 'row', name: `Avec ${name}`, sub: 'Parce que tu as regardé un de ses films', items })
+  }
+  if (personal?.seriesIds.length) {
+    const mine = new Set(personal.seriesIds)
+    const items = take('series', ids(seriesAir).filter((i) => mine.has(i)), 12)
+    if (items.length) rows.push({ key: 'my-series', kind: 'series', type: 'row', name: 'Nouveaux épisodes de tes séries', items })
+  }
+  // 3. daily rotation
+  rows.push({ key: 'trend-tv', kind: 'series', type: 'top10', name: 'Séries tendance aujourd’hui', items: take('series', ids(trT), 10) })
+  rows.push({ key: 'genre-day', kind: 'movie', type: 'row', name: `Genre du jour · ${genreOfDay[0]}`, sub: 'Change chaque jour', items: take('movie', ids(genreRow), 16) })
+  rows.push({ key: 'decade-day', kind: 'movie', type: 'row', name: `Décennie du jour · années ${decadeOfDay}`, sub: 'Change chaque jour', items: take('movie', ids(decadeRow), 16) })
+  if (sagaDay?.complete) rows.push({ key: 'saga-day', kind: 'movie', type: 'collection', name: `Saga du jour · ${sagaDay.name}`, sub: `${sagaDay.total} films, tous disponibles`, items: [], collections: [sagaDay] })
+  if (hubOfDay) rows.push({ key: 'hub-day', kind: hubOfDay.kind, type: 'row', name: `Pays du jour · ${hubOfDay.name}`, sub: 'Change chaque jour', items: take(hubOfDay.kind, ids(hubDay), 16) })
+  myHubs.forEach((h, i) => { const items = take(h.kind, ids(hubRows[i]), 16); if (items.length >= 4) rows.push({ key: 'hub-' + h.key, kind: h.kind, type: 'row', name: h.name, sub: t('inyourlang'), items }) })
+  rows.push({ key: 'added-week', kind: 'movie', type: 'row', name: t('fresh'), sub: 'Sept derniers jours', items: take('movie', addedSince(weekAgo).filter((k) => k.startsWith('movie:')).map((k) => +k.split(':')[1]), 20) })
+  rows.push({ key: '4k', kind: 'movie', type: 'row', name: t('fourk'), sub: 'Versions 4K/UHD du serveur, triées par popularité', items: take('movie', ids(popM).filter((i) => idx.fourK.has('movie:' + i)), 16) })
+  rows.push({ key: 'pop-tv', kind: 'series', type: 'row', name: 'Séries populaires cette semaine', items: take('series', ids(popT), 16) })
   return rows.filter((r) => r.type === 'collection' ? (r.collections?.length ?? 0) > 0 : r.items.length >= 4)
 }
 
@@ -127,10 +167,6 @@ export async function collection(id: number, idx: TmdbIndex): Promise<Collection
   const have = parts.filter((p) => p.item).length
   if (parts.length < 2 || have < 2) return undefined
   return { id: c.id, name: c.name, poster: img(c.poster_path, 'w342'), backdrop: img(c.backdrop_path, 'w780'), total: parts.length, have, complete: have === parts.length, parts }
-}
-async function collections(idx: TmdbIndex): Promise<CollectionCard[]> {
-  const all = await Promise.all(SAGAS.map((id) => collection(id, idx)))
-  return all.filter((c): c is CollectionCard => !!c).sort((a, b) => Number(b.complete) - Number(a.complete) || b.have - a.have)
 }
 
 /** Deep genre browse: up to 400 TMDB titles by popularity, filtered to the catalogue. */

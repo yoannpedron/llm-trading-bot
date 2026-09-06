@@ -37,8 +37,7 @@ export default function Navbar() {
           className="w-56 rounded-full bg-white/10 px-4 py-1.5 text-sm text-white placeholder:text-white/40 outline-none focus:bg-white/20 focus:w-72 transition-all"
         />
       </form>
-      <NavLink to="/profile" className="text-xs text-white/60 hover:text-white">{t('profile')}</NavLink>
-      <NavLink to="/login" className="text-xs text-white/60 hover:text-white">{mode === 'mock' ? 'Démo' : 'Xtream'} ⚙</NavLink>
+      <NavLink to="/settings" className="text-xs text-white/60 hover:text-white">{mode === 'mock' ? 'Démo · ' : ''}Paramètres ⚙</NavLink>
     </header>
   )
 }

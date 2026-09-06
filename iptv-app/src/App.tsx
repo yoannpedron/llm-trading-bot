@@ -13,10 +13,11 @@ import Login from './pages/Login'
 import Search from './pages/Search'
 import MyList from './pages/MyList'
 import Collection from './pages/Collection'
-import Profile from './pages/Profile'
+import Settings from './pages/Settings'
 import Live from './pages/Live'
 import Sport from './pages/Sport'
 import { UI_LANGS, useProfile } from './store/profile'
+import { useSettings } from './store/settings'
 
 export default function App() {
   const { mode, creds, includeAdult } = useSession()
@@ -25,6 +26,8 @@ export default function App() {
   useEffect(() => { document.documentElement.lang = uiLang; document.documentElement.dir = UI_LANGS[uiLang].dir }, [uiLang])
 
   useEffect(() => { void load(mode, creds, includeAdult) }, [mode, creds, includeAdult, load])
+  const hours = useSettings((s) => s.autoRefreshHours)
+  useEffect(() => { if (!hours) return; const t = setInterval(() => void load(mode, creds, includeAdult), hours * 3600e3); return () => clearInterval(t) }, [hours, mode, creds, includeAdult, load])
 
   return (
     <div className="relative min-h-full">
@@ -35,8 +38,9 @@ export default function App() {
       ) : (
         <main className="relative z-10">
           <Routes>
-            <Route path="/" element={onboarded ? <Home /> : <Profile onboarding />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/" element={onboarded ? <Home /> : <Settings onboarding />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/profile" element={<Settings />} />
             <Route path="/movies" element={<Browse kind="movie" />} />
             <Route path="/series" element={<Browse kind="series" />} />
             <Route path="/live" element={<Live />} />

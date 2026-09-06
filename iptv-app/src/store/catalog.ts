@@ -4,6 +4,7 @@ import { XtreamClient, loadMockCatalog, type XtreamCredentials } from '../api/xt
 import type { WorkerIn, WorkerOut } from '../workers/parser.worker'
 import ParserWorker from '../workers/parser.worker?worker'
 import { buildTmdbIndex, type TmdbIndex } from '../api/tmdbLists'
+import { useSettings } from './settings'
 
 type Status = 'idle' | 'loading' | 'parsing' | 'ready' | 'error'
 
@@ -53,7 +54,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
       if (signal.aborted) return
       const byId = new Map<string, number>()
       catalog.items.forEach((it, i) => byId.set(it.id, i))
-      set({ status: 'ready', catalog, client, byId, tmdbIndex: buildTmdbIndex(catalog.items), progress: '' })
+      set({ status: 'ready', catalog, client, byId, tmdbIndex: buildTmdbIndex(visibleItems(catalog.items)), progress: '' })
     } catch (e) {
       if (signal.aborted) return
       set({ status: 'error', error: e instanceof Error ? e.message : String(e) })
@@ -62,7 +63,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
 
   rebuildIndex(contentLangs) {
     const c = get().catalog
-    if (c) set({ tmdbIndex: buildTmdbIndex(c.items, contentLangs), catalog: { ...c, generatedAt: Date.now() } })
+    if (c) set({ tmdbIndex: buildTmdbIndex(visibleItems(c.items), contentLangs), catalog: { ...c, generatedAt: Date.now() } })
   },
 
   item(id) {
@@ -75,7 +76,7 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
     const c = get().catalog
     if (!c) return []
     if (categoryId) return (c.byCategory[kind + ':' + categoryId] ?? []).map((i) => c.items[i])
-    return c.items.filter((it) => it.kind === kind)
+    return visibleItems(c.items.filter((it) => it.kind === kind))
   },
 
   search(q, kind, limit = 200) {
@@ -106,4 +107,12 @@ function parseInWorker(raw: WorkerIn['raw'], includeAdult?: boolean): Promise<Ca
     w.onerror = (e) => { w.terminate(); rej(new Error(e.message)) }
     w.postMessage({ type: 'parse', raw, includeAdult } satisfies WorkerIn)
   })
+}
+
+/** Applies the settings filters (hidden languages / categories / PPV). */
+export function visibleItems(items: MediaItem[]): MediaItem[] {
+  const { hiddenLangs, hiddenCategories, hidePpv } = useSettings.getState()
+  if (!hiddenLangs.length && !hiddenCategories.length && !hidePpv) return items
+  const hl = new Set(hiddenLangs), hc = new Set(hiddenCategories)
+  return items.filter((it) => !(it.lang && hl.has(it.lang)) && !hc.has(it.kind + ':' + it.categoryId) && !(hidePpv && it.kind === 'live' && /^(NEXT|ENDED|LIVE)\s*\|/.test(it.rawName)))
 }
