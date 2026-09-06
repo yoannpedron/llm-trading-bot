@@ -20,6 +20,8 @@ describe('team matching', () => {
     expect(teamSimilarity('MAN UTD', 'Manchester United')).toBe(1)
     expect(teamSimilarity('ROMA', 'AS Roma')).toBeGreaterThanOrEqual(0.8)
     expect(teamSimilarity('ROMA', 'Atalanta')).toBe(0)
+    expect(teamSimilarity('OM', 'Marseille')).toBe(1)
+    expect(splitTeams('LIGUE 1 MARSEILLE - PARIS FC')).toEqual(['MARSEILLE', 'PARIS FC'])
   })
   it('links streams to fixtures within the time window, both orientations', () => {
     const now = new Date('2026-09-05T10:00:00Z')

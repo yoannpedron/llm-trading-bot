@@ -32,6 +32,17 @@ describe('live helpers', () => {
     expect(e.status).toBe('live')
     expect(e.title).toContain('volleyball')
   })
+  it('parses the field-based format with ISO or D-M-Y dates, competition and broadcaster suffix', () => {
+    const now = new Date('2026-09-06T10:00:00Z')
+    const a = parseEvent('Next | OM vs. Paris FC sur Ligue 1+ | Ligue 1+ | 2026-09-06 | 18:45 (GMT) | 8K EXCLUSIVE | FR: DAZN PPV 63', now)!
+    expect(a).toMatchObject({ status: 'next', title: 'OM vs. Paris FC', competition: 'Ligue 1+', country: 'FR' })
+    expect(a.start?.toISOString()).toBe('2026-09-06T18:45:00.000Z')
+    const b = parseEvent('Next | Marseille vs. Paris FC | all | 06-09-2026 | 20:15 (GMT) | 8K EXCLUSIVE | BR: SOCCER PPV 119', now)!
+    expect(b.start?.toISOString()).toBe('2026-09-06T20:15:00.000Z')
+    expect(b.competition).toBeUndefined()
+    const c = parseEvent('End | Monaco vs. Marseille | all | 05-09-2026 | 19:00 (GMT) | 8K EXCLUSIVE | BR: SOCCER PPV 56', now)!
+    expect(c.status).toBe('ended')
+  })
   it('ignores regular channels', () => {
     expect(parseEvent('FR| TF1 FHD')).toBeUndefined()
   })

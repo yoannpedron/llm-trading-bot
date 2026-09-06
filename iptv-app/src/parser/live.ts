@@ -41,13 +41,31 @@ export function themeOf(categoryName: string): Theme {
 export const THEME_LABEL: Record<Theme, string> = { sport: 'Sport', events: 'Événements & PPV', news: 'Info', kids: 'Enfants', movies: 'Cinéma & séries', music: 'Musique', documentary: 'Documentaires', religion: 'Religion', radio: 'Radio', '24/7': '24/7', general: 'Généralistes' }
 
 /* ---- dated events: "NEXT | ROMA - ATALANTA | Sat 05 Sep 18:35 GMT (IS) | 8K EXCLUSIVE | IS: LIVEY PPV 29" ---- */
-export interface LiveEvent { status: 'live' | 'next' | 'ended'; title: string; start?: Date; country?: string; provider?: string; raw: string }
+export interface LiveEvent { status: 'live' | 'next' | 'ended'; title: string; start?: Date; country?: string; provider?: string; competition?: string; raw: string }
 const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
 const TZ: Record<string, number> = { GMT: 0, UTC: 0, BST: 60, CET: 60, CEST: 120, EET: 120, EEST: 180, MSK: 180, IST: 330, EST: -300, EDT: -240, CST: -360, CDT: -300, PST: -480, PDT: -420, AST: 180 }
-const RE_EVENT = /^\s*(NEXT|ENDED|LIVE)\s*\|\s*(.+?)\s*\|\s*(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})\s*([A-Z]{2,4}|[+-]\d{1,2}(?::?\d{2})?)?\s*(?:\(([A-Z]{2,3})\))?/
+const RE_EVENT = /^\s*(NEXT|ENDED|LIVE|END)\s*\|\s*(.+?)\s*\|\s*(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})\s*([A-Z]{2,4}|[+-]\d{1,2}(?::?\d{2})?)?\s*(?:\(([A-Z]{2,3})\))?/
 const RE_ISO = /\((\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::\d{2})?\)/
+// "Next | OM vs. Paris FC sur Ligue 1+ | Ligue 1+ | 2026-09-06 | 18:45 (GMT) | 8K EXCLUSIVE | FR: DAZN PPV 63"
+// "Next | Marseille vs. Paris FC | all | 06-09-2026 | 20:15 (GMT) | ... | BR: SOCCER PPV 119"
+const RE_FIELDS = /^\s*(next|ended|end|live)\s*\|\s*(.+?)\s*\|\s*([^|]*?)\s*\|\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{2})-(\d{2})-(\d{4}))\s*\|\s*(\d{1,2}):(\d{2})\s*(?:\(([A-Z+\-\d:]{2,6})\))?/i
+const RE_BROADCAST = /\s+(?:sur|on|en|auf)\s+[A-Za-z0-9+ .]+$/i
 
 export function parseEvent(name: string, now = new Date()): LiveEvent | undefined {
+  const f = RE_FIELDS.exec(name)
+  if (f) {
+    const [, st, rawTitle, comp, y1, mo1, d1, d2, mo2, y2, hh, mm, tz] = f
+    const y = +(y1 ?? y2), mo = +(mo1 ?? mo2), d = +(d1 ?? d2)
+    const offset = tz ? (tz in TZ ? TZ[tz] : parseOffset(tz)) : 0
+    const start = new Date(Date.UTC(y, mo - 1, d, +hh, +mm) - offset * 60_000)
+    const provider = name.split('|').pop()?.trim()
+    const cc = /^([A-Z]{2,3}):/.exec(provider ?? '')?.[1]
+    const s = st.toLowerCase()
+    let status: LiveEvent['status'] = s.startsWith('end') ? 'ended' : s === 'live' ? 'live' : 'next'
+    if (status === 'next' && start.getTime() <= now.getTime() && now.getTime() - start.getTime() < 3 * 3600e3) status = 'live'
+    const title = rawTitle.replace(RE_BROADCAST, '').trim()
+    return { status, title, start, country: cc, provider, competition: comp && comp.toLowerCase() !== 'all' ? comp : undefined, raw: name }
+  }
   let m = RE_EVENT.exec(name)
   if (m) {
     const [, st, title, , d, mon, hh, mm, tz, cc] = m
@@ -61,7 +79,7 @@ export function parseEvent(name: string, now = new Date()): LiveEvent | undefine
     if (start.getTime() - now.getTime() > 200 * 864e5) start.setUTCFullYear(year - 1)
     if (now.getTime() - start.getTime() > 200 * 864e5) start.setUTCFullYear(year + 1)
     const provider = name.split('|').pop()?.trim()
-    let status: LiveEvent['status'] = st === 'ENDED' ? 'ended' : st === 'LIVE' ? 'live' : 'next'
+    let status: LiveEvent['status'] = st.startsWith('END') ? 'ended' : st === 'LIVE' ? 'live' : 'next'
     if (status === 'next' && start.getTime() <= now.getTime() && now.getTime() - start.getTime() < 3 * 3600e3) status = 'live'
     return { status, title: title.trim(), start, country: cc, provider, raw: name }
   }

@@ -5,7 +5,7 @@ import type { MediaItem } from '../types'
 import { norm } from '../api/sports'
 
 const STOP = new Set(['fc', 'sc', 'cf', 'afc', 'ac', 'as', 'sv', 'vfl', 'vfb', 'tsg', 'bsc', 'rb', 'rc', 'us', 'ss', 'ssc', 'club', 'de', 'du', 'the', 'city', 'united', 'town', 'real', 'athletic', 'atletico', 'sporting', 'olympique', 'stade', 'racing', 'deportivo', 'cd', 'ud', 'sd', 'ca', 'fk', 'sk', 'nk', 'hk', 'if', 'ik', 'bk', 'ff', 'hc', 'ehc', 'kfc', 'women', 'w', 'u21', 'u19', 'u23', 'ii', 'b'])
-const ALIAS: Record<string, string> = { 'borussia m gladbach': 'borussia monchengladbach', 'man utd': 'manchester united', 'man united': 'manchester united', 'man city': 'manchester city', 'spurs': 'tottenham hotspur', 'psg': 'paris saint germain', 'paris sg': 'paris saint germain', 'inter': 'internazionale', 'inter milan': 'internazionale', 'bayern': 'bayern munich', 'bayern munchen': 'bayern munich', 'gladbach': 'borussia monchengladbach', "borussia m'gladbach": 'borussia monchengladbach', 'wolves': 'wolverhampton wanderers', 'newcastle': 'newcastle united', 'leverkusen': 'bayer leverkusen', 'atletico': 'atletico madrid', 'barca': 'barcelona', 'juve': 'juventus', 'om': 'marseille', 'ol': 'lyon', 'losc': 'lille', 'ajax amsterdam': 'ajax', 'psv eindhoven': 'psv' }
+const ALIAS: Record<string, string> = { 'om': 'marseille', 'olympique de marseille': 'marseille', 'olympique marseille': 'marseille', 'ol': 'lyon', 'olympique lyonnais': 'lyon', 'losc': 'lille', 'losc lille': 'lille', 'asse': 'saint etienne', 'as saint etienne': 'saint etienne', 'ogcn': 'nice', 'ogc nice': 'nice', 'rcsa': 'strasbourg', 'rc strasbourg': 'strasbourg', 'srfc': 'rennes', 'stade rennais': 'rennes', 'fcn': 'nantes', 'psg': 'paris saint germain', 'paris sg': 'paris saint germain', 'borussia m gladbach': 'borussia monchengladbach', 'man utd': 'manchester united', 'man united': 'manchester united', 'man city': 'manchester city', 'spurs': 'tottenham hotspur', 'psg': 'paris saint germain', 'paris sg': 'paris saint germain', 'inter': 'internazionale', 'inter milan': 'internazionale', 'bayern': 'bayern munich', 'bayern munchen': 'bayern munich', 'gladbach': 'borussia monchengladbach', "borussia m'gladbach": 'borussia monchengladbach', 'wolves': 'wolverhampton wanderers', 'newcastle': 'newcastle united', 'leverkusen': 'bayer leverkusen', 'atletico': 'atletico madrid', 'barca': 'barcelona', 'juve': 'juventus', 'om': 'marseille', 'ol': 'lyon', 'losc': 'lille', 'ajax amsterdam': 'ajax', 'psv eindhoven': 'psv' }
 
 export function teamTokens(name: string): Set<string> {
   let n = norm(name)
@@ -25,7 +25,7 @@ export function teamSimilarity(a: string, b: string): number {
 
 /** Split "ROMA - ATALANTA" / "FC X VS. SV Y" / "X v Y" into two team names. */
 export function splitTeams(title: string): [string, string] | undefined {
-  const m = /^(.+?)\s+(?:vs?\.?|v\.|-|–|—|@)\s+(.+)$/i.exec(title.replace(/\s*\(.*?\)\s*$/, ''))
+  const m = /^(.+?)\s+(?:vs?\.?|v\.|-|–|—|@)\s+(.+)$/i.exec(title.replace(/\s*\(.*?\)\s*$/, '').replace(/^(?:ligue 1|premier league|la ?liga|serie a|bundesliga|champions league|ucl|uel)\s*[:|-]?\s*/i, ''))
   if (!m) return undefined
   const a = m[1].trim(), b = m[2].trim()
   return a && b && a.length < 60 && b.length < 60 ? [a, b] : undefined
