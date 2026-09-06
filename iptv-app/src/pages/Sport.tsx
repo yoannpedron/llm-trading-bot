@@ -62,7 +62,7 @@ export default function Sport() {
       {groups.map(([comp, cs]) => (
         <section key={comp} className="mb-6">
           <h2 className="mb-2 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-white/50">
-            {cs[0].match.leagueLogo ? <img src={cs[0].match.leagueLogo} alt="" className="h-4 w-4 object-contain" /> : <span>{flagOfCompetition(comp)}</span>}
+            {cs[0].match.leagueLogo ? <img src={cs[0].match.leagueLogo} alt="" className="h-[22px] w-[22px] rounded-full bg-white object-contain p-[2px]" /> : <span>{flagOfCompetition(comp)}</span>}
             {shortComp(comp)}
             {prefs.competitions.includes(comp) && <span className="text-amber-400">★</span>}
           </h2>
@@ -88,7 +88,7 @@ function Hero({ c }: { c: MatchCard }) {
   return (
     <div className="mb-6 rounded-[18px] bg-white/[.07] p-4">
       <div className="mb-3 flex items-center gap-2 text-xs font-medium text-white/50">
-        {m.leagueLogo && <img src={m.leagueLogo} alt="" className="h-4 w-4 object-contain" />}{shortComp(m.competition)}
+        {m.leagueLogo && <img src={m.leagueLogo} alt="" className="h-[22px] w-[22px] rounded-full bg-white object-contain p-[2px]" />}{shortComp(m.competition)}
         <b className="ml-auto font-semibold text-white tabular-nums">{live ? <span className="text-red-500">● {m.clock ?? 'Direct'}</span> : isToday(m.start) ? (m.start.getHours() >= 18 ? 'Ce soir' : 'Aujourd’hui') : m.start.toLocaleDateString('fr-FR', { weekday: 'long' })}</b>
       </div>
       <div className="flex items-center justify-between">
