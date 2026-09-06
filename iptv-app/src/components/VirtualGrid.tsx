@@ -1,0 +1,50 @@
+import { useEffect, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import type { MediaItem } from '../types'
+import PosterCard from './PosterCard'
+
+interface Props { items: MediaItem[]; landscape?: boolean; minWidth?: number }
+const GAP = 14
+
+/** Row-virtualised grid: scales to 200k+ items with a constant DOM size. */
+export default function VirtualGrid({ items, landscape, minWidth = 150 }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [cols, setCols] = useState(6)
+  const [cardW, setCardW] = useState(minWidth)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => {
+      const w = e.contentRect.width - 64
+      const c = Math.max(2, Math.floor((w + GAP) / (minWidth + GAP)))
+      setCols(c)
+      setCardW(Math.floor((w - GAP * (c - 1)) / c))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [minWidth])
+
+  const rowH = (landscape ? Math.round(cardW * 9 / 16) : Math.round(cardW * 1.5)) + GAP
+  const rows = Math.ceil(items.length / cols)
+  const v = useVirtualizer({ count: rows, getScrollElement: () => ref.current, estimateSize: () => rowH, overscan: 3 })
+  useEffect(() => v.measure(), [rowH, v])
+
+  return (
+    <div ref={ref} className="h-full overflow-y-auto px-8 pb-12 pt-4">
+      {items.length === 0 ? (
+        <p className="py-20 text-center text-white/40">Aucun contenu</p>
+      ) : (
+        <div className="relative" style={{ height: v.getTotalSize() }}>
+          {v.getVirtualItems().map((row) => (
+            <div key={row.key} className="absolute left-0 flex" style={{ top: row.start, gap: GAP }}>
+              {Array.from({ length: cols }, (_, c) => items[row.index * cols + c]).filter(Boolean).map((it) => (
+                <PosterCard key={it.id} item={it} width={cardW} landscape={landscape} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
