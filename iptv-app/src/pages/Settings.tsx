@@ -215,7 +215,7 @@ function Data() {
       <H>Catalogue</H>
       <p className="text-sm text-white/60">{catalog ? `${catalog.items.length.toLocaleString('fr-FR')} entrées chargées le ${new Date(catalog.generatedAt).toLocaleString('fr-FR')}` : 'Aucun catalogue'}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button onClick={() => load(mode, creds, includeAdult)} className="h-10 rounded-lg bg-white px-5 text-sm font-semibold text-black">Rafraîchir maintenant</button>
+        <button onClick={() => load(mode, creds, includeAdult, true)} className="h-10 rounded-lg bg-white px-5 text-sm font-semibold text-black">Rafraîchir maintenant</button>
         <label className="flex items-center gap-2 text-sm">Rafraîchissement automatique toutes les<select value={s.autoRefreshHours} onChange={(e) => s.set({ autoRefreshHours: +e.target.value })} className="rounded bg-white/10 px-2 py-1">{[0, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'jamais' : h + ' h'}</option>)}</select></label>
       </div>
       <H>Cache TMDB</H>

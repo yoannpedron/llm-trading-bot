@@ -12,6 +12,8 @@ export default function Navbar() {
   const [q, setQ] = useState('')
   const mode = useSession((s) => s.mode)
   const counts = useCatalog((s) => s.catalog?.counts)
+  const refreshing = useCatalog((s) => s.refreshing)
+  const source = useCatalog((s) => s.source)
   const t = useT()
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-4 px-6 py-3 bg-gradient-to-b from-black/80 to-transparent">
@@ -38,6 +40,7 @@ export default function Navbar() {
           className="w-56 rounded-full bg-white/10 px-4 py-1.5 text-sm text-white placeholder:text-white/40 outline-none focus:bg-white/20 focus:w-72 transition-all"
         />
       </form>
+      {refreshing && <span className="flex items-center gap-1.5 text-[11px] text-white/50" title={source === 'partial' ? 'Films en cours de téléchargement' : 'Mise à jour du catalogue'}><span className="h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />{source === 'partial' ? 'Films…' : 'Mise à jour'}</span>}
       <NavLink to="/settings" className="text-xs text-white/60 hover:text-white">{mode === 'mock' ? 'Démo · ' : ''}Paramètres ⚙</NavLink>
     </header>
   )

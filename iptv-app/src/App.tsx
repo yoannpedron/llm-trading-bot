@@ -29,7 +29,7 @@ export default function App() {
 
   useEffect(() => { void load(mode, creds, includeAdult) }, [mode, creds, includeAdult, load])
   const hours = useSettings((s) => s.autoRefreshHours)
-  useEffect(() => { if (!hours) return; const t = setInterval(() => void load(mode, creds, includeAdult), hours * 3600e3); return () => clearInterval(t) }, [hours, mode, creds, includeAdult, load])
+  useEffect(() => { if (!hours) return; const t = setInterval(() => void load(mode, creds, includeAdult, true), hours * 3600e3); return () => clearInterval(t) }, [hours, mode, creds, includeAdult, load])
 
   return (
     <div className="relative min-h-full">
