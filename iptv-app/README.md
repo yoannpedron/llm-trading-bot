@@ -18,6 +18,14 @@ npm run build             # tsc + vite build -> dist/
 npm run lint
 ```
 
+## Fonctionnalités
+
+- **Accueil piloté par TMDB, croisé avec le serveur** : Top 10 films et séries de la semaine, dernières sorties cinéma disponibles, ajouts récents du serveur classés par popularité, 4K disponibles, sagas complètes (page collection avec films présents / absents), chefs-d'œuvre, pépites, réalisateurs, genres. Chaque titre n'apparaît que dans une seule rangée.
+- **Profil international** : langue d'interface (FR, EN, AR avec RTL, DE, ES, PL, TR), langues de contenu par ordre de préférence (détermine la version audio par défaut et fusionne les doublons inter-langues), pays pour les sorties cinéma, hubs par cinématographie (Bollywood, Dizi, K-Drama, Anime, arabe, latino…). Métadonnées TMDB dans la langue de l'interface.
+- **Fiche unique par film** avec sélecteur de version (FR, EN, AR, 4K, sous-titré…).
+- **Live TV par pays et thème**, guide des programmes (EPG Xtream) sur le lecteur, **agenda sport** construit en parsant les flux événementiels datés (`NEXT | ROMA - ATALANTA | Sat 05 Sep 18:35 GMT`).
+- **Hero avec bande-annonce YouTube** muette, Ma liste, reprise de lecture, "Continuer à regarder", épisode suivant automatique, mode enfant.
+
 ## Architecture
 
 ```
@@ -25,17 +33,19 @@ src/
 ├── api/
 │   ├── xtream.ts        client player_api.php + URLs de lecture (live m3u8, movie, series)
 │   ├── tmdb.ts          client TMDB : 1 requête/titre (append_to_response), limiteur de concurrence, cache IndexedDB
+│   ├── tmdbLists.ts     rangées officielles et croisées (listes TMDB ∩ catalogue, dédoublonnage strict, sagas)
 │   └── mock/            échantillon de catalogue réel (adulte exclu)
 ├── parser/
 │   ├── regex.ts         nettoyage des titres (préfixe langue, année, SxxExx, N. Bölüm, qualité, bruit)
+│   ├── live.ts          pays / thème des catégories live, événements sportifs datés
 │   ├── classify.ts      routage movie / series / live
 │   ├── normalize.ts     Xtream -> MediaItem unifié
 │   └── index.ts         parseCatalog(): items + index par catégorie
 ├── workers/parser.worker.ts   parsing hors thread principal
-├── store/               zustand : session (persistée), catalogue, UI (backdrop, item focus)
+├── store/               zustand : session, catalogue + index TMDB, profil (langues, région, enfant), ma liste, progression, UI
 ├── hooks/useEnrich.ts   react-query -> TMDB
 ├── components/          Backdrop (crossfade), Hero (logo TMDB), Carousel & VirtualGrid (TanStack Virtual), Player (hls.js)
-└── pages/               Home, Browse (films/séries/live), Details, Watch, Search, Login
+└── pages/               Home, Browse (genres TMDB ou catégories serveur), Live (pays × thème), Sport, Collection, Details, Watch, Search, MyList, Profile, Login
 ```
 
 ## Stratégie de parsing
