@@ -30,7 +30,7 @@ export interface DownloadOptions {
   /** for tests */
   sleep?: (ms: number) => Promise<void>
 }
-export interface Probe { total: number; ranges: boolean; type?: string }
+export interface Probe { total: number; ranges: boolean; type?: string; /** final URL after the Xtream 302 to the content server */ finalUrl?: string }
 export class SlotBusyError extends Error { constructor() { super('slot busy (458)'); this.name = 'SlotBusyError' } }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -43,7 +43,7 @@ export async function probe(url: string, fetchImpl: typeof fetch = fetch, signal
     const cr = r.headers.get('content-range') ?? ''
     const total = +(cr.split('/')[1] ?? 0)
     await r.body?.cancel().catch(() => undefined)
-    return { total, ranges: true, type: r.headers.get('content-type') ?? undefined }
+    return { total, ranges: true, type: r.headers.get('content-type') ?? undefined, finalUrl: r.url && r.url !== url ? r.url : undefined }
   }
   if (r.ok) {
     const total = +(r.headers.get('content-length') ?? 0)
@@ -55,10 +55,12 @@ export async function probe(url: string, fetchImpl: typeof fetch = fetch, signal
 
 export async function download(o: DownloadOptions): Promise<{ received: number; total: number }> {
   const f = o.fetchImpl ?? fetch, sleep = o.sleep ?? defaultSleep
-  const minChunk = o.minChunk ?? 4 * 1024 * 1024, maxChunk = o.maxChunk ?? 64 * 1024 * 1024
+  const minChunk = o.minChunk ?? 8 * 1024 * 1024, maxChunk = o.maxChunk ?? 128 * 1024 * 1024
   const delays = o.retryDelays ?? [1, 2, 4, 8, 15]
   const slotPoll = (o.slotPoll ?? 15) * 1000
   let offset = o.startAt ?? 0, chunk = minChunk, total = 0, ranges = true
+  // Xtream answers 302 to a tokenised content-server URL: resolve it once, reuse it for every chunk (saves a round trip per chunk), fall back if the token dies
+  let target = o.url
   let attempt = 0
   const startedAt = Date.now(); let receivedSinceStart = 0
   const report = (status: Progress['status'], speed = 0) => o.onProgress?.({ received: offset, total, speed, chunk, status })
@@ -66,7 +68,7 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
   // ---- probe (with slot wait) ----
   for (;;) {
     o.signal?.throwIfAborted()
-    try { report('probing'); const p = await probe(o.url, f, o.signal); total = p.total; ranges = p.ranges; break }
+    try { report('probing'); const p = await probe(o.url, f, o.signal); total = p.total; ranges = p.ranges; if (p.finalUrl) target = p.finalUrl; break }
     catch (e) {
       if (e instanceof SlotBusyError) { report('waiting-slot'); await sleep(slotPoll); continue }
       if (attempt >= delays.length + 3) throw e
@@ -83,7 +85,8 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
     const t0 = Date.now()
     let got = 0
     try {
-      const r = await f(o.url, { headers: ranges ? { Range: `bytes=${offset}-${end}` } : {}, signal: o.signal })
+      let r = await f(target, { headers: ranges ? { Range: `bytes=${offset}-${end}` } : {}, signal: o.signal })
+      if (target !== o.url && (r.status === 403 || r.status === 404 || r.status === 410)) { await r.body?.cancel().catch(() => undefined); target = o.url; r = await f(target, { headers: ranges ? { Range: `bytes=${offset}-${end}` } : {}, signal: o.signal }); if (r.url && r.url !== o.url) target = r.url }
       if (r.status === 458) throw new SlotBusyError()
       if (ranges && r.status !== 206) throw new Error(`expected 206, got ${r.status}`)
       if (!ranges && !r.ok) throw new Error(`HTTP ${r.status}`)
@@ -104,8 +107,8 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
       attempt = 0
       // adapt: fast chunk -> grow, slow chunk -> shrink
       const dt = (Date.now() - t0) / 1000
-      if (dt < 2 && chunk < maxChunk) chunk = Math.min(maxChunk, chunk * 2)
-      else if (dt > 8 && chunk > minChunk) chunk = Math.max(minChunk, Math.floor(chunk / 2))
+      if (dt < 6 && chunk < maxChunk) chunk = Math.min(maxChunk, chunk * 2)
+      else if (dt > 20 && chunk > minChunk) chunk = Math.max(minChunk, Math.floor(chunk / 2))
       if (!ranges) break
     } catch (e) {
       if (o.signal?.aborted) throw e
