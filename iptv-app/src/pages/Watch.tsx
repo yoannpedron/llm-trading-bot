@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useProgress } from '../store/progress'
 import { useHistory } from '../store/history'
-import { useMatches } from '../hooks/useMatches'
+import { useMatches, teamKey } from '../hooks/useMatches'
+import { useSportPrefs } from '../store/sportPrefs'
 import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
@@ -25,6 +26,7 @@ export default function Watch() {
   const ep = params.get('ep') ?? undefined
   const alts = useMemo(() => (params.get('alts') ?? '').split(',').filter(Boolean), [params])
   const { cards } = useMatches()
+  const sportPrefs = useSportPrefs()
   const card = useMemo(() => cards.find((c) => c.sources.some((s) => s.item.id === id) || c.sources.some((s) => alts.includes(s.item.id))), [cards, id, alts])
   const [failed, setFailed] = useState<string[]>([])
   const onError = useCallback(() => {
@@ -69,15 +71,21 @@ export default function Watch() {
         </div>
       )}
       {card && (
-        <section className="mt-4 rounded-xl bg-white/5 p-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-display text-lg font-bold">{card.match.home} <span className="tabular-nums text-amber-400">{card.match.state !== 'pre' ? `${card.match.homeScore ?? 0} – ${card.match.awayScore ?? 0}` : 'vs'}</span> {card.match.away}</span>
-            <span className="text-xs text-white/50">{card.match.competition}{card.match.clock ? ` · ${card.match.clock}` : ''}</span>
-            {failed.length > 0 && <span className="text-xs text-amber-300">Source précédente en échec, bascule automatique</span>}
+        <section className="mt-5">
+          <div className="flex items-center justify-between">
+            <TeamBlock name={card.match.home} logo={card.match.homeLogo} />
+            <div className="text-center"><b className="font-display text-4xl font-black tracking-tight tabular-nums">{card.match.state === 'in' && card.match.homeScore !== undefined ? `${card.match.homeScore}–${card.match.awayScore}` : card.match.state === 'in' ? <span className="text-red-500">DIRECT</span> : card.match.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</b><span className="mt-0.5 block text-xs text-white/50">{card.match.state === 'in' ? card.match.clock : card.match.start.toDateString() === new Date().toDateString() ? (card.match.start.getHours() >= 18 ? 'Ce soir' : 'Aujourd’hui') : card.match.start.toLocaleDateString('fr-FR', { weekday: 'long' })}</span></div>
+            <TeamBlock name={card.match.away} logo={card.match.awayLogo} />
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {card.sources.map((s2) => <Link key={s2.item.id} to={`/watch/${s2.item.id}?alts=${alts.join(',')}`} replace className={`rounded-lg px-2.5 py-1 text-xs ${s2.item.id === id ? 'bg-white font-semibold text-black' : failed.includes(s2.item.id) ? 'bg-red-500/20 text-red-200 line-through' : 'bg-white/10 hover:bg-white/20'}`} title={s2.item.rawName}>{s2.flag} {s2.country ?? ''}{s2.lang ? ' ' + s2.lang : ''}{s2.quality ? ' · ' + s2.quality : ''}</Link>)}
+          <p className="mt-3 text-center text-[13px] text-white/50">{card.match.competition}</p>
+          <div className="mt-5 flex items-center gap-3">
+            <span className="text-sm text-white/50">Source</span>
+            <div className="flex flex-wrap gap-1.5">
+              {card.sources.map((s2) => <Link key={s2.item.id} to={`/watch/${s2.item.id}?alts=${alts.join(',')}&match=${encodeURIComponent(card.match.id)}`} replace title={s2.item.rawName} className={`grid h-9 w-9 place-items-center rounded-[10px] text-xl ${s2.item.id === id ? 'bg-white' : failed.includes(s2.item.id) ? 'bg-red-500/20 opacity-50' : 'bg-white/10 hover:bg-white/20'}`}>{s2.flag}</Link>)}
+            </div>
+            {failed.length > 0 && <span className="ml-auto text-xs text-amber-300">Bascule automatique</span>}
           </div>
+          {card.match.state !== 'in' && <button onClick={() => sportPrefs.toggleReminder(card.match.id)} className={`mt-4 h-10 w-full rounded-xl text-sm font-semibold ${sportPrefs.reminders.includes(card.match.id) ? 'bg-amber-400 text-black' : 'bg-white/10'}`}>{sportPrefs.reminders.includes(card.match.id) ? '⏰ Rappel activé, 10 min avant' : '⏰ Me rappeler 10 min avant'}</button>}
         </section>
       )}
       {nextEp && <p className="mt-3 text-sm text-white/60">Épisode suivant : <Link to={`/watch/${id}?ep=${nextEp.id}&ext=${nextEp.container_extension}`} className="underline">{nextEp.title}</Link> (lecture automatique à la fin)</p>}
@@ -95,5 +103,16 @@ export default function Watch() {
       ) : null}
       <p className="mt-3 break-all font-mono text-[11px] text-white/30">{src}</p>
     </div>
+  )
+}
+
+function TeamBlock({ name, logo }: { name: string; logo?: string }) {
+  const prefs = useSportPrefs()
+  const on = prefs.teams.includes(teamKey(name))
+  return (
+    <button onClick={() => prefs.toggleTeam(teamKey(name))} className="flex w-[110px] flex-col items-center gap-2" title={on ? 'Ne plus suivre' : 'Suivre'}>
+      {logo ? <img src={logo} alt="" className="h-14 w-14 object-contain" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-white/10 text-lg font-semibold text-white/70">{name.split(' ').slice(0, 2).map((w) => w[0]).join('')}</span>}
+      <span className="text-center text-sm font-semibold leading-tight">{on && <span className="mr-1 text-amber-400">★</span>}{name}</span>
+    </button>
   )
 }

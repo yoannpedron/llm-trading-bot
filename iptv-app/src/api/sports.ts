@@ -20,11 +20,14 @@ export interface Match {
   clock?: string          // "67'" / "Q3 4:12" / "Mi-temps"
   detail?: string
   source: 'espn' | 'tsdb'
+  leagueLogo?: string
+  leagueKey?: string
 }
 
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports'
+const SOCCER = ['uefa.champions', 'uefa.europa', 'uefa.europa.conf', 'fifa.worldq.uefa', 'fifa.world', 'uefa.nations', 'uefa.euro', 'eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'por.1', 'ned.1', 'tur.1', 'bel.1', 'sco.1', 'jpn.1', 'bra.1', 'usa.1', 'mex.1', 'arg.1', 'ksa.1', 'eng.2', 'fra.2', 'ger.2', 'esp.2', 'ita.2', 'eng.fa', 'fra.coupe_de_france', 'esp.copa_del_rey', 'ita.coppa_italia', 'ger.dfb_pokal', 'conmebol.libertadores', 'caf.nations', 'afc.champions']
 const ESPN_FEEDS: [string, Sport][] = [
-  ['soccer/all', 'football'], ['hockey/nhl', 'hockey'], ['basketball/nba', 'basketball'], ['basketball/wnba', 'basketball'], ['football/nfl', 'amfootball'],
+  ...SOCCER.map((l) => ['soccer/' + l, 'football'] as [string, Sport]), ['soccer/all', 'football'], ['hockey/nhl', 'hockey'], ['basketball/nba', 'basketball'], ['basketball/wnba', 'basketball'], ['football/nfl', 'amfootball'],
   ['football/college-football', 'amfootball'], ['baseball/mlb', 'baseball'], ['mma/ufc', 'mma'], ['racing/f1', 'motorsport'], ['tennis/atp', 'tennis'], ['tennis/wta', 'tennis'],
 ]
 const TSDB = 'https://www.thesportsdb.com/api/v1/json/3'
@@ -42,8 +45,9 @@ function humanizeSlug(slug?: string) {
 async function espn(feed: string, sport: Sport): Promise<Match[]> {
   const r = await fetch(`${ESPN}/${feed}/scoreboard?limit=500`, { signal: AbortSignal.timeout(12_000) })
   if (!r.ok) return []
-  const d = (await r.json()) as { events?: EspnEvent[]; leagues?: { name?: string }[] }
-  const leagueName = d.leagues?.[0]?.name
+  const d = (await r.json()) as { events?: EspnEvent[]; leagues?: { name?: string; logos?: { href: string }[] }[] }
+  const leagueName = feed === 'soccer/all' ? undefined : d.leagues?.[0]?.name
+  const leagueLogo = d.leagues?.[0]?.logos?.[0]?.href
   return (d.events ?? []).flatMap((e) => {
     const c = e.competitions?.[0]; if (!c) return []
     const home = c.competitors.find((x) => x.homeAway === 'home'), away = c.competitors.find((x) => x.homeAway === 'away')
@@ -52,7 +56,7 @@ async function espn(feed: string, sport: Sport): Promise<Match[]> {
     const state = st.type.state
     const clock = state === 'in' ? (st.type.description === 'Halftime' ? 'Mi-temps' : st.displayClock ? (sport === 'football' ? st.displayClock.replace(/:00$/, "'") : `${st.period ? 'P' + st.period + ' ' : ''}${st.displayClock}`) : st.type.shortDetail) : undefined
     return [{
-      id: 'espn:' + e.id, sport, competition: feed === 'soccer/all' ? humanizeSlug(e.season?.slug) || 'Football' : leagueName || feed,
+      id: 'espn:' + e.id, sport, competition: leagueName ?? (humanizeSlug(e.season?.slug) || 'Football'), leagueLogo: feed === 'soccer/all' ? undefined : leagueLogo, leagueKey: feed,
       home: home.team.displayName, away: away.team.displayName, homeShort: home.team.shortDisplayName, awayShort: away.team.shortDisplayName,
       homeLogo: home.team.logo, awayLogo: away.team.logo, start: new Date(e.date), state,
       homeScore: home.score !== undefined ? +home.score : undefined, awayScore: away.score !== undefined ? +away.score : undefined,
@@ -87,7 +91,8 @@ export async function fetchMatches(): Promise<Match[]> {
   const all = (await Promise.all(jobs)).flat()
   // dedupe (same teams within 2h) preferring ESPN
   const seen = new Map<string, Match>()
-  for (const m of all.sort((a, b) => (a.source === 'espn' ? 0 : 1) - (b.source === 'espn' ? 0 : 1))) {
+  const pri = (m: Match) => (m.source === 'espn' ? (m.leagueLogo ? 0 : 1) : 2)
+  for (const m of all.sort((a, b) => pri(a) - pri(b))) {
     const k = [norm(m.home), norm(m.away)].sort().join('|') + '|' + Math.round(m.start.getTime() / 7200e3)
     if (!seen.has(k)) seen.set(k, m)
   }

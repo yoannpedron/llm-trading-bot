@@ -23,7 +23,7 @@ export default function Navbar() {
         <NavLink to="/movies" className={link}>{t('movies')}{counts ? ` · ${fmt(counts.movie)}` : ''}</NavLink>
         <NavLink to="/series" className={link}>{t('series')}{counts ? ` · ${fmt(counts.series)}` : ''}</NavLink>
         <NavLink to="/live" className={link}>{t('live')}{counts ? ` · ${fmt(counts.live)}` : ''}</NavLink>
-        <NavLink to="/sport" className={link}>Match Center</NavLink>
+        <NavLink to="/sport" className={link}>Matchs</NavLink>
         <NavLink to="/list" className={link}>{t('mylist')}</NavLink>
       </nav>
       <form

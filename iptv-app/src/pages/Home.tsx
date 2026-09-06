@@ -40,7 +40,7 @@ export default function Home() {
     const now = new Date(); const soon = now.getTime() + 60 * 60000
     const items = catalog.items.filter((i) => { if (i.kind !== 'live') return false; const e = parseEvent(i.rawName, now); return !!e && !!e.start && (e.status === 'live' || (e.status === 'next' && e.start.getTime() <= soon)) })
       .sort((a, b) => (parseEvent(a.rawName, now)!.start!.getTime()) - (parseEvent(b.rawName, now)!.start!.getTime())).slice(0, 30)
-    return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs en direct et dans l’heure', sub: 'Scores et sources dans le Match Center', items } : undefined
+    return items.length ? { key: 'matches', kind: 'live', type: 'row', name: 'Matchs', sub: 'En direct et dans l’heure', items } : undefined
   }, [catalog])
   const list = useMemo(() => {
     const base = [...(rows?.length ? rows : providerRows)]
