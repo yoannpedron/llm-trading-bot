@@ -29,16 +29,26 @@ export interface DownloadOptions {
   slotPoll?: number
   /** for tests */
   sleep?: (ms: number) => Promise<void>
+  /** provider-specific 'busy' detection (status code or HTML body instead of video) */
+  isBusy?: (r: Response) => boolean
+  /** number of simultaneous connections allowed for this account (1 = sequential) */
+  parallel?: number
+  /** resume state for parallel downloads: per-region cursor */
+  regions?: Region[]
+  onRegions?: (r: Region[]) => void
 }
+export interface Region { start: number; end: number; pos: number }
 export interface Probe { total: number; ranges: boolean; type?: string; /** final URL after the Xtream 302 to the content server */ finalUrl?: string }
 export class SlotBusyError extends Error { constructor() { super('slot busy (458)'); this.name = 'SlotBusyError' } }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-export async function probe(url: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal): Promise<Probe> {
+const defaultBusy = (r: Response) => r.status === 458 || r.status === 429 || r.status === 503 || (r.ok && !/video|octet-stream|mpegurl|mp2t/i.test(r.headers.get('content-type') ?? ''))
+
+export async function probe(url: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal, isBusy: (r: Response) => boolean = defaultBusy): Promise<Probe> {
   // GET with a 1-byte range: works on servers that refuse HEAD, and tells us whether ranges are honoured
   const r = await fetchImpl(url, { headers: { Range: 'bytes=0-0' }, signal })
-  if (r.status === 458) throw new SlotBusyError()
+  if (isBusy(r)) { await r.body?.cancel().catch(() => undefined); throw new SlotBusyError() }
   if (r.status === 206) {
     const cr = r.headers.get('content-range') ?? ''
     const total = +(cr.split('/')[1] ?? 0)
@@ -54,7 +64,27 @@ export async function probe(url: string, fetchImpl: typeof fetch = fetch, signal
 }
 
 export async function download(o: DownloadOptions): Promise<{ received: number; total: number }> {
-  const f = o.fetchImpl ?? fetch, sleep = o.sleep ?? defaultSleep
+  if ((o.parallel ?? 1) > 1) return downloadParallel(o)
+  return downloadSequential(o)
+}
+
+/** N regions downloaded at once, each sequentially. Only when the account allows several connections. */
+async function downloadParallel(o: DownloadOptions): Promise<{ received: number; total: number }> {
+  const f = o.fetchImpl ?? fetch, isBusy = o.isBusy ?? defaultBusy
+  const p = await probe(o.url, f, o.signal, isBusy)
+  if (!p.ranges) return downloadSequential(o)
+  const n = Math.min(o.parallel ?? 1, 4)
+  const regions: Region[] = o.regions?.length ? o.regions : Array.from({ length: n }, (_, i) => { const size = Math.ceil(p.total / n); const start = i * size; return { start, end: Math.min(p.total, start + size) - 1, pos: start } })
+  const received = () => regions.reduce((a, r) => a + (r.pos - r.start), 0)
+  const notify = () => { o.onRegions?.(regions); o.onProgress?.({ received: received(), total: p.total, speed: 0, chunk: 0, status: 'downloading' }) }
+  await Promise.all(regions.map((r) => r.pos > r.end ? Promise.resolve() : downloadSequential({ ...o, parallel: 1, startAt: r.pos, endAt: r.end, onProgress: (x) => { r.pos = x.received; if (x.status === 'downloading') notify(); else o.onProgress?.({ ...x, received: received(), total: p.total }) } })))
+  await o.sink.close?.()
+  o.onProgress?.({ received: received(), total: p.total, speed: 0, chunk: 0, status: 'done' })
+  return { received: received(), total: p.total }
+}
+
+async function downloadSequential(o: DownloadOptions & { endAt?: number }): Promise<{ received: number; total: number }> {
+  const f = o.fetchImpl ?? fetch, sleep = o.sleep ?? defaultSleep, isBusy = o.isBusy ?? defaultBusy
   const minChunk = o.minChunk ?? 8 * 1024 * 1024, maxChunk = o.maxChunk ?? 128 * 1024 * 1024
   const delays = o.retryDelays ?? [1, 2, 4, 8, 15]
   const slotPoll = (o.slotPoll ?? 15) * 1000
@@ -68,7 +98,7 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
   // ---- probe (with slot wait) ----
   for (;;) {
     o.signal?.throwIfAborted()
-    try { report('probing'); const p = await probe(o.url, f, o.signal); total = p.total; ranges = p.ranges; if (p.finalUrl) target = p.finalUrl; break }
+    try { report('probing'); const p = await probe(o.url, f, o.signal, isBusy); total = o.endAt !== undefined ? o.endAt + 1 : p.total; ranges = p.ranges; if (p.finalUrl) target = p.finalUrl; break }
     catch (e) {
       if (e instanceof SlotBusyError) { report('waiting-slot'); await sleep(slotPoll); continue }
       if (attempt >= delays.length + 3) throw e
@@ -87,7 +117,7 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
     try {
       let r = await f(target, { headers: ranges ? { Range: `bytes=${offset}-${end}` } : {}, signal: o.signal })
       if (target !== o.url && (r.status === 403 || r.status === 404 || r.status === 410)) { await r.body?.cancel().catch(() => undefined); target = o.url; r = await f(target, { headers: ranges ? { Range: `bytes=${offset}-${end}` } : {}, signal: o.signal }); if (r.url && r.url !== o.url) target = r.url }
-      if (r.status === 458) throw new SlotBusyError()
+      if (isBusy(r)) { await r.body?.cancel().catch(() => undefined); throw new SlotBusyError() }
       if (ranges && r.status !== 206) throw new Error(`expected 206, got ${r.status}`)
       if (!ranges && !r.ok) throw new Error(`HTTP ${r.status}`)
       if (!ranges && !total) total = +(r.headers.get('content-length') ?? 0)
@@ -121,7 +151,6 @@ export async function download(o: DownloadOptions): Promise<{ received: number; 
     }
   }
   if (total && offset !== total) throw new Error(`incomplete: ${offset}/${total}`)
-  await o.sink.close?.()
-  report('done')
+  if (o.endAt === undefined) { await o.sink.close?.(); report('done') } else report('downloading')
   return { received: offset, total }
 }

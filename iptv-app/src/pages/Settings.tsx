@@ -8,6 +8,7 @@ import { useCatalog } from '../store/catalog'
 import { useHomeRows } from '../hooks/useHomeRows'
 import { XtreamClient, type XtreamUserInfo } from '../api/xtream'
 import { countryOf } from '../parser/live'
+import { probeProvider } from '../download/profile'
 
 type Tab = 'accounts' | 'languages' | 'categories' | 'data'
 const TABS: [Tab, string][] = [['accounts', 'Comptes'], ['languages', 'Langues'], ['categories', 'Catégories'], ['data', 'Données']]
@@ -44,9 +45,19 @@ function Accounts() {
   const [form, setForm] = useState({ label: '', url: '', username: '', password: '' })
   const [test, setTest] = useState<Record<string, XtreamUserInfo | 'error' | 'loading'>>({})
   const [key, setKey] = useState(s.tmdbKeyOverride ?? '')
+  const catalog = useCatalog((c) => c.catalog)
   const probe = async (id: string, c: { url: string; username: string; password: string }) => {
     setTest((t) => ({ ...t, [id]: 'loading' }))
-    try { setTest((t) => ({ ...t, [id]: 'x' as never })); const r = await new XtreamClient(c).login(); setTest((t) => ({ ...t, [id]: r })) } catch { setTest((t) => ({ ...t, [id]: 'error' })) }
+    try { const r = await new XtreamClient(c).login(); setTest((t) => ({ ...t, [id]: r })) } catch { setTest((t) => ({ ...t, [id]: 'error' })) }
+  }
+  /** Learn how this provider behaves (redirect, ranges, busy code, connections, HLS). Runs on the device only. */
+  const analyse = async (id: string, c: { url: string; username: string; password: string }) => {
+    const cl = new XtreamClient(c)
+    const sample = catalog?.items.find((i) => i.kind === 'movie' && i.id.startsWith('movie:'))
+    if (!sample) { alert('Charge d’abord le catalogue de ce compte.'); return }
+    const me = await cl.login().catch(() => undefined)
+    const p = await probeProvider({ sampleUrl: cl.movieUrl(sample.streamId, sample.ext), apiUrl: `${c.url}/player_api.php?username=${c.username}&password=${c.password}`, testBusy: +(me?.user_info.active_cons ?? 1) === 0 })
+    s.setProfile(id, p)
   }
   useEffect(() => { s.accounts.forEach((a) => probe(a.id, a)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -72,9 +83,12 @@ function Accounts() {
                   </span>
                 )}
                 <button onClick={() => probe(a.id, a)} className="rounded bg-white/10 px-3 py-1 text-xs hover:bg-white/20">Tester</button>
+                <button onClick={() => void analyse(a.id, a)} className="rounded bg-white/10 px-3 py-1 text-xs hover:bg-white/20">Analyser</button>
                 {!active && <button onClick={() => { session.setLive({ url: a.url, username: a.username, password: a.password }); s.setActive(a.id); nav('/') }} className="rounded bg-white px-3 py-1 text-xs font-semibold text-black">Utiliser</button>}
                 <button onClick={() => s.removeAccount(a.id)} className="text-xs text-white/40 hover:text-red-300">Supprimer</button>
               </div>
+              {s.profiles[a.id] && (() => { const p = s.profiles[a.id]; return (
+                <p className="mt-2 text-[11px] text-white/50">Profil fournisseur · {p.maxConnections} connexion{p.maxConnections > 1 ? 's' : ''} · {p.redirect ? 'redirection avec jeton' : 'accès direct'} · {p.ranges ? 'reprise par plages' : 'sans plages'} · {p.hlsVod ? 'VOD en HLS' : 'fichiers progressifs'} · occupé = {p.busyHtml ? 'page HTML' : p.busyStatus ?? 'inconnu'}{p.refSpeed ? ` · ${(p.refSpeed / 1e6).toFixed(1)} Mo/s observés` : ''}{p.releaseSeconds ? ` · libération ${p.releaseSeconds} s` : ''} · analysé le {new Date(p.probedAt).toLocaleDateString('fr-FR')}</p>) })()}
             </li>
           )
         })}

@@ -1,12 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { XtreamCredentials } from '../api/xtream'
+import type { ProviderProfile } from '../download/profile'
 
 export interface Account extends XtreamCredentials { id: string; label: string }
 
 interface Settings {
   accounts: Account[]
   activeAccountId?: string
+  profiles: Record<string, ProviderProfile>
+  setProfile: (accountId: string, p: ProviderProfile) => void
+  learn: (accountId: string, patch: Partial<ProviderProfile>) => void
   tmdbKeyOverride?: string
   /** Home rows */
   hiddenRows: string[]
@@ -35,7 +39,9 @@ interface Settings {
 const toggle = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
 export const useSettings = create<Settings>()(persist((set, get) => ({
-  accounts: [], hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, autoRefreshHours: 12,
+  accounts: [], profiles: {}, hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, autoRefreshHours: 12,
+  setProfile: (id, p) => set({ profiles: { ...get().profiles, [id]: p } }),
+  learn: (id, patch) => { const cur = get().profiles[id]; if (cur) set({ profiles: { ...get().profiles, [id]: { ...cur, ...patch } } }) },
   addAccount: (a) => { const id = crypto.randomUUID(); set({ accounts: [...get().accounts, { ...a, id }] }); return id },
   removeAccount: (id) => set({ accounts: get().accounts.filter((a) => a.id !== id), activeAccountId: get().activeAccountId === id ? undefined : get().activeAccountId }),
   setActive: (id) => set({ activeAccountId: id }),

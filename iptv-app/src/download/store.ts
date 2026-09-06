@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { download, type Progress } from './engine'
 import { openSink, remove, sizeOf } from './opfs'
+import { strategyFor, type ProviderProfile } from './profile'
+import { downloadHls, type HlsIndex } from './hls'
+import type { Region } from './engine'
+import { useSettings } from '../store/settings'
+import { useSession } from '../store/session'
 
 export type DlStatus = 'queued' | 'downloading' | 'waiting-slot' | 'paused' | 'done' | 'error'
 export interface Dl {
@@ -18,6 +23,9 @@ export interface Dl {
   error?: string
   createdAt: number
   finishedAt?: number
+  regions?: Region[]
+  hls?: HlsIndex
+  strategy?: string
 }
 interface State {
   items: Record<string, Dl>
@@ -39,7 +47,7 @@ export const useDownloads = create<State>()(persist((set, get) => ({
   items: {}, maxRate: 0, wifiOnly: false,
   add: (d) => {
     if (get().items[d.id]) return
-    const file = d.id.replace(/[^a-z0-9]+/gi, '_') + '.' + d.ext
+    const file = d.id.replace(/[^a-z0-9]+/gi, '_') + '.' + (d.ext === 'm3u8' ? 'ts' : d.ext)
     set({ items: { ...get().items, [d.id]: { ...d, file, total: 0, received: 0, status: 'queued', createdAt: Date.now() } } })
     get()._tick()
   },
@@ -57,14 +65,28 @@ export const useDownloads = create<State>()(persist((set, get) => ({
     const ac = new AbortController(); controllers.set(next.id, ac)
     void (async () => {
       try {
-        const startAt = await sizeOf(next.file)
+        const profile = currentProfile()
+        const strat = strategyFor(profile)
+        const isHls = next.ext === 'm3u8' || !!profile?.hlsVod
+        const startAt = isHls ? (next.received || 0) : (next.regions?.length ? 0 : await sizeOf(next.file))
         const sink = await openSink(next.file, startAt)
         let last = 0
-        await download({ url: next.url, sink, startAt, maxRate: get().maxRate, signal: ac.signal, onProgress: (p: Progress) => {
+        const onProgress = (p: Progress) => {
           const now = Date.now(); if (now - last < 500 && p.status === 'downloading') return; last = now
           patch(set, get, next.id, { received: p.received, total: p.total, speed: p.speed, chunk: p.chunk, status: p.status === 'waiting-slot' ? 'waiting-slot' : 'downloading' })
-        } })
-        patch(set, get, next.id, { status: 'done', speed: 0, finishedAt: Date.now() })
+        }
+        const t0 = Date.now()
+        if (isHls) {
+          patch(set, get, next.id, { strategy: 'HLS segments' })
+          const r = await downloadHls({ url: next.url, sink, signal: ac.signal, isBusy: strat.isBusy, onProgress, startIndex: next.hls, startOffset: next.received || 0 })
+          patch(set, get, next.id, { hls: r.index })
+        } else {
+          patch(set, get, next.id, { strategy: strat.parallel > 1 ? `${strat.parallel} connexions` : '1 connexion, séquentiel' })
+          const r = await download({ url: next.url, sink, startAt, maxRate: get().maxRate, signal: ac.signal, isBusy: strat.isBusy, parallel: strat.parallel, regions: next.regions, onRegions: (regions) => patch(set, get, next.id, { regions: regions.map((x) => ({ ...x })) }), onProgress })
+          const secs = (Date.now() - t0) / 1000
+          if (secs > 5 && profile) learn({ refSpeed: Math.round(r.received / secs) })
+        }
+        patch(set, get, next.id, { status: 'done', speed: 0, finishedAt: Date.now(), regions: undefined })
       } catch (e) {
         if (!ac.signal.aborted) patch(set, get, next.id, { status: 'error', error: e instanceof Error ? e.message : String(e), speed: 0 })
       } finally {
@@ -74,4 +96,14 @@ export const useDownloads = create<State>()(persist((set, get) => ({
   },
 }), { name: 'iptv-downloads', partialize: (s) => ({ items: Object.fromEntries(Object.entries(s.items).map(([k, v]) => [k, { ...v, status: v.status === 'downloading' || v.status === 'waiting-slot' || v.status === 'queued' ? 'paused' : v.status, speed: 0 }])), maxRate: s.maxRate, wifiOnly: s.wifiOnly }) }))
 
+function currentProfile(): ProviderProfile | undefined {
+  const { accounts, activeAccountId, profiles } = useSettings.getState(); const creds = useSession.getState().creds
+  const acc = accounts.find((a) => a.id === activeAccountId) ?? accounts.find((a) => a.username === creds?.username && a.url === creds?.url)
+  return acc ? profiles[acc.id] : undefined
+}
+function learn(patch: Partial<ProviderProfile>) {
+  const { accounts, activeAccountId } = useSettings.getState(); const creds = useSession.getState().creds
+  const acc = accounts.find((a) => a.id === activeAccountId) ?? accounts.find((a) => a.username === creds?.username && a.url === creds?.url)
+  if (acc) useSettings.getState().learn(acc.id, patch)
+}
 function patch(set: (p: Partial<State>) => void, get: () => State, id: string, p: Partial<Dl>) { const it = get().items[id]; if (it) set({ items: { ...get().items, [id]: { ...it, ...p } } }) }

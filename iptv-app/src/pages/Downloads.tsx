@@ -42,7 +42,7 @@ function Item({ d }: { d: Dl }) {
   return (
     <li className="rounded-xl bg-white/5 p-3">
       <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1"><b className="block truncate">{d.title}</b><span className="text-xs text-white/50">{d.total ? `${mb(d.received)} / ${mb(d.total)}` : ''} {label[d.status]}</span></div>
+        <div className="min-w-0 flex-1"><b className="block truncate">{d.title}</b><span className="text-xs text-white/50">{d.total ? `${mb(d.received)} / ${mb(d.total)}` : ''} {label[d.status]}{d.strategy && d.status !== 'done' ? ` · ${d.strategy}` : ''}</span></div>
         {d.status === 'done' && <Link to={`/watch/${d.id.split('#')[0]}?local=${encodeURIComponent(d.id)}`} className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black">▶ Lire</Link>}
         {(d.status === 'downloading' || d.status === 'waiting-slot' || d.status === 'queued') && <button onClick={() => dl.pause(d.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm">Pause</button>}
         {(d.status === 'paused' || d.status === 'error') && <button onClick={() => dl.resume(d.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm">Reprendre</button>}

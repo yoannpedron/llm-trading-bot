@@ -8,6 +8,7 @@ import { useBadge } from '../hooks/useBadge'
 import { parseEvent } from '../parser/live'
 import { useDownloads } from '../download/store'
 import { fileOf } from '../download/opfs'
+import { localPlaylist } from '../download/hls'
 import type { XtreamSeriesInfo } from '../api/xtream'
 import { useCatalog } from '../store/catalog'
 import { useUi } from '../store/ui'
@@ -31,7 +32,7 @@ export default function Watch() {
   const localId = params.get('local') ?? undefined
   const dlItem = useDownloads((s) => localId ? s.items[localId] : undefined)
   const [localUrl, setLocalUrl] = useState<string>()
-  useEffect(() => { let u: string | undefined; if (dlItem?.status === 'done') void fileOf(dlItem.file).then((f) => { if (f) { u = URL.createObjectURL(f); setLocalUrl(u) } }); return () => { if (u) URL.revokeObjectURL(u) } }, [dlItem])
+  useEffect(() => { const urls: string[] = []; if (dlItem?.status === 'done') void fileOf(dlItem.file).then((f) => { if (!f) return; const u = URL.createObjectURL(f); urls.push(u); if (dlItem.hls) { const pl = URL.createObjectURL(new Blob([localPlaylist(dlItem.hls, u)], { type: 'application/vnd.apple.mpegurl' })); urls.push(pl); setLocalUrl(pl + '#.m3u8') } else setLocalUrl(u) }); return () => urls.forEach((x) => URL.revokeObjectURL(x)) }, [dlItem])
   const alts = useMemo(() => (params.get('alts') ?? '').split(',').filter(Boolean), [params])
   const { cards } = useMatches()
   const sportPrefs = useSportPrefs()

@@ -12,7 +12,7 @@ export default function Player({ src, title, autoPlay = true, startAt, onProgres
     const video = ref.current
     if (!video) return
     setError(undefined)
-    const isHls = /\.m3u8(\?|$)/.test(src)
+    const isHls = /\.m3u8(\?|#|$)/.test(src) || src.endsWith('#.m3u8')
     let hls: Hls | undefined
     if (isHls && Hls.isSupported()) {
       hls = new Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 60 })
