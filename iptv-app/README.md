@@ -73,20 +73,24 @@ Priorité au `tmdb` fourni par le provider (85 % des films, 88 % des séries du 
 
 | Phase | Mesure |
 |---|---|
-| Premier démarrage, interface utilisable (chaînes + séries) | 7,6 s |
-| Premier démarrage, catalogue complet | 20 à 25 s, borné par le serveur qui met 13 à 20 s à envoyer 86 Mo de films non compressés |
-| Redémarrage depuis l'instantané local | 2,6 s |
-| Recherche sur 296 000 titres | 8 ms de calcul, 140 ms affichés |
+| Premier démarrage, interface utilisable (chaînes + séries) | 6 à 9 s |
+| Premier démarrage, catalogue complet | 17 à 25 s, borné par le serveur qui met 13 à 20 s à envoyer 86 Mo de films non compressés |
+| Redémarrage depuis l'instantané local | 0,8 s |
+| Mémoire JS du fil d'interface, catalogue complet chargé | 106 Mo (246 Mo avant la v2 des colonnes) |
+| Construction de la vue catalogue | 65 ms |
+| Index TMDB (250 000 clés) | 140 ms |
+| Recherche sur 296 000 titres | 12 ms de calcul, 150 ms affichés |
 | Mise à jour du catalogue | en arrière-plan, interface utilisable pendant toute la durée |
 
-Mécanismes : instantané colonnaire dans IndexedDB (typed arrays + colonnes texte), transfert worker → interface en tampons UTF-8 sans copie, parsing JSON incrémental pendant le téléchargement, catalogues partiels au premier démarrage, restauration par tranches sans bloquer l'interface, index de recherche persistant, index TMDB différé après le premier rendu, polices auto-hébergées (aucune requête bloquante vers un tiers).
+Les données ne résident pas sous forme d'objets : le catalogue est un jeu de colonnes (typed arrays pour les nombres, UTF-8 + offsets pour le texte) stocké tel quel dans IndexedDB et transféré sans copie du worker vers l'interface. Une entrée n'est décodée que lorsque l'interface la touche (quelques centaines à la fois), et synopsis / casting / réalisateur / genres restent dans un second enregistrement lu à la demande par le worker, jamais chargés dans le fil d'interface. Les préfixes d'URL d'affiches sont dédupliqués par dictionnaire, la recherche s'exécute directement sur les octets, l'index TMDB est trois typed arrays.
 
-## Performance
+## Anciens appareils : palier « léger »
 
-- Parsing des 300k entrées dans un Web Worker (UI jamais bloquée).
-- Carrousels et grilles virtualisés : ~40 à 160 cartes dans le DOM quel que soit le volume.
-- Jaquettes du provider utilisées dans les grilles ; TMDB n'est appelé que pour l'item focus / la page détails.
-- Cache TMDB en IndexedDB, un titre n'est jamais refetché.
+Détection automatique (RAM ≤ 2 Go, ≤ 2 cœurs, économiseur de données, réseau 2G, animations réduites) avec réglage manuel dans Paramètres › Données › Affichage. Le palier léger coupe les bandes-annonces, le flou, le zoom du fond et les transitions, charge des affiches TMDB en w342 et des fonds en w780, et réduit le sur-rendu des grilles.
+
+## Pages dynamiques par catégorie
+
+Chaque catégorie serveur (et chaque type entier) a sa propre page construite depuis les données du provider : ajouts récents, mieux notés (top 10), sorties de l'année et de l'année précédente, décennies réellement couvertes, 4K, versions par langue. Une rangée n'existe que si le provider a au moins 8 titres pour elle, et la page passe en simple grille sous 24 titres : le même code produit deux rangées chez un petit provider et douze chez un gros. Les rangées de l'accueil obéissent à la même règle (5 titres minimum pour un top 10, 6 pour une rangée TMDB).
 
 ## Proxy
 
