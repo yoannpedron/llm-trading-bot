@@ -16,6 +16,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
+| Collecte des piles et batteries usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 2 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
@@ -25,6 +26,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
+| Collecte des piles et batteries usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 2 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 
@@ -37,7 +39,7 @@ npm install docx && node build-procedures.js
 ```
 
 Le script écrit les deux `.docx`. Le contenu de chaque procédure est en clair dans les blocs
-`P1` à `P9`, `F1` et `M1` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
+`P1` à `P10`, `F1` et `M1` ; la charte est dans les constantes du haut de fichier. Balisage disponible dans
 les textes : `**gras**`, `` `chemin d'écran` ``, `//italique//`, `{{champ à compléter}}`.
 
 ## Attention aux retouches dans Word
@@ -65,6 +67,8 @@ courses des plinthes et ordre des zones inchangés.
 Procédure accès : brouillon « Carte procédure » des Services Généraux, complété par le guide
 d'utilisation VISOR V2.0.0.36 pour les libellés d'écrans, les statuts d'identifiant, la limite
 de dix groupes d'accès et le comportement de la suppression.
+Procédure piles : contrat d'enlèvement des batteries ecosystem (janvier 2026), annexes A et B,
+et échanges de courriels avec ecosystem (demande n°4000674344).
 Procédure machine à café : plan de nettoyage officiel De Jong Duke Lua et manuel utilisateur
 du constructeur (Lua CoEx, réf. 5DUCNS20M), complétés par les consignes du site.
 Procédures courrier, Welcome by et contraventions : cahier de consignes Pénélope pour Audika
