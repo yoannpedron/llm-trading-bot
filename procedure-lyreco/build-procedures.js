@@ -162,6 +162,33 @@ const CAPTURE = (t) => new Paragraph({
   alignment: AlignmentType.CENTER,
   spacing: { before: 60, after: 120 },
 });
+const BOX = (lines, label) => new Table({
+  columnWidths: [CW], width: { size: CW, type: WidthType.DXA },
+  borders: {
+    top: { style: BorderStyle.SINGLE, size: 4, color: LINE },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: LINE },
+    left: { style: BorderStyle.SINGLE, size: 4, color: LINE },
+    right: { style: BorderStyle.SINGLE, size: 4, color: LINE },
+    insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
+  },
+  rows: [new TableRow({
+    children: [new TableCell({
+      width: { size: CW, type: WidthType.DXA },
+      shading: { type: ShadingType.CLEAR, fill: 'F7F9F8', color: 'auto' },
+      margins: { top: 110, bottom: 110, left: 150, right: 150 },
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: label.toUpperCase(), font: SANS, bold: true, size: 13, color: MUTED, characterSpacing: 25 })],
+          spacing: { after: 60 },
+        }),
+        ...lines.map((l) => new Paragraph({
+          children: runs(l, { size: 17 }),
+          spacing: { after: l ? 30 : 60, line: 235 },
+        })),
+      ],
+    })],
+  })],
+});
 const GAP = (h = 90) => new Paragraph({ text: '', spacing: { after: h } });
 const STEP = (n, t) => [
   new Paragraph({
@@ -607,61 +634,105 @@ P9.push(BUL("Noter l'intervention : {{support de suivi à préciser}}"));
 /* ================= PROCÉDURE 10 — COLLECTE DES PILES ================= */
 const P10 = [];
 P10.push(EYEBROW('PROCÉDURE INTERNE'));
-P10.push(TITLE('Collecte des piles et batteries usagées'));
-P10.push(LEDE("Mettre en place et faire fonctionner la collecte des piles d'aides auditives dans un centre, avec l'éco-organisme ecosystem."));
+P10.push(TITLE('Devenir point de collecte des piles usagées'));
+P10.push(LEDE("Faire enregistrer un centre auprès de l'éco-organisme ecosystem, signer le contrat d'enlèvement et obtenir les contenants, étape par étape."));
 P10.push(META([['Version', '1.0'], ['Périmètre', 'centres du réseau'], ['Diffusion', 'directeurs de centre']]));
 
-P10.push(H2('1', 'Deux voies possibles — choisir la bonne'));
-P10.push(P("ecosystem est l'éco-organisme agréé pour les piles et batteries. Deux dispositifs coexistent, et **le choix dépend du volume que produit le centre**."));
-P10.push(table(['', 'Voie A — bac de pré-collecte', 'Voie B — point d’enlèvement sous contrat'], [
-  ['Pour qui', 'Un centre seul, gisement de quelques kilos par an', 'Un site qui regroupe le gisement de plusieurs centres'],
-  ['Mise en place', 'Commande en ligne, gratuite, sans contrat', 'Contrat de partenariat signé par le siège'],
-  ['Vidage', 'Le centre vide lui-même le bac dans un point de collecte public', 'Enlèvement par un prestataire ecosystem, sur demande'],
-  ['Condition', 'Aucune', '90 kg minimum, soit 3 bacs pleins de 30 kg'],
-], cols([0.16, 0.42, 0.42])));
+P10.push(H2('1', 'Avant de commencer'));
+P10.push(table(['Qui', 'Rôle dans la démarche'], [
+  ['Le centre', "Fait la demande, rassemble ses informations, installe et surveille le contenant, demande les enlèvements"],
+  ['Le siège', "Fournit l'identité juridique, désigne le signataire habilité — le centre ne signe pas lui-même"],
+  ['ecosystem', "Enregistre le site, envoie le contrat, fournit les contenants et les accès, organise les enlèvements"],
+], cols([0.20, 0.80])));
 P10.push(GAP(70));
-P10.push(note('À lire avant de signer quoi que ce soit', "Un centre produit environ **10 kg de piles boutons par an**. La quantité minimum d'enlèvement du contrat est de **90 kg**, soit **neuf années de gisement** : un centre isolé ne l'atteindra jamais et n'obtiendra pas d'enlèvement. **La voie A est celle qui convient à un centre**. La voie B ne se justifie que si le centre regroupe le gisement d'autres centres.", 'stop'));
+P10.push(note('Vérifier d’abord que la démarche a un sens', "L'enlèvement n'est déclenché qu'à partir de **90 kg**, soit trois bacs pleins. Un centre qui produit une dizaine de kilos de piles boutons par an ne les atteindra pas : dans ce cas, demander plutôt un **bac de pré-collecte gratuit** que le centre vide lui-même dans un point de collecte public. La démarche ci-dessous vaut pour un site qui **regroupe le gisement de plusieurs centres**.", 'stop'));
 
-P10.push(H2('2', 'Voie A — commander un bac de pré-collecte'));
-P10.push(BUL("Commander gratuitement l'outil de pré-collecte sur `extranet.corepile.net`, rubrique demandes d'outils. Des outils de sensibilisation peuvent être commandés au même endroit."));
-P10.push(BUL("Installer le bac à l'accueil du centre, hors de portée du public si les piles y sont visibles."));
-P10.push(BUL("Quand le bac est plein, le **vider soi-même** dans un point de collecte ecosystem. La carte des points est sur `jerecyclemespiles.com`."));
-P10.push(BUL("Ne jamais jeter de piles avec les déchets courants, ni les stocker en vrac hors du bac."));
+P10.push(H2('2', 'Étape par étape'));
 
-P10.push(H2('3', 'Voie B — devenir point d’enlèvement'));
-P10.push(P("Réservé aux sites qui massifient le gisement. La démarche se fait avec le siège : le contrat engage l'entité juridique, pas le centre."));
-P10.push(...STEP(1, 'Demander l’enregistrement du site'));
-P10.push(P("Écrire à `contacteznous@ecosystem.eco` en fournissant :"));
-P10.push(BUL("nom de l'établissement, adresse complète et **SIRET du centre** ;"));
-P10.push(BUL("horaires d'ouverture, et horaires spécifiques de collecte s'ils diffèrent ;"));
-P10.push(BUL("nom, prénom, e-mail et téléphone de la **personne référente** ;"));
-P10.push(BUL("gisement annuel estimé et nature des piles ;"));
-P10.push(BUL("photos du stock."));
-P10.push(...STEP(2, 'Compléter le contrat'));
-P10.push(BUL("Télécharger les documents **au format Word** : contrat, annexe A (fiche d'identification) et annexe B (conditions d'enlèvement)."));
-P10.push(BUL("Renseigner les coordonnées du **siège social** depuis un ordinateur, **sans dater ni signer**."));
-P10.push(BUL("À l'article 1, cocher la **catégorie 1 « Batteries portables »** : c'est celle des piles boutons d'aides auditives."));
-P10.push(BUL("Renvoyer les documents **au format Word** à `contacteznous@ecosystem.eco`."));
-P10.push(BUL("Communiquer l'**adresse e-mail nominative** du signataire habilité : le système de signature refuse les adresses génériques."));
-P10.push(BUL("ecosystem signe, puis un lien **DocuSign** est envoyé au signataire, qui date et signe en ligne."));
+P10.push(...STEP(1, 'Rassembler les informations du centre'));
+P10.push(P("Avant d'écrire, réunir ces sept éléments. Une demande incomplète repart en aller-retour."));
+P10.push(BUL("Nom de l'établissement, tel qu'il apparaît sur les documents officiels."));
+P10.push(BUL("Adresse complète du lieu où le transporteur viendra."));
+P10.push(BUL("**SIRET du centre** — il est propre à l'établissement, ce n'est pas celui du siège."));
+P10.push(BUL("Horaires d'ouverture, et horaires de collecte s'ils diffèrent."));
+P10.push(BUL("Personne référente : nom, prénom, e-mail et téléphone direct."));
+P10.push(BUL("Gisement annuel estimé, en kilos, et nature des piles."));
+P10.push(BUL("**Photos du stock** actuel de piles."));
+
+P10.push(...STEP(2, 'Envoyer la demande d’enregistrement'));
+P10.push(P("Écrire à `contacteznous@ecosystem.eco`. Conserver le **numéro de demande** renvoyé par ecosystem : il sert de référence à tous les échanges suivants."));
+P10.push(BOX([
+  "**Objet :** Demande d'enregistrement d'un point de collecte de piles",
+  "",
+  "Bonjour,",
+  "",
+  "Nous souhaitons enregistrer notre établissement comme point de collecte de piles. Voici les éléments demandés.",
+  "",
+  "**Nom de l'établissement :** {{nom du centre}}",
+  "**Adresse :** {{adresse complète}}",
+  "**SIRET :** {{SIRET du centre}}",
+  "**Entité juridique :** SOGECA, SAS au capital de 145 900 €, siège social 6 rue Fructidor, 93400 Saint-Ouen-sur-Seine, RCS Bobigny 308 895 770",
+  "**Horaires d'ouverture :** {{horaires}}",
+  "**Horaires spécifiques pour la collecte :** identiques aux horaires d'ouverture",
+  "**Personne référente :** {{nom, prénom}} — {{téléphone}} — {{e-mail}}",
+  "**Gisement annuel estimé :** {{en kg}}, exclusivement des piles boutons d'aides auditives",
+  "",
+  "Les photos du stock sont jointes au présent message.",
+  "",
+  "Bien cordialement,",
+], 'Modèle de message'));
+
+P10.push(...STEP(3, 'Recevoir et compléter le contrat'));
+P10.push(P("ecosystem renvoie trois fichiers : le **contrat d'enlèvement des batteries**, l'**annexe A** (fiche d'identification) et l'**annexe B** (conditions d'enlèvement). Les traiter ainsi :"));
+P10.push(BUL("**Télécharger les fichiers au format Word.** Ne pas les convertir en PDF, ne pas les imprimer pour les remplir à la main."));
+P10.push(BUL("**Contrat, première page** — dans le bloc laissé vide après « ET », saisir l'identité juridique : SOGECA, SAS au capital de 145 900 €, siège social 6 rue Fructidor, 93400 Saint-Ouen-sur-Seine, RCS Bobigny 308 895 770."));
+P10.push(BUL("**Contrat, article 1** — cocher la case **Catégorie 1 « Batteries portables »**. C'est la catégorie des piles boutons d'aides auditives ; ne rien cocher d'autre."));
+P10.push(BUL("**Annexe A** — une ligne par centre concerné : nom de la structure, adresse d'enlèvement, code postal, ville, SIRET, contact référent opérationnel, e-mail et téléphone. Cette liste peut être mise à jour plus tard par simple échange écrit."));
+P10.push(BUL("**Annexe B** — rien à remplir : elle renvoie au paragraphe G des conditions générales."));
 P10.push(GAP(60));
-P10.push(note('Identité juridique à saisir', "Les centres relèvent de **SOGECA**, SAS au capital de 145 900 €, siège social 6 rue Fructidor, 93400 Saint-Ouen-sur-Seine, RCS Bobigny 308 895 770. Ces mentions sont identiques pour tous les centres ; **seul le SIRET change**, il est propre à chaque établissement.", 'info'));
-P10.push(...STEP(3, 'Réception du matériel'));
-P10.push(P("Une fois le partenariat finalisé, le site reçoit les contenants et ses **identifiants d'accès à l'espace en ligne** — chaque point d'enlèvement a les siens."));
+P10.push(note('Ne pas dater, ne pas signer', "Les documents doivent revenir **complétés mais ni datés ni signés** : la date et la signature seront apposées électroniquement à la fin du processus. Un document signé à la main fait recommencer la procédure.", 'warn'));
 
-P10.push(H2('4', 'Stocker et demander un enlèvement'));
-P10.push(BUL("Aménager une **zone de stockage sécurisée** ; manipuler les piles avec précaution pour éviter tout endommagement et toute fuite."));
-P10.push(BUL("**Ne rien mélanger** avec les piles : ecosystem peut refuser l'enlèvement si d'autres déchets sont présents."));
-P10.push(BUL("Les contenants — bac de 22 litres pour 30 kg, ou fût de 220 litres pour 300 kg — **restent la propriété d'ecosystem**. Le site en répond : disparition ou dégradation donnent lieu à indemnisation."));
-P10.push(BUL("Demander l'enlèvement **depuis l'espace en ligne**, une fois la quantité minimum atteinte."));
-P10.push(BUL("L'enlèvement intervient sous **10 jours ouvrables** maximum, avec échange **un contenant plein contre un contenant vide**. Le prestataire remplit un bordereau de suivi de déchets."));
+P10.push(...STEP(4, 'Renvoyer et désigner le signataire'));
+P10.push(BUL("Renvoyer les fichiers **au format Word** à `contacteznous@ecosystem.eco`, en rappelant le numéro de demande."));
+P10.push(BUL("Indiquer dans le même message l'**adresse e-mail nominative** de la personne habilitée à signer. Le système de signature **refuse les adresses génériques** du type contact@ ou sgx@."));
+P10.push(BUL("Cette personne est désignée par le siège : le contrat engage SOGECA, pas le centre. Signataire habilité : {{à compléter par les services généraux}}"));
 
-P10.push(H2('5', 'Contact ecosystem'));
+P10.push(...STEP(5, 'Signer par DocuSign'));
+P10.push(BUL("ecosystem fait signer le contrat par sa direction, puis un lien **DocuSign** part vers l'adresse du signataire désigné."));
+P10.push(BUL("Le signataire suit le lien : l'outil l'accompagne champ par champ pour dater et signer."));
+P10.push(BUL("Sans action de sa part, rien n'avance : prévenir la personne qu'elle va recevoir ce lien."));
+
+P10.push(...STEP(6, 'Recevoir le matériel et les accès'));
+P10.push(P("Une fois le partenariat finalisé, le site reçoit les **contenants** et ses **identifiants d'accès à l'espace en ligne**. Chaque point d'enlèvement dispose de ses propres identifiants, qui servent à demander les enlèvements et à consulter les collectes enregistrées."));
+
+P10.push(...STEP(7, 'Installer et stocker'));
+P10.push(BUL("Aménager une **zone de stockage sécurisée**, à l'abri et hors passage."));
+P10.push(BUL("Manipuler les piles avec précaution : tout endommagement peut provoquer une fuite de substances dangereuses."));
+P10.push(BUL("**Ne rien mélanger** aux piles. ecosystem peut refuser l'enlèvement si d'autres déchets sont présents dans le contenant."));
+P10.push(BUL("Les contenants — bac de 22 litres pour 30 kg, fût de 220 litres pour 300 kg — **restent la propriété d'ecosystem**. Le site en répond : perte ou dégradation donnent lieu à indemnisation, et ils sont à restituer en fin de contrat."));
+
+P10.push(...STEP(8, 'Demander un enlèvement'));
+P10.push(BUL("Se connecter à l'espace en ligne avec les identifiants du point d'enlèvement."));
+P10.push(BUL("Vérifier que la **quantité minimum** est atteinte : trois bacs pleins de 30 kg, ou un fût plein de 300 kg."));
+P10.push(BUL("Déposer la demande d'enlèvement."));
+P10.push(BUL("Le prestataire intervient sous **dix jours ouvrables** au maximum et remet **un contenant vide pour chaque contenant plein enlevé**."));
+P10.push(BUL("Il remplit un **bordereau de suivi de déchets** : le conserver. Le tonnage est pesé au centre de regroupement, puis enregistré dans l'espace en ligne."));
+P10.push(BUL("En cas d'écart entre le tonnage enregistré et ce qui a été enlevé, le signaler à ecosystem : le contrat prévoit une analyse conjointe."));
+
+P10.push(H2('3', 'Points de blocage courants'));
+P10.push(table(['Situation', 'Ce qu’il faut faire'], [
+  ['Aucune réponse après la demande', "Relancer par téléphone au 0 809 540 590 en donnant le numéro de demande"],
+  ['Documents renvoyés en PDF', 'Recommencer : seul le format Word est accepté'],
+  ['Adresse générique donnée pour la signature', "Fournir une adresse nominative : la signature électronique ne part pas autrement"],
+  ['Le lien DocuSign n’arrive pas', "Vérifier les indésirables du signataire, puis rappeler ecosystem"],
+  ['Le contenant est plein mais sous 90 kg', "Pas d'enlèvement de droit ; demander à ecosystem un accord d'organisation particulier"],
+  ['Fermeture définitive du centre', "Prévenir ecosystem au moins un mois à l'avance et restituer les contenants"],
+], cols([0.34, 0.66])));
+
+P10.push(H2('4', 'Contact ecosystem'));
 P10.push(table(null, [
   ['Téléphone', '0 809 540 590 — du lundi au vendredi, 8h30 à 18h00'],
   ['E-mail', 'contacteznous@ecosystem.eco'],
-  ['Points de collecte publics', 'jerecyclemespiles.com'],
-  ['Outils de pré-collecte', 'extranet.corepile.net'],
 ], cols([0.30, 0.70])));
 
 /* ================= FICHE — CONTACTS UTILES ================= */

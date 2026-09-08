@@ -16,7 +16,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
-| Collecte des piles et batteries usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 2 |
+| Devenir point de collecte des piles usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 3 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 | Gestion des accès au siège social | PRO-SG-003 | `PRO-SG-003_Gestion_des_acces_au_siege.docx` | 2 |
@@ -26,7 +26,7 @@ filet d'accent, sections numérotées, pied de page « Document interne » suivi
 | Accès aux parkings P1 et P2 | PRO-SG-007 | `PRO-SG-007_Acces_parkings.docx` | 1 |
 | Traitement des mails du poste d'accueil | PRO-SG-008 | `PRO-SG-008_Traitement_des_mails.docx` | 2 |
 | Machine à café De Jong Duke Lua | PRO-SG-009 | `PRO-SG-009_Machine_a_cafe.docx` | 2 |
-| Collecte des piles et batteries usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 2 |
+| Devenir point de collecte des piles usagées | PRO-SG-010 | `PRO-SG-010_Collecte_des_piles.docx` | 3 |
 | Contacts utiles (fiche pratique) | FIC-SG-001 | `FIC-SG-001_Contacts_utiles.docx` | 2 |
 | Mémento — l'essentiel du poste | MEM-SG-001 | `MEM-SG-001_Memento.docx` | 2 |
 
