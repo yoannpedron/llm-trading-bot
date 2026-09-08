@@ -645,7 +645,7 @@ P10.push(table(['Qui', 'Rôle dans la démarche'], [
   ['ecosystem', "Enregistre le site, envoie le contrat, fournit les contenants et les accès, organise les enlèvements"],
 ], cols([0.20, 0.80])));
 P10.push(GAP(70));
-P10.push(note('Vérifier d’abord que la démarche a un sens', "L'enlèvement n'est déclenché qu'à partir de **90 kg**, soit trois bacs pleins. Un centre qui produit une dizaine de kilos de piles boutons par an ne les atteindra pas : dans ce cas, demander plutôt un **bac de pré-collecte gratuit** que le centre vide lui-même dans un point de collecte public. La démarche ci-dessous vaut pour un site qui **regroupe le gisement de plusieurs centres**.", 'stop'));
+P10.push(note('Vérifier d’abord que la démarche a un sens', "Le contrat fixe une **quantité minimum** d'enlèvement : trois bacs pleins de 30 kg, soit **90 kg**, ou un fût plein de **300 kg**. En dessous, ecosystem n'est pas tenu d'intervenir ; un enlèvement reste possible, mais suppose un accord séparé sur l'organisation et la fréquence. Un centre qui produit une dizaine de kilos par an est donc dans une zone où rien n'est garanti : lui convient mieux un **bac de pré-collecte gratuit**, vidé par le centre dans un point de collecte public. La démarche ci-dessous vaut pour un site qui **regroupe le gisement de plusieurs centres**.", 'stop'));
 
 P10.push(H2('2', 'Étape par étape'));
 
@@ -713,7 +713,7 @@ P10.push(BUL("Les contenants — bac de 22 litres pour 30 kg, fût de 220 litres
 
 P10.push(...STEP(8, 'Demander un enlèvement'));
 P10.push(BUL("Se connecter à l'espace en ligne avec les identifiants du point d'enlèvement."));
-P10.push(BUL("Vérifier que la **quantité minimum** est atteinte : trois bacs pleins de 30 kg, ou un fût plein de 300 kg."));
+P10.push(BUL("Vérifier que la **quantité minimum** est atteinte : trois bacs pleins de 30 kg, soit 90 kg, ou un fût plein de 300 kg selon le contenant mis à disposition."));
 P10.push(BUL("Déposer la demande d'enlèvement."));
 P10.push(BUL("Le prestataire intervient sous **dix jours ouvrables** au maximum et remet **un contenant vide pour chaque contenant plein enlevé**."));
 P10.push(BUL("Il remplit un **bordereau de suivi de déchets** : le conserver. Le tonnage est pesé au centre de regroupement, puis enregistré dans l'espace en ligne."));
@@ -725,7 +725,7 @@ P10.push(table(['Situation', 'Ce qu’il faut faire'], [
   ['Documents renvoyés en PDF', 'Recommencer : seul le format Word est accepté'],
   ['Adresse générique donnée pour la signature', "Fournir une adresse nominative : la signature électronique ne part pas autrement"],
   ['Le lien DocuSign n’arrive pas', "Vérifier les indésirables du signataire, puis rappeler ecosystem"],
-  ['Le contenant est plein mais sous 90 kg', "Pas d'enlèvement de droit ; demander à ecosystem un accord d'organisation particulier"],
+  ['Contenant plein, quantité minimum non atteinte', "Pas d'enlèvement de droit : demander à ecosystem un accord séparé, ou une tournée à fréquence convenue"],
   ['Fermeture définitive du centre', "Prévenir ecosystem au moins un mois à l'avance et restituer les contenants"],
 ], cols([0.34, 0.66])));
 
