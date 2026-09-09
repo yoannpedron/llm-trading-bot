@@ -54,7 +54,7 @@ def fmt_phone(v):
         digits = "0" + digits[2:]
     if len(digits) == 10 and digits.startswith("0"):
         num = " ".join(digits[i:i + 2] for i in range(0, 10, 2))
-        reste = re.sub(r"[\d\s./-]+", " ", s).strip(" ,;()")
+        reste = re.sub(r"[\d\s./+()-]+", " ", s).strip(" ,;()")
         return num, reste
     return "", s          # pas un numero exploitable : on conserve le texte tel quel
 
@@ -132,7 +132,8 @@ def get_supplier(nom, domaine="", compte="", region="", centre=""):
     if s is None:
         s = {"nom": clean(nom), "domaines": [], "comptes": [], "regions": [],
              "centres": [], "notes": [], "occurrences": [], "lignes": [],
-             "tel_general": []}   # (priorite, ordre, numero)
+             "tel_general": [],   # (priorite, ordre, numero)
+             "pole": POLE_DEFAUT}
         suppliers[key] = s
     add_domain(s, domaine)
     for champ, val in (("comptes", compte), ("regions", region), ("centres", centre)):
@@ -223,6 +224,48 @@ for row in wb["annuaire FRN espaces verts"].iter_rows(min_row=2, values_only=Tru
     if any(clean(x) for x in (contact, fonction, tel, port, mail, comm)):
         add_contact(courant, contact, fonction, tel, port, mail, comm, "", centre, entete)
 
+# ------------------------------------------------------------- ajouts hors annuaire
+# Fournisseurs transmis par Yoann Pedron le 09/09/2026, absents de l'annuaire FRN.
+SOURCE_AJOUT = "Ajout hors annuaire FRN (transmis le 09/09/2026)"
+
+AJOUTS = [
+    {"nom": "OOVOOM FLEET", "domaine": "GESTION DE FLOTTE",
+     "adresse": "59 boulevard Exelmans, 75016 Paris", "standard": "01 80 82 44 44",
+     "contacts": [{"contact": "Sandra Bibas", "portable": "+33 6 88 39 35 03"}]},
+
+    {"nom": "SNP", "domaine": "MÉNAGE", "pole": "SIÈGE", "centre": "Siège",
+     "commentaire": "Prestataire ménage du siège"},
+
+    {"nom": "NETIJY", "domaine": "MÉNAGE", "region": "OUEST ; SUD OUEST",
+     "commentaire": "Prestataire ménage secteurs Ouest et Sud-Ouest"},
+
+    {"nom": "LUSTRAL", "domaine": "MÉNAGE", "region": "EST ; NORD",
+     "commentaire": "Prestataire ménage secteurs Est et Nord"},
+
+    {"nom": "KINTESSIA", "domaine": "MÉNAGE", "region": "PARIS RP ; SUD EST",
+     "commentaire": "Prestataire ménage secteurs Paris RP et Sud-Est"},
+
+    {"nom": "PÉNÉLOPE GROUPE", "domaine": "",
+     "adresse": "52 rue Taitbout, Paris", "standard": "01 42 09 10 00",
+     "contacts": [{"contact": "O. Kojcic", "courriel": "o.kojcic@penelope.fr",
+                   "commentaire": "Nom déduit de l'adresse courriel, à confirmer"}]},
+]
+
+for a in AJOUTS:
+    s_ = get_supplier(a["nom"], a.get("domaine", ""), "", a.get("region", ""), a.get("centre", ""))
+    s_["pole"] = a.get("pole", POLE_DEFAUT)
+    s_["notes"].append(SOURCE_AJOUT)
+    for champ in ("adresse", "commentaire"):
+        if a.get(champ):
+            s_["notes"].append(a[champ])
+    if a.get("standard"):
+        num, _ = fmt_phone(a["standard"])
+        s_["tel_general"].append((0, 0, num))
+    for c in a.get("contacts", []):
+        add_contact(s_, c.get("contact", ""), c.get("fonction", ""), c.get("tel", ""),
+                    c.get("portable", ""), c.get("courriel", ""), c.get("commentaire", ""),
+                    a.get("region", ""), a.get("centre", ""), False)
+
 # ------------------------------------------------- corrections et notes de conso
 s = suppliers.get(norm_key("TECH 9 ENERGIE"))
 if s and not s["domaines"]:
@@ -237,8 +280,10 @@ for s in suppliers.values():
                           "lignes fusionnées, domaines cumulés")
     if not s["comptes"]:
         s["notes"].append("Aucun n° de compte fournisseur Audika dans la source")
-    if not any(l["numero"] for l in s["lignes"]):
+    if not any(l["numero"] for l in s["lignes"]) and not s["tel_general"]:
         s["notes"].append("Aucun numéro de téléphone dans la source")
+    if not s["domaines"]:
+        s["notes"].append("Domaine d’activité à préciser")
 
 s = suppliers.get(norm_key("GRAF SERVICES PLUS"))
 if s:
@@ -286,8 +331,9 @@ ws.title = "Fournisseurs"
 ws["A1"] = "Annuaire fournisseurs consolidé"
 ws["A1"].font = F_TITRE
 ws["A2"] = ("Source : Annuaire_FRN.xlsx (onglets « annuaire FRN contrats » et « annuaire FRN "
-            "espaces verts »). Une ligne dédiée par fournisseur, ses contacts rangés juste en "
-            f"dessous. Pôle non renseigné dans la source → « {POLE_DEFAUT} ».")
+            "espaces verts »), complétée des fournisseurs transmis hors annuaire. Une ligne "
+            "dédiée par fournisseur, ses contacts rangés juste en dessous. Pôle non renseigné "
+            f"→ « {POLE_DEFAUT} ».")
 ws["A2"].font = F_SOUS
 ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(COLONNES))
 ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(COLONNES))
@@ -330,7 +376,7 @@ for s in sorted(suppliers.values(), key=lambda x: norm_key(x["nom"])):
 
     # ---- ligne dediee au fournisseur (identite, code, domaine, ligne principale)
     valeurs = [
-        POLE_DEFAUT, s["nom"], code, code2, " ; ".join(s["domaines"]),
+        s["pole"], s["nom"], code, code2, " ; ".join(s["domaines"]),
         " ; ".join(s["regions"]), " ; ".join(s["centres"]),
         min(s["tel_general"])[2] if s["tel_general"] else "",
         "", "", "", "", " ; ".join(s["notes"]),

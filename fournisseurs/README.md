@@ -3,7 +3,7 @@
 `Table_fournisseurs_consolidee.xlsx` — annuaire fournisseurs Audika consolidé en **un seul onglet
 `Fournisseurs`**, présenté par blocs : **une ligne dédiée par fournisseur** (identité, code,
 domaine, ligne principale), puis **ses contacts rangés juste en dessous**. Les informations
-fournisseur ne sont jamais répétées. 52 fournisseurs, 184 contacts, 236 lignes.
+fournisseur ne sont jamais répétées. 58 fournisseurs, 186 contacts, 244 lignes.
 
 Tout est en **majuscules**, à la seule exception de la colonne `COURRIEL`. Les lignes de contact
 sont groupées sous leur fournisseur (repliables), avec filtre automatique et volets figés.
@@ -12,7 +12,7 @@ sont groupées sous leur fournisseur (repliables), avec filtre automatique et vo
 
 | Colonne | Contenu |
 |---|---|
-| Pôle | `SGX Réseau` — l'annuaire FRN relève du réseau ; aucun pôle n'est renseigné dans la source. |
+| Pôle | `SGX RÉSEAU` par défaut (l'annuaire FRN relève du réseau) ; `SIÈGE` pour les prestataires du siège. |
 | Fournisseur | Raison sociale telle que saisie en colonne ENTREPRISE. |
 | Code fournisseur | Référence seule, extraite du champ « N° COMPTE FRN AUDIKA » (`FSAB0010`, `V000112`). |
 | Code fournisseur 2 | Raison sociale du même champ (`ABIOXIR`). |
@@ -32,6 +32,10 @@ sont groupées sous leur fournisseur (repliables), avec filtre automatique et vo
 - `Audika_Table_correspondance_centres.xlsx` — table de correspondance des 632 centres transmise
   à Eurofeu. Ne contient aucune coordonnée fournisseur : rien à reprendre. Eurofeu figure déjà
   dans l'annuaire (SÉCURITÉ INCENDIE).
+- **Ajouts hors annuaire**, transmis par Yoann Pedron le 09/09/2026 et signalés comme tels en
+  commentaire : OOVOOM FLEET (gestion de flotte), PÉNÉLOPE GROUPE, et les quatre prestataires
+  ménage SNP (siège), NETIJY (Ouest / Sud-Ouest), LUSTRAL (Est / Nord), KINTESSIA (Paris RP /
+  Sud-Est).
 - Fichier de Lucile (Teams) : non fourni, à intégrer dès réception.
 
 ## Règles de consolidation
