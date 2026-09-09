@@ -59,6 +59,17 @@ def fmt_phone(v):
     return "", s          # pas un numero exploitable : on conserve le texte tel quel
 
 
+def clean_mail(v):
+    """Nettoie une adresse courriel des residus de copier-coller (chevrons, ponctuation)."""
+    return clean(v).strip(" <>;,.")
+
+
+def mail_suspect(mail):
+    """Signale une extension de domaine incomplete (ex. « @eurofeu.r »)."""
+    m = re.search(r"\.([A-Za-z]+)$", mail or "")
+    return bool(mail) and (not m or len(m.group(1)) < 2)
+
+
 def norm_key(name):
     s = unicodedata.normalize("NFKD", clean(name))
     s = "".join(c for c in s if not unicodedata.combining(c))
@@ -94,7 +105,7 @@ GENERIC_STARTS = (
     "demande", "comptabilite", "generique", "maintenance", "planning",
     "gestion", "contact", "depannage", "boite", "courriel", "departement",
     "generaliste", "assistante d", "travaux", "siege", "vpi", "adv",
-    "accueil", "secretariat",
+    "accueil", "secretariat", "panne", "intervention",
 )
 MANUAL_GENERIC = {"saint denis"}     # agence designee par sa seule ville
 
@@ -154,6 +165,9 @@ def add_contact(s, contact, fonction, tel, portable, courriel, commentaire,
             notes.append(note)
 
     contact, fonction = clean(contact), clean(fonction)
+    courriel = clean_mail(courriel)
+    if mail_suspect(courriel):
+        notes.append("Extension du courriel incomplète dans la source, à vérifier")
     libelle = contact or fonction
     generique = is_generic(libelle)
     if not libelle and nums:
@@ -170,7 +184,7 @@ def add_contact(s, contact, fonction, tel, portable, courriel, commentaire,
         "contact": libelle,
         "fonction": fonction if fonction != libelle else "",
         "numero": " / ".join(nums),
-        "courriel": clean(courriel),
+        "courriel": courriel,
         "commentaire": clean(commentaire),
         "notes": notes,
         "region": clean(region),
@@ -229,9 +243,37 @@ for row in wb["annuaire FRN espaces verts"].iter_rows(min_row=2, values_only=Tru
 SOURCE_AJOUT = "Ajout hors annuaire FRN (transmis le 09/09/2026)"
 
 AJOUTS = [
-    {"nom": "OOVOOM FLEET", "domaine": "GESTION DE FLOTTE",
+    {"nom": "OOVOOM FLEET", "domaine": "GESTION DE FLOTTE, CONTRAVENTIONS",
      "adresse": "59 boulevard Exelmans, 75016 Paris", "standard": "01 80 82 44 44",
-     "contacts": [{"contact": "Sandra Bibas", "portable": "+33 6 88 39 35 03"}]},
+     "pole_a_confirmer": True,
+     "commentaire": "Également désigné « OOVOOM » dans les échanges",
+     "contacts": [
+         {"contact": "Sandra Bibas", "portable": "+33 6 88 39 35 03"},
+         {"contact": "Service flotte automobile et contraventions",
+          "tel": "01 80 82 44 43", "courriel": "auddika@oovoom.fr",
+          "commentaire": "Adresse saisie « auddika@ » avec deux d, à confirmer"},
+     ]},
+
+    {"nom": "SOVEDIS", "domaine": "ENTRETIEN DES MACHINES À CAFÉ",
+     "pole": "SIÈGE", "centre": "Siège",
+     "commentaire": "Prestataire du siège ; seul numéro communiqué, sur un portable",
+     "contacts": [{"contact": "Panne et intervention", "portable": "06 52 97 88 52"}]},
+
+    {"nom": "LYRECO", "domaine": "FOURNITURES DE BUREAU",
+     "standard": "0825 09 08 07", "pole_a_confirmer": True},
+
+    {"nom": "MÉNAGE", "domaine": "PROPRETÉ DES LOCAUX", "pole_a_confirmer": True,
+     "commentaire": "Raison sociale non précisée : s’agit-il du contact chez SNP, "
+                    "prestataire ménage du siège ? À confirmer",
+     "contacts": [{"contact": "Aline", "portable": "06 22 70 14 37"}]},
+
+    {"nom": "LORINIS", "domaine": "AGENT MULTI-SERVICE", "pole_a_confirmer": True,
+     "contacts": [{"contact": "Antonio", "portable": "06 18 32 69 08"},
+                  {"contact": "William", "portable": "06 58 02 41 68"}]},
+
+    {"nom": "PRODITION", "domaine": "LOGISTIQUE", "pole_a_confirmer": True,
+     "commentaire": "Centre logistique Audika",
+     "contacts": [{"contact": "Veronique", "tel": "01 41 27 28 66"}]},
 
     {"nom": "SNP", "domaine": "MÉNAGE", "pole": "SIÈGE", "centre": "Siège",
      "commentaire": "Prestataire ménage du siège"},
@@ -245,16 +287,26 @@ AJOUTS = [
     {"nom": "KINTESSIA", "domaine": "MÉNAGE", "region": "PARIS RP ; SUD EST",
      "commentaire": "Prestataire ménage secteurs Paris RP et Sud-Est"},
 
-    {"nom": "PÉNÉLOPE GROUPE", "domaine": "",
+    {"nom": "PÉNÉLOPE GROUPE", "domaine": "", "pole_a_confirmer": True,
      "adresse": "52 rue Taitbout, Paris", "standard": "01 42 09 10 00",
-     "contacts": [{"contact": "O. Kojcic", "courriel": "o.kojcic@penelope.fr",
-                   "commentaire": "Nom déduit de l'adresse courriel, à confirmer"}]},
+     "contacts": [
+         {"contact": "Raja HELLARA", "fonction": "Directrice régionale",
+          "portable": "06 33 37 23 65", "courriel": "r.hellara@penelope.fr"},
+         {"contact": "Olivera KOJCIC", "fonction": "Responsable d’agence",
+          "portable": "06 83 82 70 78", "courriel": "o.kojcic@penelope.fr"},
+         {"contact": "Sarah BENKHALIFA", "fonction": "Responsable planning",
+          "portable": "06 02 04 51 05", "courriel": "s.benkhalifa@penelope.fr"},
+         {"contact": "Svetlana CAUTIK", "fonction": "Responsable contrôle qualité",
+          "portable": "06 88 08 82 22", "courriel": "s.cautik@penelope.fr"},
+     ]},
 ]
 
 for a in AJOUTS:
     s_ = get_supplier(a["nom"], a.get("domaine", ""), "", a.get("region", ""), a.get("centre", ""))
     s_["pole"] = a.get("pole", POLE_DEFAUT)
     s_["notes"].append(SOURCE_AJOUT)
+    if a.get("pole_a_confirmer"):
+        s_["notes"].append("Pôle à confirmer : prestation à caractère siège / services généraux")
     for champ in ("adresse", "commentaire"):
         if a.get(champ):
             s_["notes"].append(a[champ])

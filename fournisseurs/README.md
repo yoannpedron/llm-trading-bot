@@ -3,7 +3,7 @@
 `Table_fournisseurs_consolidee.xlsx` — annuaire fournisseurs Audika consolidé en **un seul onglet
 `Fournisseurs`**, présenté par blocs : **une ligne dédiée par fournisseur** (identité, code,
 domaine, ligne principale), puis **ses contacts rangés juste en dessous**. Les informations
-fournisseur ne sont jamais répétées. 58 fournisseurs, 186 contacts, 244 lignes.
+fournisseur ne sont jamais répétées. 63 fournisseurs, 195 contacts, 258 lignes.
 
 Tout est en **majuscules**, à la seule exception de la colonne `COURRIEL`. Les lignes de contact
 sont groupées sous leur fournisseur (repliables), avec filtre automatique et volets figés.
@@ -33,9 +33,11 @@ sont groupées sous leur fournisseur (repliables), avec filtre automatique et vo
   à Eurofeu. Ne contient aucune coordonnée fournisseur : rien à reprendre. Eurofeu figure déjà
   dans l'annuaire (SÉCURITÉ INCENDIE).
 - **Ajouts hors annuaire**, transmis par Yoann Pedron le 09/09/2026 et signalés comme tels en
-  commentaire : OOVOOM FLEET (gestion de flotte), PÉNÉLOPE GROUPE, et les quatre prestataires
-  ménage SNP (siège), NETIJY (Ouest / Sud-Ouest), LUSTRAL (Est / Nord), KINTESSIA (Paris RP /
-  Sud-Est).
+  commentaire : les prestataires ménage SNP (siège), NETIJY (Ouest / Sud-Ouest), LUSTRAL
+  (Est / Nord), KINTESSIA (Paris RP / Sud-Est) et MÉNAGE (raison sociale à préciser), plus les
+  services généraux OOVOOM FLEET (flotte et contraventions), SOVEDIS (machines à café, siège),
+  LYRECO (fournitures de bureau), LORINIS (agent multi-service), PRODITION (centre logistique)
+  et PÉNÉLOPE GROUPE.
 - Fichier de Lucile (Teams) : non fourni, à intégrer dès réception.
 
 ## Règles de consolidation
@@ -54,6 +56,8 @@ sont groupées sous leur fournisseur (repliables), avec filtre automatique et vo
   du tableau, au même titre qu'une personne nommée.
 - **Aucune donnée perdue** : les 185 lignes de contact des sources sont reprises, y compris les
   contacts sans téléphone. Un fournisseur sans aucun contact n'a que sa ligne dédiée.
+- **Courriels** : les résidus de copier-coller (chevrons, ponctuation finale) sont retirés, et
+  une extension de domaine incomplète est signalée en commentaire sans être corrigée d'office.
 - **Casse** : tout est écrit en majuscules à l'écriture des cellules, sauf la colonne `COURRIEL`
   (les adresses restent en minuscules, telles qu'elles s'écrivent).
 
