@@ -96,6 +96,14 @@ Détection de la langue d'un titre, en cascade : préfixe du titre (`FR|`, `[DE]
 
 Navigation Films / Séries : genres TMDB uniquement, sur le catalogue du spectateur. Les catégories du provider ne sont plus dans la navigation ; elles s'activent ou se désactivent dans Paramètres › Catégories. Une entrée « Autres titres » regroupe les titres sans fiche TMDB (réglage). La recherche présente d'abord les résultats dans les langues du profil, les autres langues repliées dessous.
 
+## Lecteur
+
+Contrôles propres (barre de lecture avec tampon, ±10 s, volume, direct/durée), menu Réglages : vitesse 0,5× à 2×, pistes audio (HLS et pistes intégrées quand le navigateur les expose), sous-titres (pistes HLS ou intégrées, fichier .srt/.vtt chargé depuis l'appareil, conversion SRT → WebVTT à la volée), décalage des sous-titres par pas de 250 ms, taille 75 à 200 %, qualité HLS (auto ou niveau fixe), plein écran, picture-in-picture. Raccourcis : espace/K lecture, ←/→ ±10 s (Maj : ±60 s), ↑/↓ volume, M muet, F plein écran, P PiP, C sous-titres, A piste audio suivante, < > vitesse, 0-9 saut en pourcentage. Volume, vitesse et langues choisies sont mémorisés. Limite navigateur : un MKV/MP4 progressif à plusieurs pistes audio ne permet le changement de piste que si le navigateur expose `audioTracks` (Safari, Chrome avec flag) ; en HLS c'est toujours possible.
+
+## Secours DNS
+
+Les FAI bloquent souvent un fournisseur en mentant sur son nom de domaine. Quand l'API devient injoignable, l'application résout le nom via DNS-over-HTTPS (Cloudflare, Google, Quad9 en parallèle), vérifie que l'API répond sur l'adresse obtenue, puis remplace le nom par l'IP partout (API, flux, téléchargements) pendant 24 h. Diagnostic et forçage manuel dans Paramètres › Comptes › Secours DNS, avec la réponse de chaque résolveur. Ne contourne pas un blocage d'adresse IP (VPN nécessaire) et ne s'applique qu'à l'hôte du fournisseur, pas aux serveurs de contenu vers lesquels il redirige.
+
 ## Pages dynamiques par genre et par catégorie
 
 Chaque page (Tout, genre TMDB, autres titres, catégorie serveur sans clé TMDB) est construite depuis les données du provider : ajouts récents, mieux notés (top 10), sorties de l'année et de l'année précédente, décennies réellement couvertes, 4K, versions par langue. Une rangée n'existe que si le provider a au moins 8 titres pour elle, et la page passe en simple grille sous 24 titres : le même code produit deux rangées chez un petit provider et douze chez un gros. Les rangées de l'accueil obéissent à la même règle (5 titres minimum pour un top 10, 6 pour une rangée TMDB).

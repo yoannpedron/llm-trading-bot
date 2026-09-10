@@ -7,6 +7,8 @@ import { buildTmdbIndex, type TmdbIndex } from '../api/tmdbLists'
 import { useSettings } from './settings'
 import { useProfile } from './profile'
 import { LANGS } from '../parser/langs'
+import { useSession, effectiveCreds } from './session'
+import { findRescue, hostOf } from '../api/dns'
 import { searchBytes, type Extra } from '../catalog/columnar'
 import { CatalogView, type ItemList } from '../catalog/view'
 
@@ -51,16 +53,34 @@ export const useCatalog = create<CatalogState>()((set, get) => ({
   refreshing: false,
   tmdbIndex: EMPTY_INDEX,
 
-  async load(mode, creds, includeAdult, forceRefresh) {
+  async load(mode, rawCreds, includeAdult, forceRefresh) {
     worker?.terminate()
     worker = new CatalogWorker()
+    // a DNS rescue in force swaps the blocked hostname for its IP everywhere (API, streams, downloads)
+    const creds = effectiveCreds(rawCreds)
+    let rescued = !!(rawCreds && creds && rawCreds.url !== creds.url)
     const client = mode === 'live' && creds ? new XtreamClient(creds) : undefined
     set({ status: get().catalog ? 'ready' : 'loading', progress: 'Chargement…', error: undefined, client, refreshing: mode === 'live' })
-    const key = mode === 'live' && creds ? `${creds.url}|${creds.username}` : 'mock'
+    // snapshot key follows the original host so a rescue never loses the local catalogue
+    const key = mode === 'live' && rawCreds ? `${rawCreds.url}|${rawCreds.username}` : 'mock'
     worker.onmessage = (e: MessageEvent<WorkerOut>) => {
       const msg = e.data
       if (msg.type === 'progress') { set({ progress: msg.text }); return }
-      if (msg.type === 'error') { set(get().catalog ? { refreshing: false, progress: '' } : { status: 'error', error: msg.message, refreshing: false }); return }
+      if (msg.type === 'error') {
+        // network failure on a live provider: is the name blocked by the ISP resolver? try DNS-over-HTTPS + IP once
+        if (mode === 'live' && creds && !rescued && useSettings.getState().dnsRescue && /fetch|network|load failed|NetworkError/i.test(msg.message)) {
+          rescued = true
+          set({ progress: 'Nom du serveur injoignable, tentative de secours DNS…' })
+          void findRescue(creds.url, creds.username, creds.password, proxied).then((r) => {
+            if (r) { console.info(`[dns] rescue ${hostOf(creds.url)} -> ${r.ip}`); useSession.getState().setRescue({ host: hostOf(creds.url), ip: r.ip, at: Date.now() }); void get().load(mode, rawCreds, includeAdult, forceRefresh) }
+            else set(get().catalog ? { refreshing: false, progress: '' } : { status: 'error', error: msg.message + ' (secours DNS sans résultat)', refreshing: false })
+          })
+          return
+        }
+        // a stale rescue (IP moved) must not stick: drop it, the next load goes through the name again
+        if (rescued && rawCreds && creds && rawCreds.url !== creds.url && /fetch|network|load failed|NetworkError/i.test(msg.message)) useSession.getState().setRescue(undefined)
+        set(get().catalog ? { refreshing: false, progress: '' } : { status: 'error', error: msg.message, refreshing: false }); return
+      }
       if (msg.type === 'extra') { pending.get(msg.req)?.(msg.extra); pending.delete(msg.req); return }
       if (msg.type === 'refreshed') { set({ refreshing: false, progress: '', lastDiff: msg.diff ? { ...msg.diff, at: Date.now() } : get().lastDiff }); return }
       const gen = ++applying

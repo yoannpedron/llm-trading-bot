@@ -12,6 +12,8 @@ import { countryOf } from '../parser/live'
 import { LANGS } from '../parser/langs'
 import { probeProvider } from '../download/profile'
 import LangSetup from '../components/LangSetup'
+import { hostOf, reachable, resolveAll, withHost } from '../api/dns'
+import { proxied } from '../api/xtream'
 
 type Tab = 'accounts' | 'languages' | 'categories' | 'data'
 const TABS: [Tab, string][] = [['accounts', 'Comptes'], ['languages', 'Langues'], ['categories', 'Catégories'], ['data', 'Données']]
@@ -65,6 +67,7 @@ function Accounts() {
   useEffect(() => { s.accounts.forEach((a) => probe(a.id, a)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div>
+      <DnsRescue />
       <H>Comptes Xtream</H>
       {s.accounts.length === 0 && <p className="text-sm text-white/50">Aucun compte. L'application tourne en mode démo sur un échantillon.</p>}
       <ul className="flex flex-col gap-2">
@@ -106,6 +109,47 @@ function Accounts() {
       </form>
       <H>Clé TMDB</H>
       <div className="flex gap-2"><Input placeholder="Laisser vide pour utiliser la clé du fichier .env" value={key} onChange={(e) => setKey(e.target.value)} /><button onClick={() => { s.set({ tmdbKeyOverride: key || undefined }); location.reload() }} className="shrink-0 rounded-lg bg-white/10 px-4 text-sm">Enregistrer</button></div>
+    </div>
+  )
+}
+
+/* ---------------- DNS rescue ---------------- */
+function DnsRescue() {
+  const s = useSettings()
+  const { creds, rescue, setRescue } = useSession()
+  const load = useCatalog((c) => c.load)
+  const { mode, includeAdult } = useSession()
+  const [res, setRes] = useState<{ resolver: string; ips: string[]; error?: string; ms: number }[]>()
+  const [busy, setBusy] = useState(false)
+  const host = creds ? hostOf(creds.url) : ''
+  const run = async () => {
+    if (!creds) return
+    setBusy(true); setRes(undefined)
+    const r = await resolveAll(host); setRes(r)
+    const ips = [...new Set(r.flatMap((x) => x.ips))]
+    let found: string | undefined
+    for (const ip of ips) { if (await reachable(withHost(creds.url, ip), creds.username, creds.password, proxied)) { found = ip; break } }
+    setBusy(false)
+    if (found) { setRescue({ host, ip: found, at: Date.now() }); void load(mode, creds, includeAdult, true) }
+    else if (ips.length) alert(`Le nom se résout (${ips.join(', ')}) mais aucune IP ne répond à l'API : le serveur est hors ligne ou bloqué au niveau IP (VPN nécessaire).`)
+    else alert('Aucun résolveur ne connaît ce nom : le domaine a disparu ou est bloqué chez les résolveurs publics aussi.')
+  }
+  if (!creds) return null
+  return (
+    <div className="mb-2">
+      <H>Secours DNS</H>
+      <p className="text-sm text-white/60">Les FAI bloquent souvent un fournisseur IPTV en mentant sur son nom de domaine. L'application résout alors <b className="text-white">{host}</b> via DNS-over-HTTPS (Cloudflare, Google, Quad9) et parle directement à l'adresse IP. Automatique dès que le serveur devient injoignable. Ne contourne pas un blocage d'adresse IP.</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={s.dnsRescue} onChange={(e) => s.set({ dnsRescue: e.target.checked })} className="h-5 w-5 accent-amber-400" />Secours automatique</label>
+        <button onClick={run} disabled={busy} className="h-9 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50">{busy ? 'Test en cours…' : 'Tester et forcer maintenant'}</button>
+        {rescue && rescue.host === host && <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs text-emerald-300">Actif : {host} → {rescue.ip} depuis {new Date(rescue.at).toLocaleTimeString('fr-FR')}</span>}
+        {rescue && <button onClick={() => { setRescue(undefined); void load(mode, creds, includeAdult) }} className="h-9 rounded-lg bg-white/10 px-3 text-xs">Revenir au nom</button>}
+      </div>
+      {res && (
+        <ul className="mt-3 grid gap-1 text-xs text-white/70 sm:grid-cols-3">
+          {res.map((r) => <li key={r.resolver} className="rounded bg-white/5 px-3 py-2"><b className="text-white">{r.resolver}</b> · {r.ms} ms<br />{r.error ? <span className="text-red-300">{r.error}</span> : r.ips.length ? r.ips.join(', ') : <span className="text-amber-300">aucune adresse</span>}</li>)}
+        </ul>
+      )}
     </div>
   )
 }

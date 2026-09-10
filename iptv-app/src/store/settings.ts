@@ -25,6 +25,8 @@ interface Settings {
   showUnknownLang: boolean
   /** titles without a TMDB record, shown in an "Autres" row / page */
   showUntagged: boolean
+  /** resolve the provider over DNS-over-HTTPS and use the IP when the ISP resolver blocks the name */
+  dnsRescue: boolean
   /** Data */
   autoRefreshHours: number
   /** rendering tier: auto = detected from the device */
@@ -45,7 +47,7 @@ interface Settings {
 const toggle = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
 export const useSettings = create<Settings>()(persist((set, get) => ({
-  accounts: [], profiles: {}, hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, showUnknownLang: true, showUntagged: true, autoRefreshHours: 12, perf: 'auto',
+  accounts: [], profiles: {}, hiddenRows: [], pinnedRows: [], rowOrder: [], renamedRows: {}, hiddenLangs: [], hiddenCategories: [], hidePpv: false, showUnknownLang: false, showUntagged: true, dnsRescue: true, autoRefreshHours: 12, perf: 'auto',
   setProfile: (id, p) => set({ profiles: { ...get().profiles, [id]: p } }),
   learn: (id, patch) => { const cur = get().profiles[id]; if (cur) set({ profiles: { ...get().profiles, [id]: { ...cur, ...patch } } }) },
   addAccount: (a) => { const id = crypto.randomUUID(); set({ accounts: [...get().accounts, { ...a, id }] }); return id },

@@ -15,6 +15,7 @@ import MyList from './pages/MyList'
 import Collection from './pages/Collection'
 import Settings from './pages/Settings'
 import Welcome from './pages/Welcome'
+import Lab from './pages/Lab'
 import Live from './pages/Live'
 import Sport from './pages/Sport'
 import Multi from './pages/Multi'
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/details/:id" element={<Details />} />
             <Route path="/watch/:id" element={<Watch />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/lab" element={<Lab />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

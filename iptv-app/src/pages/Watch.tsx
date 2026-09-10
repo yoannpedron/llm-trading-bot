@@ -70,7 +70,7 @@ export default function Watch() {
       </div>
       {localUrl && <p className="mb-2 text-xs text-emerald-300">Lecture hors ligne depuis l'appareil. Le créneau du serveur reste libre.</p>}
       {src ? (
-        <Player src={src} title={item.title} startAt={startAt} onProgress={item.kind === 'live' ? undefined : onProgress} onEnded={onEnded} onError={onError} />
+        <Player src={src} title={item.title} live={item.kind === 'live'} startAt={startAt} onProgress={item.kind === 'live' ? undefined : onProgress} onEnded={onEnded} onError={onError} />
       ) : (
         <div className="flex aspect-video items-center justify-center rounded-xl bg-white/5 text-center text-white/60">
           {mode === 'mock' ? (
