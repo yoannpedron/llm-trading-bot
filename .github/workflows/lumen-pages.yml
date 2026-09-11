@@ -1,0 +1,82 @@
+# Publie Lumen (iptv-app) sur GitHub Pages, sous /llm-trading-bot/iptv/, à côté du scanner
+# Yu-Gi-Oh! qui occupe la racine du site. Le scanner est reconstruit depuis sa branche pour
+# ne pas l'effacer (un seul site Pages par dépôt). Si sa construction échoue, seul Lumen est publié.
+name: Pages — Lumen IPTV
+
+on:
+  push:
+    branches: [claude/iptv-netflix-app-vwmd1a]
+    paths: ['iptv-app/**', '.github/workflows/lumen-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/yugioh-card-price-ocr-ix9l67
+          path: scanner
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Le fournisseur répond-il en HTTPS ? (une page https ne peut parler qu'à un serveur https)
+        run: |
+          echo "http  : $(curl -s -m 20 -o /dev/null -w '%{http_code}' 'http://mag.marsweb.co/player_api.php?username=5e43d416a4&password=3fefc937f35d')"
+          echo "https : $(curl -s -m 20 -o /dev/null -w '%{http_code}' 'https://mag.marsweb.co/player_api.php?username=5e43d416a4&password=3fefc937f35d')"
+          echo "https live: $(curl -s -m 20 -o /dev/null -w '%{http_code}' 'https://mag.marsweb.co/live/5e43d416a4/3fefc937f35d/1.m3u8')"
+
+      - name: Build Lumen
+        working-directory: iptv-app
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/iptv/
+          VITE_HASH_ROUTER: '1'
+          VITE_TMDB_KEY: a38cc6c89c3008d4a5c1b71697711dde
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html dist/404.html
+
+      - name: Build du scanner (meilleur effort)
+        id: scanner
+        continue-on-error: true
+        working-directory: scanner/yugioh-scanner
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html dist/404.html
+
+      - name: Assemblage du site
+        run: |
+          mkdir -p site/iptv
+          if [ -d scanner/yugioh-scanner/dist ]; then cp -r scanner/yugioh-scanner/dist/. site/; fi
+          cp -r iptv-app/dist/. site/iptv/
+          touch site/.nojekyll
+          find site -maxdepth 2 | head -30
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}iptv/
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

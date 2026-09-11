@@ -6,4 +6,5 @@ interface ImportMetaEnv {
   readonly VITE_XTREAM_USER?: string
   readonly VITE_XTREAM_PASS?: string
   readonly VITE_XTREAM_DIRECT?: string
+  readonly VITE_HASH_ROUTER?: string
 }
