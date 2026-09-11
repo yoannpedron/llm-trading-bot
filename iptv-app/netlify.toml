@@ -1,0 +1,26 @@
+# Netlify: site créé depuis l'interface (Import from Git → ce dépôt → branche claude/iptv-netflix-app-vwmd1a,
+# base directory "iptv-app"). Le navigateur ne parle qu'à Netlify en HTTPS ; Netlify relaie vers le
+# fournisseur en HTTP côté serveur (règles ci-dessous), ce qu'une page HTTPS ne peut pas faire elle-même.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  VITE_XTREAM_PROXY = "1"
+  VITE_TMDB_API_KEY = "a38cc6c89c3008d4a5c1b71697711dde"
+  VITE_XTREAM_URL = "http://mag.marsweb.co"
+  VITE_XTREAM_USER = "5e43d416a4"
+  VITE_XTREAM_PASS = "3fefc937f35d"
+
+# API et flux du fournisseur de test, relayés par Netlify (statut 200 = proxy, pas redirection)
+[[redirects]]
+  from = "/xtream/mag.marsweb.co/*"
+  to = "http://mag.marsweb.co/:splat"
+  status = 200
+  force = true
+
+# application monopage
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

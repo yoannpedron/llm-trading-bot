@@ -27,6 +27,8 @@ function b64(s: string) { try { return decodeURIComponent(escape(atob(s))) } cat
 
 /** In dev everything goes through the Vite proxy (see vite.config.ts). */
 export function proxied(base: string): string {
+  // VITE_XTREAM_PROXY=1: production build behind a reverse proxy that maps /xtream/<host>/… to http://<host>/… (Netlify _redirects, nginx…)
+  if (import.meta.env.VITE_XTREAM_PROXY === '1') return `/xtream/${encodeURIComponent(base.replace(/^https?:\/\//, '').replace(/\/+$/, ''))}`
   if (import.meta.env.VITE_XTREAM_DIRECT === '1' || !import.meta.env.DEV) {
     let b = base.replace(/\/+$/, '')
     // an https page cannot talk to an http provider (mixed content): use the provider's https port, Xtream panels expose one
