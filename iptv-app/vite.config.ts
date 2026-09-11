@@ -52,6 +52,8 @@ function handler(req: import('node:http').IncomingMessage, res: import('node:htt
 }
 
 export default defineConfig({
+  // VITE_BASE=/repo/ for GitHub Pages builds
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react(), tailwindcss(), xtreamProxy()],
   worker: { format: 'es' },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
