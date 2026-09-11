@@ -42,7 +42,10 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/iptv/
           VITE_HASH_ROUTER: '1'
-          VITE_TMDB_KEY: a38cc6c89c3008d4a5c1b71697711dde
+          VITE_TMDB_API_KEY: a38cc6c89c3008d4a5c1b71697711dde
+          VITE_XTREAM_URL: http://mag.marsweb.co
+          VITE_XTREAM_USER: 5e43d416a4
+          VITE_XTREAM_PASS: 3fefc937f35d
         run: |
           npm ci
           npm run build
